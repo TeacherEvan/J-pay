@@ -83,7 +83,7 @@ The architecture is designed around these limits explicitly:
 - **Weak-GPS override (v1.1):** fixes with `accuracyMeters > 50` are rejected client-side, but a moderator can manually attest a check-in (mod UI: employee + site + time → creates a log with `isModeratorOverride: true`). Without this, basement/indoor sites generate zero records and payroll disputes have no evidence trail.
 - One-way messaging to Moderator queue.
 - Web Push reminders + approval alerts.
-- **Offline mode:** failed check-ins enqueue to an IndexedDB outbox and replay via Serwist Background Sync when connectivity returns. Original client timestamps are preserved and flagged through `clientReportedTime` delta.
+- **Offline mode (foreground-primary):** failed check-ins enqueue to an IndexedDB outbox. Foreground reconciliation — `visibilitychange`, the window `online` event, and the next successful mutation — flushes the outbox on ALL platforms (primary path, see §8); Background Sync is a Chromium-only bonus. Original client timestamps are preserved and flagged through `clientReportedTime` delta.
 
 ### 5.2 Moderator Interface (Desktop-Optimized)
 
@@ -259,10 +259,11 @@ Derivation rules (v1.1):
 ## 8. Offline Architecture
 
 1. Check-in mutation fails (network down) → payload written to **IndexedDB outbox** with original client timestamp.
-2. Serwist **Background Sync** fires on connectivity restore → replays outbox in order.
-3. Replayed entries keep original `clientReportedTime`; server `_creationTime` delta flags them naturally via clock-skew path.
+2. **Replay triggers (primary):** app foregrounding (`visibilitychange`), the window `online` event, and next successful mutation each flush the outbox. These run on ALL platforms.
+3. **Bonus trigger:** Serwist Background Sync fires on connectivity restore **on Chromium browsers only** (caniuse `background-sync`: Safari/iOS/Firefox never supported, any version). Treat it as opportunistic acceleration, never the mechanism.
 4. Outbox capped (~100 entries) to respect the 1MB transaction limit on replay batches.
 5. **Replay ordering rule (v1.1):** shift derivation MUST order by skew-corrected `clientReportedTime` (§6.1 rule 1), because replayed offline entries arrive with `_creationTime` far later than their work actually occurred — ordering by server time would place them in wrong shifts. Multi-device and post-reinstall scenarios produce the same hazard.
+6. **Platform-support table (checked 2026-08-23, caniuse.com/background-sync):** Chrome/Edge/Samsung Internet ≥49 ✅ · Safari desktop+iOS ❌ all versions · Firefox ❌ (except behind flag). ZA field workforce skews Android but iPhone share is material — foreground reconciliation is the load-bearing path.
 
 ---
 
@@ -398,14 +399,16 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor E as Employee (PWA)
+    participant UI as App UI (foreground)
     participant OB as IndexedDB Outbox
     participant SW as Serwist BG Sync
     participant CX as Convex
     E->>OB: check-in attempt fails (offline) → enqueue w/ original timestamp
     Note over OB: connectivity restored
-    SW->>SW: sync event fires
-    SW->>CX: replay queued mutations in order
-    CX-->>SW: saved (clientTime preserved, skew flags naturally)
+    UI->>OB: visibilitychange / online event fires
+    UI->>CX: flushOutbox() — replay queued mutations in order (PRIMARY, all platforms)
+    CX-->>UI: saved (clientTime preserved, skew flags naturally)
+    SW-->>CX: bonus replay on connectivity restore (Chromium only)
 ```
 
 ### 10.5 State Diagram — Shift Status Transitions

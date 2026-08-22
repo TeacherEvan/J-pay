@@ -55,5 +55,9 @@ if "impossibleTravelFlag" in doc and "previous fix" in doc.lower():
     if 'order("desc")' not in doc and "by_user_time descending" not in doc:
         failures.append("M1: impossible-travel previous-fix lookup unspecified")
 
+# B4 strict: platform support table must exist
+if "Background Sync support:" not in doc and "background-sync" not in doc.lower():
+    failures.append("B4: no platform-support statement for Background Sync")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)
