@@ -35,5 +35,13 @@ if "Vercel Cron" in doc and "convex/crons.ts" not in doc:
 if "web-push" not in doc:
     failures.append("M7: no push sender named (expect web-push via Convex Action)")
 
+# B2: state diagram must contain side-mission substate
+FENCE = chr(96) * 3  # avoid literal fence inside this snippet
+if "stateDiagram-v2" in doc and "side_mission" not in doc.split("stateDiagram-v2")[1].split(FENCE)[0]:
+    failures.append("B2: state diagram lacks quick_side_mission substate")
+# B2: unpaired side-mission rule must parallel unpaired-lunch rule
+if "unpaired lunch" in doc.lower() and "unpaired side mission" not in doc.lower():
+    failures.append("B2: unpaired side-mission rule missing (parallel to rule 4)")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

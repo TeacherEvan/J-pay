@@ -231,6 +231,10 @@ Derivation rules (v1.1):
 3. **Auto-close:** a shift with no terminal event (`day finish`/`job finish`) by `startedAt + MAX_SHIFT_HOURS (16h)` is auto-closed with `needsReview = true`, reason `"auto_closed_no_terminal"`.
 4. **Unpaired lunch:** a `lunch` without a resuming `checkpoint` deducts the site's default lunch minutes (configurable, default 60) — not needsReview unless it exceeds 2× default.
 5. **Overnight/DST:** shift day attribution uses `sites.timezone`. A shift crossing local midnight belongs to the local day it started in. DST transition days (23h/25h) use wall-clock boundaries via IANA tz math, never naive ±24h.
+6. **Side-mission entry:** legal from any active state; entering does not pause the shift clock — deduction happens at exit.
+7. **Side-mission duration:** authoritative value is `min(declared picker minutes, wall-clock minutes between entry log and exit log)`.
+8. **Implicit exits:** `day finish` / `job finish` implicitly close an open side mission.
+9. **Unpaired side mission** (no exit before next shift start): deduct declared duration; flag needsReview only if declared > 2× the picker max for that employee's site default — parallel to rule 4's lunch treatment.
 
 - Out-of-order or malformed sequences **never silently miscount**: they create a shift flagged `needsReview = true` for moderator resolution.
 - Every payroll number is reconstructible from `logs` alone. `shifts` is a materialized cache; **logs are truth**.
@@ -415,6 +419,19 @@ stateDiagram-v2
     checkpoint --> job_finish
     day_finish --> [*]
     job_finish --> [*]
+    state "in side mission" as side_mission
+    arrived --> side_mission
+    checkpoint --> side_mission
+    lunch --> side_mission
+    side_mission --> checkpoint : exit
+    side_mission --> job_finish : implicit exit
+    note right of side_mission
+        duration = min(picker value,
+        wall-clock elapsed).
+        Unpaired at terminal: deduct
+        declared duration; needsReview
+        only past 2× threshold.
+    end note
     note right of lunch
         Any illegal transition
         → shift.needsReview = true
