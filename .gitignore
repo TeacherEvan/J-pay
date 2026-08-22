@@ -1,0 +1,25 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Python gates
+__pycache__/
+*.pyc
+.venv/
+
+# Node scratch (tsc validation of schema fences)
+node_modules/
+tsconfig.tsbuildinfo
+
+# Secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# Generated previews
+*.mmd.png
