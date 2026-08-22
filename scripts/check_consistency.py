@@ -43,5 +43,17 @@ if "stateDiagram-v2" in doc and "side_mission" not in doc.split("stateDiagram-v2
 if "unpaired lunch" in doc.lower() and "unpaired side mission" not in doc.lower():
     failures.append("B2: unpaired side-mission rule missing (parallel to rule 4)")
 
+# B3: skew filtering must either name by_user_skew index or admit filtered scan
+if "clockSkewMs" in doc:
+    has_index_claim = bool(re.search(r"filter.*index|via that index", doc))
+    has_two_tail = "by_user_skew" in doc
+    has_scan_admission = "filtered scan" in doc
+    if has_index_claim and not (has_two_tail and has_scan_admission):
+        failures.append("B3: skew-index claim inconsistent with schema/indexes")
+# M1: impossible travel must specify lookup method
+if "impossibleTravelFlag" in doc and "previous fix" in doc.lower():
+    if 'order("desc")' not in doc and "by_user_time descending" not in doc:
+        failures.append("M1: impossible-travel previous-fix lookup unspecified")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

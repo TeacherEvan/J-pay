@@ -177,7 +177,8 @@ export default defineSchema({
   })
     .index("by_user_time", ["userId", "_creationTime"])
     .index("by_status", ["status"])
-    .index("by_site_time", ["siteId", "_creationTime"]),
+    .index("by_site_time", ["siteId", "_creationTime"])
+    .index("by_user_skew", ["userId", "clockSkewMs"]),
 
   shifts: defineTable({                        // DERIVED cache; logs are truth
     userId: v.id("users"),
@@ -247,7 +248,8 @@ Derivation rules (v1.1):
 - **Row-scoped authz (v1.1 — HARD RULE):** every query and mutation derives the acting `userId` from `ctx.auth` and filters rows by it. A client-supplied `userId` argument is NEVER trusted as an identity or filter input, including on indexed queries like `by_user_time`. Employees read only their own logs/shifts/messages; one unscoped query is a full payroll-data leak.
 - **Device binding:** HMAC-signed token issued inside Convex (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
 - **Impossible-travel heuristic (v1.1):** at write time, compare against the employee's previous fix: if implied speed > 200 km/h, set `impossibleTravelFlag = true` for moderator review. Catches naive GPS spoofing cheaply; advisory flag, not a hard reject.
-- **Clock tamper:** `clockSkewMs = _creationTime − clientReportedTime` computed AND STORED at write (v1.1) so it is indexable — moderators filter `|skew| > 30000ms` via that index rather than post-query scans.
+  *Previous-fix definition:* query `logs.by_user_time` with `.order("desc")`, scan back up to 5 entries, take the one with the greatest skew-corrected `clientReportedTime`. This is approximate under offline replay by design — the flag is advisory evidence for moderators, not ground truth.
+- **Clock tamper:** `clockSkewMs` computed AND stored at write. Moderators filter via two-tail range queries on `by_user_skew` (`skew ≤ −30000` OR `skew ≥ 30000`) — Convex index ranges cannot express absolute-value scans, so both tails are queried and unioned. Within a single user's date window a post-query filtered scan is also acceptable at this scale; the index exists so large-window audits don't degrade.
 - **IP address:** captured where available (edge headers) but treated strictly as advisory telemetry for fraud review. Not an enforcement control — documented as such everywhere it appears.
 - **Geofencing:** haversine distance computed server-side inside mutations against the user's assigned site(s). Client-reported `isWithinGeofence` is never trusted.
 - **GPS spoofing reality (v1.1):** coords originate from the client and fake-GPS apps are trivial on Android. Server-side defenses are layered: accuracy gating, impossible-travel flagging, device binding fraud signals, moderator review queue. The system is designed to *detect* spoofing, not prevent it.
