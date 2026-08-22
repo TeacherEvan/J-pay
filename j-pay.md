@@ -1,253 +1,438 @@
 # J-Pay — Technical Requirements Document (TRD)
 
-**Project:** J-Pay (Payroll & Geolocation Logger PWA)
-**Repository:** `TeacherEvan/J-pay-webb_logger`
-**Status:** Draft v0.2 (corrected)
-**Author:** Architecture pass — reviewed against hard system limits and stack constraints.
+**Project:** PWA Payroll & Geolocation Logger
+**Repository:** TeacherEvan/J-pay-webb_logger
+**Version:** 1.1 (senior-review revision)
+**Status:** Draft for review
+
+### Revision Log (v1.1)
+
+| # | Section | Change |
+|---|---|---|
+| R1 | §5.1/§6 | Side mission defined as substate; grammar extended (was illegal transition → needsReview flood) |
+| R2 | §5.1 | Weak-GPS moderator override path added |
+| R3 | §5.3 | Device token cloneability documented; issuance preconditions + WebAuthn upgrade path |
+| R4 | §7 | Row-scoped authz hard rule (`ctx.auth` only, never client-supplied userId) |
+| R5 | §6 | Schema: `logs.idempotencyKey`, `logs.siteTimezone`, `logs.impossibleTravelFlag`, `sites.timezone` |
+| R6 | §6.1 | Shift grammar: skew-corrected sort, idempotency dedupe, 16h auto-close, overnight/DST rules |
+| R7 | §8 | Offline replay ordering rule |
+| R8 | §7 | Impossible-travel heuristic (>200 km/h between fixes) |
+| R9 | §9 | Retention enforced by Vercel Cron → Convex purge mutation |
+| R10 | §5.2 | CSV formula-injection sanitization + pagination vs 4.5MB cap |
+| R11 | §7 | clockSkewMs stored at write → indexable |
+| R12 | §5.2 | Push subscription pruning on 404/410 |
+| R13 | §4 | Consent modal links privacy notice |
+| R14 | §11 | Open Questions updated |
 
 ---
 
-> **Reviewer's Note (applied to this revision):** The originating prompt contained five structural gaps that would have produced a TRD with silent holes. This document closes them:
-> 1. PWA install can **not** auto-fire on link access — it requires a captured `beforeinstallprompt` event triggered by a **user gesture**.
-> 2. The data path Employee → Convex is **direct**; Vercel's 10s/4.5MB limits only bound SSR/Edge routes, not the check-in mutation.
-> 3. **Convex is not a Web Push provider** — push needs VAPID + a sender (a Vercel Function running `web-push`, or an external provider).
-> 4. **No auth provider** was declared; Moderator "backend-provisioned only" access presumes one. Convex Auth (or Clerk) is required.
-> 5. **Offline check-in queue** was mandated by the limits but unspecified — IndexedDB + Background Sync / reconnect reconciliation is now designed.
+## 1. Overview
+
+J-Pay is a Progressive Web App for field-employee time tracking and payroll. Employees check in/out with GPS-verified timestamps; moderators audit locations in real time, manage constraints, compute payroll over derived shifts, and export CSV reports. Built mobile-first for employees, desktop-optimized for moderators.
+
+### 1.1 Conflict Rule
+
+The embedded schema (§6) is the source of truth. Where feature specifications and schema disagree, the schema wins and the discrepancy is flagged in §11 Open Questions.
 
 ---
 
-## 1. Overview & Goals
-
-J-Pay is a Progressive Web App for field-workforce payroll and geolocation logging. Employees (mobile) log time-and-place events; Moderators (desktop) audit locations, manage geofences, and compute payroll.
-
-Non-goals: live turn-by-turn navigation, biometric facial verification, native app stores (PWA-only by design).
-
-## 2. Stack Requirements (binding)
+## 2. Stack Requirements
 
 | Layer | Technology |
-|-------|------------|
+|---|---|
 | Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
-| Backend/DB | Convex (reactive DB, auth, file storage, real-time sync) |
-| Deployment | Vercel (Edge network) |
-| PWA | Serwist (`@serwist/next`) for service worker + manifest caching |
-| Auth | **Convex Auth** (added — see §4.4) |
-| Push | **Web Push API + VAPID** via a Vercel Function (added — see §4.5) |
+| Backend/DB | Convex (reactive database, file storage, real-time sync) |
+| Auth | Clerk, integrated with Convex via official `clerk-convex` provider (JWT); roles (`moderator` \| `employee`) mirrored into Convex `users` table |
+| Deployment | Vercel (Edge network). All Convex access flows through Next.js route handlers or server components. The Convex deploy URL is never exposed as a public client-side env var without a `CLERK_ISSUER` check |
+| PWA | Serwist (service worker generation, manifest caching, Background Sync) |
 
-> **Why Serwist over next-pwa:** `next-pwa` is unmaintained for Next 15's App Router; Serwist is the actively-supported successor with first-class App Router support.
+---
 
-## 3. Hard Technical Limits (must be enforced in code)
+## 3. Hard Technical Limits
 
-| # | Limit | Enforcement point |
-|---|-------|-------------------|
-| L1 | `navigator.geolocation` → `enableHighAccuracy:true`, `timeout:5000`, `maximumAge:0` | Client check-in wrapper (non-overridable constant) |
-| L2 | Convex document/argument size ≤ **1 MB** (this is the document/argument cap, not a "transaction" cap) | Log payload schema; reject attachments > 1MB |
-| L3 | Vercel Serverless/Edge execution ≤ **10 s**; response body ≤ **4.5 MB** | Only SSR/API routes; see §3.1 |
-| L4 | Service-worker precache budget < **50 MB** for core assets | Build-time asset audit in CI |
+The architecture is designed around these limits explicitly:
 
-### 3.1 Path-clarity on L3
-The Employee check-in flow is **Client → Convex** (WebSocket/mutation), which is **not** subject to Vercel's 10s/4.5MB function limits. L3 applies **only** to:
-- Next.js Server Components / Route Handlers (SSR, initial HTML).
-- The Push-sending Vercel Function (§4.5).
-- CSV export streaming (§6.6) — must paginate to stay under 4.5MB per response.
+1. **Geolocation:** `navigator.geolocation` with `enableHighAccuracy: true`, `timeout: 5000`, `maximumAge: 0`. Any fix with `accuracyMeters > 50` is **rejected**; UI surfaces a "weak GPS signal" state instead of storing junk data.
+2. **Convex mutations:** payloads must not exceed the **1MB** transaction limit.
+3. **Vercel functions:** **10s** execution timeout; response payload cap **4.5MB**.
+4. **Service worker cache:** budget < **50MB** for core app assets, with an LRU eviction strategy on runtime caches.
+5. **Web Push:** encrypted message payload ≤ **4KB**. Notifications are trigger-only; clients fetch real content after wake.
+6. **IP address is advisory telemetry only.** It must never be documented or implemented as an enforcement control — clients can bypass edge checks and spoof headers. See §7 Security.
 
-## 4. Architecture
+---
 
-### 4.1 System Architecture (Mermaid)
+## 4. Application Initialization
 
-```mermaid
-flowchart LR
-  subgraph Client["Employee / Moderator PWA (Next.js 15)"]
-    UI[UI - shadcn/ui]
-    SW[Service Worker - Serwist]
-    IDB[(IndexedDB offline queue)]
-    GEO[Geolocation API]
-  end
-  subgraph Vercel["Vercel Edge Network"]
-    EDGE[Edge / SSR routes]
-    PUSH[Push Sender Fn - web-push + VAPID]
-  end
-  subgraph Convex["Convex Backend"]
-    MUT[Mutations / Queries]
-    DB[(Convex DB)]
-    AUTH[Convex Auth]
-    REALTIME[Reactive sync]
-  end
+- Capture `beforeinstallprompt`; suppress default; show custom install UI.
+  - **iOS reality:** no programmatic install prompt exists. Show manual "Add to Home Screen" instructions when iOS is detected.
+- Initial loading screen: animated J-Pay logger SVG/CSS logo reveal.
+- Consent modal enforcing geolocation + localstorage permissions. Copy: **"All work, no ads!"**
+  - The modal MUST link the full privacy notice (data collected, lawful basis, retention, worker rights per §9). The modal alone is transparency shorthand, not the notice.
+  - NOTE: employment-context consent is legally weak (GDPR Art. 7 power imbalance). The data-governance section (§9) cites **legitimate interest** as the lawful basis for location processing, with this modal serving as transparency notice only.
 
-  UI -->|L1 geolocation| GEO
-  UI -->|check-in mutation| MUT
-  UI -. offline .-> IDB
-  IDB -->|reconnect reconcile| MUT
-  SW -->|precache L4| UI
-  EDGE -->|initial HTML| UI
-  PUSH -->|Web Push| UI
-  MUT --> DB
-  MUT --> AUTH
-  MUT --> REALTIME
-  REALTIME -->|live audit / messages| UI
-```
-
-### 4.2 Database ERD (Mermaid)
-
-```mermaid
-erDiagram
-  USERS ||--o{ LOGS : "records"
-  USERS ||--o{ MESSAGES_SENT : "sends"
-  USERS ||--o{ MESSAGES_RECV : "receives"
-
-  USERS {
-    id string PK
-    name string
-    email string
-    role enum "moderator|employee"
-    isActive boolean
-    deviceId string "optional, device binding"
-    hourlyRate number "mod-editable"
-    allowedGeofenceRadiusMeters number "mod-editable"
-    designatedLocationLat number "optional"
-    designatedLocationLng number "optional"
-    archivedAt number "soft delete"
-    pushSubscriptionTokens string[] "optional"
-  }
-  LOGS {
-    id string PK
-    userId id FK
-    _creationTime number "SERVER UTC, trusted"
-    clientReportedTime number "tamper-delta check"
-    status enum
-    latitude number
-    longitude number
-    accuracyMeters number
-    isWithinGeofence boolean "server-calc"
-    sideMissionDurationMinutes enum "15|30|45|60|120"
-    deviceMetadata string
-    ipAddress string "optional, from headers"
-  }
-  MESSAGES {
-    id string PK
-    senderId id FK
-    recipientId id "optional = mod queue"
-    content string
-    isRead boolean
-    archivedAt number "soft delete"
-  }
-```
-
-### 4.3 Geolocation Check-in Sequence (Mermaid)
-
-```mermaid
-sequenceDiagram
-  actor E as Employee
-  participant UI as PWA UI
-  participant G as Geolocation API
-  participant C as Convex Mutation
-  participant DB as Convex DB
-  participant M as Moderator View
-
-  E->>UI: Tap "Check-in"
-  UI->>G: getCurrentPosition(L1: highAcc, 5s, maxAge 0)
-  G-->>UI: {lat, lng, accuracy}
-  UI->>UI: Build log payload (clientReportedTime = Date.now())
-  alt Online
-    UI->>C: logCheckIn(payload)
-    C->>C: Verify server _creationTime
-    C->>C: Calc isWithinGeofence (server-side)
-    C->>C: Delta = clientReportedTime - _creationTime (tamper flag)
-    C->>DB: Insert log
-    C-->>UI: Ack + logId
-    C->>M: Reactive push (audit row)
-  else Offline
-    UI->>UI: Persist to IndexedDB queue
-    Note over UI: SW Background Sync retries on reconnect
-    UI-->>E: "Queued — will sync"
-  end
-```
-
-### 4.4 Authentication (added — gap closed)
-- **Convex Auth** with password (or magic-link) provider; Moderator accounts are **seeded/created only by an existing Moderator** (backend-provisioned, never self-signup).
-- Employee accounts: created by Moderator, issued a one-time activation link; on first login the `deviceId` is bound (see §4.7).
-- Role enforced server-side on every Moderator query/mutation via `ctx.auth` + a `requireModerator` wrapper.
-
-### 4.5 Push Notifications (added — gap closed)
-Convex does **not** send Web Push. Architecture:
-1. Employee subscribes via `pushManager.subscribe` using a **VAPID public key** shipped in the manifest/env.
-2. Subscription endpoint + key stored in `users.pushSubscriptionTokens`.
-3. A **Vercel Function** (`/api/push`) holds the VAPID private key (env secret) and calls `web-push` to dispatch reminders/approvals.
-4. Triggers: scheduled reminders via Convex cron → enqueue → Vercel Function sends. Approval alerts fired from the Moderator payroll-approve mutation via an action that calls the Function.
-
-> **Hardening:** VAPID private key is a Vercel env secret, never in client bundle.
-
-### 4.6 Offline Support (added — gap closed, mandated by L4)
-- **Precache** (L4 < 50MB): app shell, critical JS/CSS, logo assets, locale data.
-- **Runtime cache:** network-first for API, cache-first for static.
-- **Offline check-in queue:** on `getCurrentPosition` success but no connectivity, write the log to **IndexedDB** with `synced:false`. A Serwist **Background Sync** handler flushes the queue when connectivity returns; the same mutation path (§4.3) reconciles, and server `_creationTime` remains the trusted timestamp (client time used only for delta/tamper analytics).
-- **Conflict rule:** last-write-wins per `logId`; duplicates detected by `(userId, clientReportedTime, status)` hash.
-
-### 4.7 Device Binding & Recovery (added — gap closed)
-- `deviceId` pins an employee to one physical device.
-- **Recovery flow:** employee requests re-binding from a *different* device → Moderator verifies identity out-of-band → `unbindDevice` mutation clears `deviceId` → new device binds on next login.
-- Lockout: check-ins from an unbound device for a bound user are rejected server-side with code `DEVICE_MISMATCH`.
+---
 
 ## 5. Feature Specifications
 
-### 5.1 Application Initialization
-- On first load, the SW registers; capture `beforeinstallprompt` (**cannot auto-show**). Show a custom "Install J-Pay" button that calls `prompt()` on the captured event (user gesture requirement).
-- Loading screen: animated J-Pay SVG/CSS logo reveal (pure CSS, < 200KB, counts toward L4).
-- Consent modal (geolocation + localStorage) — copy: **"All work, no ads!"**; blocks app until accepted (stored as a consent flag, revocable in settings).
+### 5.1 Employee Interface (Mobile-First)
 
-### 5.2 Employee Interface (mobile-first)
-- Single prominent **Check-in** button → records GPS, accuracy radius, UTC timestamp (server-trusted).
-- State badges: `checkpoint`, `lunch`, `arrived`, `day finish`, `job finish`, `feeling sick`.
-- **Quick side mission** dropdown strictly limited to `[15m, 30m, 45m, 1h, 2h]` (mapped to Convex enum `15|30|45|60|120`).
-- Direct messaging: one-way employee → Moderator queue.
-- Push: logging reminders + approval alerts (§4.5).
+- Single prominent **CHECK-IN** button: records GPS coords, accuracy radius, UTC timestamp (server time authoritative), device metadata.
+- Quick-add status badges matching `logs.status` exactly:
+  `["checkpoint", "lunch", "arrived", "day finish", "job finish", "feeling sick", "quick side mission"]` + side-mission duration picker.
+- **Side mission semantics (v1.1):** a side mission is a **substate**, not a standalone event. Tapping it writes a log with status `quick side mission` + duration; the shift engine (§6.1) treats it as entering a substate that must be exited by the next `checkpoint` or `job finish`. Duration is deducted from worked minutes. It is a legal transition from any active state.
+- **Weak-GPS override (v1.1):** fixes with `accuracyMeters > 50` are rejected client-side, but a moderator can manually attest a check-in (mod UI: employee + site + time → creates a log with `isModeratorOverride: true`). Without this, basement/indoor sites generate zero records and payroll disputes have no evidence trail.
+- One-way messaging to Moderator queue.
+- Web Push reminders + approval alerts.
+- **Offline mode:** failed check-ins enqueue to an IndexedDB outbox and replay via Serwist Background Sync when connectivity returns. Original client timestamps are preserved and flagged through `clientReportedTime` delta.
 
-### 5.3 Moderator Interface (desktop-optimized)
-- Access only via Moderator role (§4.4).
-- Real-time audit log of employee locations (Convex reactive query).
-- Payroll calculator — editable: hourly rates, multipliers, **overtime threshold (default 8h/day or 40h/wk), currency (ZAR default), rounding rule (nearest 5 min)**.
-- Diagram drafting: lightweight `<canvas>` whiteboard **or** Mermaid live-editor embed.
-- Constraint management: geofence radius, allowed login IP ranges (CIDR list enforced on mutation).
-- Two-way messaging: Mod→Mod broadcast, Mod→Employee direct (Convex reactive).
-- Reporting: CSV export of date ranges (§6.6).
+### 5.2 Moderator Interface (Desktop-Optimized)
 
-## 6. Data & Compliance
+- Access provisioned via Clerk backend only (role set in dashboard/API, not self-service).
+- Real-time audit log of employee locations (Convex reactive queries).
+- Payroll calculator over derived **shifts** (§6), editable hourly rates and multipliers.
+- Lightweight diagram tool (canvas or mermaid render-only).
+- Constraint management: geofence radius per site assignment; IP ranges displayed as advisory signals, clearly labeled non-enforcing.
+- Two-way messaging: Mod-to-Mod broadcast; Mod-to-Employee direct (Convex reactive queries).
+- Reporting: CSV export by employee + date range (uses `by_user_time` index).
+  - **Formula-injection sanitization (v1.1):** any cell value beginning with `=`, `+`, `-`, or `@` is prefixed with `'` on export (employee names, message content are attacker-controllable).
+  - **Pagination (v1.1):** exports paginate on `by_user_time` and stream chunks; a single response must never approach the 4.5MB Vercel cap.
+- **Push subscription maintenance (v1.1):** when a push send returns 404/410, delete the `pushSubscriptions` row. Without pruning, dead endpoints accumulate indefinitely.
+- **Moderator manual check-in attestation (v1.1):** override flow for weak-GPS sites (see §5.1).
 
-### 6.1 Geofence Default (gap closed)
-If `designatedLocationLat/Lng` is unset at activation, the Moderator **must** set it before the employee can log; server rejects `isWithinGeofence` calc with `GEOFENCE_UNSET` otherwise. Default `allowedGeofenceRadiusMeters = 100` if Moderator omits.
+### 5.3 Device Binding
 
-### 6.2 Time Zones (gap closed)
-All stored timestamps are **UTC** (`_creationTime`). Payroll/reporting converts to the **employee's configured timezone** (field `timezone` on users, default `Africa/Johannesburg`). Reports never display raw UTC to Moderators.
-
-### 6.3 Privacy / PII / Retention (gap closed)
-Geolocation is sensitive personal data.
-- **Lawful basis & retention:** define in a privacy notice; default retention **13 months** then anonymize (`archivedAt` soft-delete + geohash truncation job).
-- **POPIA (ZA) / GDPR (EU)** compliance notes required in the deployed privacy page.
-- IP ranges and precise coords are Moderator-only; employees see only their own logs.
-
-### 6.4 Payroll Rules (gap closed)
-- Multipliers: ordinary (1.0), overtime (1.5), Sunday/holiday (2.0) — Moderator-editable per employee.
-- Rounding: configurable, default round-to-nearest-5-min.
-- Currency: single tenant currency (ZAR default), no FX conversion in v1.
-- Approval: Moderator "approves" a pay period → locks edits → triggers payout-export (CSV/JSON).
-
-### 6.5 CSV Export at Scale (gap closed)
-Large date ranges can exceed L3's 4.5MB. Export is **streamed/paginated**: the Vercel Function writes the CSV in chunks and returns a download token; the client fetches paginated blobs and assembles, or Convex Action streams to object storage and returns a signed URL.
-
-### 6.6 Error / Retry / Observability (gap closed)
-- Geolocation failure (timeout/denied): UI offers manual "retry" + reason code; never silently drops.
-- Mutation retry: Convex client auto-retries transient failures; offline queue handled by §4.6.
-- Observability: Convex dashboard + Vercel logs; client error boundary reports to a `/api/log` route (non-blocking).
-
-## 7. Build / CI (gap closed)
-- Lint + typecheck + `tsc --noEmit` gate.
-- **L4 asset audit:** CI script sums precache asset sizes; fails build if ≥ 50MB.
-- Deploy preview per PR; production deploy on `main` via Vercel.
-
-## 8. Open Questions for Product Owner
-1. Multi-tenant or single-org? (Affects schema isolation.)
-2. Payroll payout integration (bank API) in scope for v1?
-3. Device-binding recovery: out-of-band verification method (SMS/email)?
-4. Diagram tool: canvas freehand vs Mermaid embed — which?
+- Server-issued signed device token (HMAC, secret held in Vercel env), stored in IndexedDB, verified server-side on each mutation.
+- **Issuance preconditions (v1.1):** token issuance requires a valid Clerk session from an **invite-only** Clerk organization, and the user must have `role === "employee"` and `isActive === true` at issue time. Self-service signup outside invites must be disabled in the Clerk dashboard.
+- **Known limitation (v1.1):** an IndexedDB-stored HMAC token proves *possession*, not *device* — any employee can extract their own token via DevTools and share it (buddy punching). Moderators MUST treat duplicate-token usage across distinct devices/IPs as a fraud signal. Optional hardening: WebAuthn platform authenticator (`authenticatorAttachment: "platform"`) for hardware-backed identity on modern Android/iOS; recommended Phase 2.
+- Loss of device = moderator-triggered re-issue flow.
+- A localStorage copy alone is **NOT** sufficient identity.
 
 ---
-*Generated as the corrected deliverable. Web-based citation was unavailable at authoring time (search backend billing block); platform constraints stated are established framework behaviors. Validate against current Next 15 / Convex / Serwist docs at implementation.*
+
+## 6. Data Model
+
+```ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  users: defineTable({
+    name: v.string(),
+    email: v.string(),
+    role: v.union(v.literal("moderator"), v.literal("employee")),
+    isActive: v.boolean(),
+    deviceId: v.optional(v.string()),          // signed device token id
+    archivedAt: v.optional(v.number()),        // soft delete (payroll compliance)
+    hourlyRateOverride: v.optional(v.number()),
+    pushSubscriptionTokens: v.optional(v.array(v.string())),
+  })
+    .index("by_email", ["email"])
+    .index("by_role", ["role"])
+    .index("by_active", ["isActive"]),
+
+  sites: defineTable({
+    name: v.string(),
+    latitude: v.number(),
+    longitude: v.number(),
+    geofenceRadiusMeters: v.number(),
+    timezone: v.string(),                      // IANA tz — payroll day boundaries are LOCAL (v1.1)
+    archivedAt: v.optional(v.number()),
+  }),
+
+  userSites: defineTable({                     // employees assigned to one+ sites
+    userId: v.id("users"),
+    siteId: v.id("sites"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_site", ["siteId"]),
+
+  logs: defineTable({
+    userId: v.id("users"),
+    siteId: v.id("sites"),
+    // Server _creationTime is authoritative. clientReportedTime exists to
+    // detect clock tampering delta only.
+    clientReportedTime: v.number(),
+    clockSkewMs: v.optional(v.number()),       // computed at write; mods filter |skew| > 30000
+    status: v.union(
+      v.literal("arrived"),
+      v.literal("checkpoint"),
+      v.literal("lunch"),
+      v.literal("feeling sick"),
+      v.literal("day finish"),
+      v.literal("job finish"),
+      v.literal("quick side mission")
+    ),
+    latitude: v.number(),
+    longitude: v.number(),
+    accuracyMeters: v.number(),                // rejected if > 50 at write time
+    isWithinGeofence: v.boolean(),             // haversine computed strictly server-side
+    sideMissionDurationMinutes: v.optional(
+      v.union(v.literal(15), v.literal(30), v.literal(45), v.literal(60), v.literal(120))
+    ),
+    deviceMetadata: v.string(),
+    ipAddress: v.optional(v.string()),         // ADVISORY ONLY — never enforcement
+    idempotencyKey: v.string(),                // client-generated UUID per button press; mutation dedupes (v1.1)
+    isModeratorOverride: v.optional(v.boolean()), // manual attestation for weak-GPS sites (v1.1)
+    impossibleTravelFlag: v.optional(v.boolean()), // >200 km/h vs previous fix (v1.1)
+  })
+    .index("by_user_time", ["userId", "_creationTime"])
+    .index("by_status", ["status"])
+    .index("by_site_time", ["siteId", "_creationTime"]),
+
+  shifts: defineTable({                        // DERIVED cache; logs are truth
+    userId: v.id("users"),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    totalMinutes: v.optional(v.number()),
+    needsReview: v.boolean(),                  // malformed/out-of-order sequences land here
+    reviewReason: v.optional(v.string()),
+  })
+    .index("by_user_start", ["userId", "startedAt"])
+    .index("by_needs_review", ["needsReview"]),
+
+  messages: defineTable({
+    senderId: v.id("users"),
+    recipientId: v.optional(v.id("users")),
+    modQueue: v.boolean(),                     // do NOT rely on recipientId absence — not indexable
+    content: v.string(),
+    isRead: v.boolean(),
+    archivedAt: v.optional(v.number()),        // archive ≠ delete; retention per §9
+    retentionDays: v.optional(v.number()),
+  })
+    .index("by_recipient_read", ["recipientId", "isRead"])
+    .index("by_modqueue_unread", ["modQueue", "isRead"]),
+
+  pushSubscriptions: defineTable({             // one row per subscription → rotation/dedup
+    userId: v.id("users"),
+    endpoint: v.string(),
+    keysP256dh: v.string(),
+    keysAuth: v.string(),
+  })
+    .index("by_user", ["userId"]),
+});
+```
+
+### 6.1 Shift Derivation Grammar (strict)
+
+Legal transitions:
+
+```
+(arrived | job finish) → checkpoint? → lunch → checkpoint (resume)
+→ ... → day finish | job finish
+quick side mission: legal from ANY active state; enters a substate
+  exited by the next checkpoint or job finish; picker duration deducted
+  from worked minutes
+```
+
+Derivation rules (v1.1):
+
+1. **Ordering:** candidate logs are sorted by `clientReportedTime` skew-corrected (`clientReportedTime` when `|clockSkewMs| <= 30000`, else `_creationTime`). NEVER derive order from `_creationTime` alone — offline replay and multi-device use produce out-of-order server arrival.
+2. **Dedupe:** `idempotencyKey` duplicates are dropped before state-machine evaluation (double-tap / network retry protection).
+3. **Auto-close:** a shift with no terminal event (`day finish`/`job finish`) by `startedAt + MAX_SHIFT_HOURS (16h)` is auto-closed with `needsReview = true`, reason `"auto_closed_no_terminal"`.
+4. **Unpaired lunch:** a `lunch` without a resuming `checkpoint` deducts the site's default lunch minutes (configurable, default 60) — not needsReview unless it exceeds 2× default.
+5. **Overnight/DST:** shift day attribution uses `sites.timezone`. A shift crossing local midnight belongs to the local day it started in. DST transition days (23h/25h) use wall-clock boundaries via IANA tz math, never naive ±24h.
+
+- Out-of-order or malformed sequences **never silently miscount**: they create a shift flagged `needsReview = true` for moderator resolution.
+- Every payroll number is reconstructible from `logs` alone. `shifts` is a materialized cache; **logs are truth**.
+
+---
+
+## 7. Security
+
+- **AuthN/AuthZ:** Clerk JWTs validated in Convex; role checked in every mutation/query. Moderators provisioned backend-only.
+- **Row-scoped authz (v1.1 — HARD RULE):** every query and mutation derives the acting `userId` from `ctx.auth` and filters rows by it. A client-supplied `userId` argument is NEVER trusted as an identity or filter input, including on indexed queries like `by_user_time`. Employees read only their own logs/shifts/messages; one unscoped query is a full payroll-data leak.
+- **Device binding:** HMAC-signed token issued by Vercel function (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
+- **Impossible-travel heuristic (v1.1):** at write time, compare against the employee's previous fix: if implied speed > 200 km/h, set `impossibleTravelFlag = true` for moderator review. Catches naive GPS spoofing cheaply; advisory flag, not a hard reject.
+- **Clock tamper:** `clockSkewMs = _creationTime − clientReportedTime` computed AND STORED at write (v1.1) so it is indexable — moderators filter `|skew| > 30000ms` via that index rather than post-query scans.
+- **IP address:** captured where available (edge headers) but treated strictly as advisory telemetry for fraud review. Not an enforcement control — documented as such everywhere it appears.
+- **Geofencing:** haversine distance computed server-side inside mutations against the user's assigned site(s). Client-reported `isWithinGeofence` is never trusted.
+- **GPS spoofing reality (v1.1):** coords originate from the client and fake-GPS apps are trivial on Android. Server-side defenses are layered: accuracy gating, impossible-travel flagging, device binding fraud signals, moderator review queue. The system is designed to *detect* spoofing, not prevent it.
+
+---
+
+## 8. Offline Architecture
+
+1. Check-in mutation fails (network down) → payload written to **IndexedDB outbox** with original client timestamp.
+2. Serwist **Background Sync** fires on connectivity restore → replays outbox in order.
+3. Replayed entries keep original `clientReportedTime`; server `_creationTime` delta flags them naturally via clock-skew path.
+4. Outbox capped (~100 entries) to respect the 1MB transaction limit on replay batches.
+5. **Replay ordering rule (v1.1):** shift derivation MUST order by skew-corrected `clientReportedTime` (§6.1 rule 1), because replayed offline entries arrive with `_creationTime` far later than their work actually occurred — ordering by server time would place them in wrong shifts. Multi-device and post-reinstall scenarios produce the same hazard.
+
+---
+
+## 9. Data Governance & Privacy
+
+- **Lawful basis:** legitimate interest (employment context consent is invalid under GDPR Art. 7 due to power imbalance). Consent modal = transparency notice.
+- **Retention schedule (defaults, exact durations = Open Question):**
+  - Raw GPS coordinates: purged after **N days** post-payroll finalization.
+  - Aggregated hours / shift totals: retained per local labor statute (typically 2–7 years).
+- **Retention enforcement mechanism (v1.1):** retention is executed, not aspirational — **Vercel Cron → Convex purge mutation** runs daily, deletes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
+- **Worker rights:** access/export request procedure defined (self-serve CSV of own logs; includes their push subscription endpoints — these are personal data under Art. 4(1)).
+- **Minimization:** no third-party ad/analytics trackers; location recorded only at explicit badge events, never continuous tracking.
+
+---
+
+## 10. Diagrams
+
+### 10.1 System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client["Client (PWA)"]
+        UI[Next.js 15 UI]
+        SW[Serwist Service Worker]
+        OB[(IndexedDB Outbox)]
+    end
+    subgraph Vercel["Vercel Edge"]
+        RH[Route Handlers / Server Components]
+        DT[Device Token Issuer HMAC]
+    end
+    CL[Clerk Auth]
+    CX[(Convex DB)]
+
+    UI --> RH
+    RH --> CL
+    RH --> CX
+    UI -- offline check-in --> OB
+    OB --> SW
+    SW -- Background Sync replay --> RH
+    DT --> UI
+```
+
+### 10.2 Database ERD
+
+```mermaid
+erDiagram
+    users ||--o{ userSites : "assigned to"
+    sites ||--o{ userSites : "hosts"
+    users ||--o{ logs : "creates"
+    sites ||--o{ logs : "occurs at"
+    users ||--o{ shifts : "derives"
+    users ||--o{ messages : "sends"
+    users ||--o{ pushSubscriptions : "registers"
+
+    users {
+        string name
+        string email
+        string role "moderator|employee"
+        boolean isActive
+        string deviceId
+        number archivedAt "SOFT DELETE"
+    }
+    sites {
+        string name
+        number latitude
+        number longitude
+        number geofenceRadiusMeters
+        number archivedAt "SOFT DELETE"
+    }
+    userSites {
+        id userId
+        id siteId
+    }
+    logs {
+        id userId
+        id siteId
+        number clientReportedTime
+        number clockSkewMs
+        string status
+        number latitude
+        number longitude
+        number accuracyMeters
+        boolean isWithinGeofence
+        string ipAddress "ADVISORY"
+    }
+    shifts {
+        id userId
+        number startedAt
+        number endedAt
+        boolean needsReview
+    }
+    messages {
+        id senderId
+        id recipientId
+        boolean modQueue
+        string content
+        boolean isRead
+        number archivedAt "SOFT DELETE"
+    }
+    pushSubscriptions {
+        id userId
+        string endpoint
+        string keysP256dh
+        string keysAuth
+    }
+```
+
+### 10.3 Sequence — Geolocation Check-in (happy path)
+
+```mermaid
+sequenceDiagram
+    actor E as Employee (PWA)
+    participant UI as Next.js App
+    participant CX as Convex Mutation
+    E->>UI: Tap CHECK-IN
+    UI->>UI: navigator.geolocation.getCurrentPosition(highAccuracy, 5s, maxAge 0)
+    alt accuracyMeters > 50
+        UI-->>E: "Weak GPS signal" — retry, nothing stored
+    else fix accepted
+        UI->>CX: createLog(coords, accuracy, clientTime, deviceToken)
+        CX->>CX: verify Clerk JWT + HMAC device token
+        CX->>CX: haversine vs assigned site(s) → isWithinGeofence
+        CX->>CX: clockSkewMs = now − clientTime
+        CX->>CX: shift state machine update (or needsReview flag)
+        CX-->>UI: log saved (_creationTime authoritative)
+        UI-->>E: confirmation badge
+    end
+```
+
+### 10.4 Sequence — Offline Replay Path
+
+```mermaid
+sequenceDiagram
+    actor E as Employee (PWA)
+    participant OB as IndexedDB Outbox
+    participant SW as Serwist BG Sync
+    participant CX as Convex
+    E->>OB: check-in attempt fails (offline) → enqueue w/ original timestamp
+    Note over OB: connectivity restored
+    SW->>SW: sync event fires
+    SW->>CX: replay queued mutations in order
+    CX-->>SW: saved (clientTime preserved, skew flags naturally)
+```
+
+### 10.5 State Diagram — Shift Status Transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> arrived
+    arrived --> checkpoint
+    arrived --> lunch
+    checkpoint --> lunch
+    lunch --> checkpoint
+    checkpoint --> day_finish
+    checkpoint --> job_finish
+    day_finish --> [*]
+    job_finish --> [*]
+    note right of lunch
+        Any illegal transition
+        → shift.needsReview = true
+        (moderator resolves)
+    end note
+```
+
+---
+
+## 11. Open Questions
+
+1. Exact raw-coordinate retention duration (days) after payroll finalization — depends on jurisdiction.
+2. Applicable labor-record retention statute(s) for aggregated hours.
+3. Multi-site assignment policy: can one employee be geofence-active at multiple sites simultaneously? If yes, `shifts` needs a `siteId` array or per-site split shifts.
+4. Side-mission handling within shift math: RESOLVED in v1.1 default (deducted from worked minutes via substate exit pairing) — confirm with payroll stakeholder.
+5. Push notification cadence/quiet-hours policy for logging reminders.
+6. Site default lunch minutes (v1.1 §6.1 rule 4): confirm 60min default and 2× review threshold per site.
+7. WebAuthn platform authenticator rollout timing (v1.1 §5.3 Phase 2): which devices in the field support it?
+
+---
+
+*End of document.*
