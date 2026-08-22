@@ -53,8 +53,8 @@ The embedded schema (§6) is the source of truth. Where feature specifications a
 The architecture is designed around these limits explicitly:
 
 1. **Geolocation:** `navigator.geolocation` with `enableHighAccuracy: true`, `timeout: 5000`, `maximumAge: 0`. Any fix with `accuracyMeters > 50` is **rejected**; UI surfaces a "weak GPS signal" state instead of storing junk data.
-2. **Convex mutations:** payloads must not exceed the **1MB** transaction limit.
-3. **Vercel functions:** **10s** execution timeout; response payload cap **4.5MB**.
+2. **Convex document size ≤ 1 MiB per document/nested object; 16 MiB read + 16 MiB written per transaction** (verified docs.convex.dev/production/state/limits, 2026-08-23). Each log is ≪ 1 MiB; outbox replay batches are bounded by the 16 MiB write budget — cap batches at 200 entries for headroom.
+3. **Vercel Functions (Fluid compute): duration configurable up to 300s Hobby / 800s Pro; response/request body cap 4.5MB hard** (`413 FUNCTION_PAYLOAD_TOO_LARGE`) (verified vercel.com/docs/functions/limitations, 2026-08-23). Only CSV export assembly approaches these; paginate on `by_user_time`.
 4. **Service worker cache:** budget < **50MB** for core app assets, with an LRU eviction strategy on runtime caches.
 5. **Web Push:** encrypted message payload ≤ **4KB**. Notifications are trigger-only; clients fetch real content after wake.
 6. **IP address is advisory telemetry only.** It must never be documented or implemented as an enforcement control — clients can bypass edge checks and spoof headers. See §7 Security.
@@ -261,7 +261,7 @@ Derivation rules (v1.1):
 1. Check-in mutation fails (network down) → payload written to **IndexedDB outbox** with original client timestamp.
 2. **Replay triggers (primary):** app foregrounding (`visibilitychange`), the window `online` event, and next successful mutation each flush the outbox. These run on ALL platforms.
 3. **Bonus trigger:** Serwist Background Sync fires on connectivity restore **on Chromium browsers only** (caniuse `background-sync`: Safari/iOS/Firefox never supported, any version). Treat it as opportunistic acceleration, never the mechanism.
-4. Outbox capped (~100 entries) to respect the 1MB transaction limit on replay batches.
+4. Outbox capped (~100 entries) to respect the 16 MiB per-transaction write budget on replay batches (§3 item 2).
 5. **Replay ordering rule (v1.1):** shift derivation MUST order by skew-corrected `clientReportedTime` (§6.1 rule 1), because replayed offline entries arrive with `_creationTime` far later than their work actually occurred — ordering by server time would place them in wrong shifts. Multi-device and post-reinstall scenarios produce the same hazard.
 6. **Platform-support table (checked 2026-08-23, caniuse.com/background-sync):** Chrome/Edge/Samsung Internet ≥49 ✅ · Safari desktop+iOS ❌ all versions · Firefox ❌ (except behind flag). ZA field workforce skews Android but iPhone share is material — foreground reconciliation is the load-bearing path.
 

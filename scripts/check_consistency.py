@@ -59,5 +59,11 @@ if "impossibleTravelFlag" in doc and "previous fix" in doc.lower():
 if "Background Sync support:" not in doc and "background-sync" not in doc.lower():
     failures.append("B4: no platform-support statement for Background Sync")
 
+# M2: transaction-limit mislabel must be gone
+if "1MB transaction limit" in doc or "1 MB transaction" in doc.lower():
+    failures.append("M2: '1MB transaction limit' mislabel present")
+if "Fluid compute" not in doc and "300s" not in doc:
+    failures.append("M2/V2: Vercel duration figure not updated to Fluid compute reality")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)
