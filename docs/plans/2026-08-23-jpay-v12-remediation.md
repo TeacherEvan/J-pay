@@ -38,6 +38,12 @@ These rules apply to the executing agent and any subagent. Violating a guardrail
 ### G7 — Plan-vs-doc agreement
 - If execution reveals the plan itself is wrong (a finding was mis-stated), STOP and amend THIS plan file first (bump revision), then continue. Never let the TRD silently diverge from the plan executing it.
 
+### Execution Revisions (2026-08-23 — G7 amendments made during execution)
+
+- **Rev A (Task 1):** The D4 gate in `scripts/check_consistency.py` is document-wide (`\bClerk\b` anywhere fails), but Task 1's original edit list could not clear Clerk residue in §5.2, §5.3, §7 (device-binding bullet + AuthN/AuthZ), and §10.3. The global Clerk→Convex Auth sweep — including Task 7 Step 3's §5.3 issuance text — is pulled forward into Task 1 so its stated Step 5 gate ("D4/B1 failure lines gone") is achievable. Task 7's D4/M5 checks become residual verification.
+- **Rev B (Task 2):** Task 2 Step 2 greps for `side_mission` inside the §10.5 diagram body, but the Step 3 diagram aliased the substate as `sm` (no underscore) — the test could never clear. Diagram amended: `state "in side mission" as side_mission`.
+- **Rev C (Task 5):** Task 5's M2 test greps `1MB transaction limit`, which also occurs in §8 item 4 (outside Task 5's original file list). Task 5 extended to rewrite §8 item 4 to the 16 MiB write-budget wording.
+
 ---
 
 ## Pre-Flight Decisions (owner: Ewaldt — answer before Task 1)
@@ -235,13 +241,13 @@ stateDiagram-v2
     checkpoint --> job_finish
     day_finish --> [*]
     job_finish --> [*]
-    state "in side mission" as sm
-    arrived --> sm
-    checkpoint --> sm
-    lunch --> sm
-    sm --> checkpoint : exit
-    sm --> job_finish : implicit exit
-    note right of sm
+    state "in side mission" as side_mission
+    arrived --> side_mission
+    checkpoint --> side_mission
+    lunch --> side_mission
+    side_mission --> checkpoint : exit
+    side_mission --> job_finish : implicit exit
+    note right of side_mission
         duration = min(picker value,
         wall-clock elapsed).
         Unpaired at terminal: deduct
@@ -359,6 +365,7 @@ git add -A && git commit -m "docs(j-pay): resolve B4 — foreground-primary offl
 
 **Files:**
 - Modify: `j-pay.md` §3 Hard Technical Limits items 2–3
+- Modify: `j-pay.md` §8 item 4 (Rev C — same mislabeled limit lives there)
 
 **Step 1: Failing test addition**
 
@@ -376,6 +383,8 @@ if "Fluid compute" not in doc and "300s" not in doc:
 
 > 2. **Convex document size ≤ 1 MiB per document/nested object; 16 MiB read + 16 MiB written per transaction** (verified docs.convex.dev/production/state/limits, 2026-08-23). Each log is ≪ 1 MiB; outbox replay batches are bounded by the 16 MiB write budget — cap batches at 200 entries for headroom.
 > 3. **Vercel Functions (Fluid compute): duration configurable up to 300s Hobby / 800s Pro; response/request body cap 4.5MB hard** (`413 FUNCTION_PAYLOAD_TOO_LARGE`). Only CSV export assembly approaches these; paginate on `by_user_time`.
+
+And §8 item 4 (Rev C): replace `to respect the 1MB transaction limit on replay batches` with `to respect the 16 MiB per-transaction write budget on replay batches (§3 item 2)`.
 
 **Step 4: Run** — Expected: cleared.
 

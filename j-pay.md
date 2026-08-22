@@ -42,8 +42,8 @@ The embedded schema (§6) is the source of truth. Where feature specifications a
 |---|---|
 | Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
 | Backend/DB | Convex (reactive database, file storage, real-time sync) |
-| Auth | Clerk, integrated with Convex via official `clerk-convex` provider (JWT); roles (`moderator` \| `employee`) mirrored into Convex `users` table |
-| Deployment | Vercel (Edge network). All Convex access flows through Next.js route handlers or server components. The Convex deploy URL is never exposed as a public client-side env var without a `CLERK_ISSUER` check |
+| Auth | **Convex Auth** (`@convex-dev/auth`, registry-verified v0.0.95 2026-08-11) with password provider; sessions via `ctx.auth`. Roles (`moderator` \| `employee`) stored on the `users` row and enforced server-side. Moderator provisioning = invite-only internal mutation (no self-signup route shipped). |
+| Deployment | Vercel (Edge network). Client applications connect **directly to Convex** via `ConvexReactClient` using the public `NEXT_PUBLIC_CONVEX_URL`, authenticated with Convex Auth sessions. Vercel Route Handlers exist only for secret-free server conveniences: CSV export assembly and edge rate-limiting (device-token issuance moves INTO Convex per Task 7/M5). Data isolation comes from row-scoped authz inside every Convex function (§7 R4), never from URL concealment. |
 | PWA | Serwist (service worker generation, manifest caching, Background Sync) |
 
 ---
@@ -87,7 +87,7 @@ The architecture is designed around these limits explicitly:
 
 ### 5.2 Moderator Interface (Desktop-Optimized)
 
-- Access provisioned via Clerk backend only (role set in dashboard/API, not self-service).
+- Access provisioned backend-only (invite-only internal Convex mutation sets role; not self-service).
 - Real-time audit log of employee locations (Convex reactive queries).
 - Payroll calculator over derived **shifts** (§6), editable hourly rates and multipliers.
 - Lightweight diagram tool (canvas or mermaid render-only).
@@ -101,8 +101,8 @@ The architecture is designed around these limits explicitly:
 
 ### 5.3 Device Binding
 
-- Server-issued signed device token (HMAC, secret held in Vercel env), stored in IndexedDB, verified server-side on each mutation.
-- **Issuance preconditions (v1.1):** token issuance requires a valid Clerk session from an **invite-only** Clerk organization, and the user must have `role === "employee"` and `isActive === true` at issue time. Self-service signup outside invites must be disabled in the Clerk dashboard.
+- Server-issued signed device token (HMAC, secret held solely in Convex env), stored in IndexedDB, verified server-side on each mutation.
+- **Issuance preconditions (v1.1):** tokens are issued **inside Convex** (internal mutation at activation). Issuance requires a valid Convex Auth session for an invited `role === "employee"` user with `isActive === true`; self-signup route is not shipped (moderator invite-only provisioning). If edge issuance is ever required for rate-limiting, that reintroduces a second secret surface — rejected per review M5 unless documented need arises.
 - **Known limitation (v1.1):** an IndexedDB-stored HMAC token proves *possession*, not *device* — any employee can extract their own token via DevTools and share it (buddy punching). Moderators MUST treat duplicate-token usage across distinct devices/IPs as a fraud signal. Optional hardening: WebAuthn platform authenticator (`authenticatorAttachment: "platform"`) for hardware-backed identity on modern Android/iOS; recommended Phase 2.
 - Loss of device = moderator-triggered re-issue flow.
 - A localStorage copy alone is **NOT** sufficient identity.
@@ -239,9 +239,9 @@ Derivation rules (v1.1):
 
 ## 7. Security
 
-- **AuthN/AuthZ:** Clerk JWTs validated in Convex; role checked in every mutation/query. Moderators provisioned backend-only.
+- **AuthN/AuthZ:** Convex Auth sessions validated via ctx.auth (clients connect direct to Convex — no route-handler proxy hop); role checked in every mutation/query. Moderators provisioned backend-only.
 - **Row-scoped authz (v1.1 — HARD RULE):** every query and mutation derives the acting `userId` from `ctx.auth` and filters rows by it. A client-supplied `userId` argument is NEVER trusted as an identity or filter input, including on indexed queries like `by_user_time`. Employees read only their own logs/shifts/messages; one unscoped query is a full payroll-data leak.
-- **Device binding:** HMAC-signed token issued by Vercel function (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
+- **Device binding:** HMAC-signed token issued inside Convex (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
 - **Impossible-travel heuristic (v1.1):** at write time, compare against the employee's previous fix: if implied speed > 200 km/h, set `impossibleTravelFlag = true` for moderator review. Catches naive GPS spoofing cheaply; advisory flag, not a hard reject.
 - **Clock tamper:** `clockSkewMs = _creationTime − clientReportedTime` computed AND STORED at write (v1.1) so it is indexable — moderators filter `|skew| > 30000ms` via that index rather than post-query scans.
 - **IP address:** captured where available (edge headers) but treated strictly as advisory telemetry for fraud review. Not an enforcement control — documented as such everywhere it appears.
@@ -284,19 +284,20 @@ flowchart LR
         OB[(IndexedDB Outbox)]
     end
     subgraph Vercel["Vercel Edge"]
-        RH[Route Handlers / Server Components]
-        DT[Device Token Issuer HMAC]
+        RH[Route Handlers: CSV export / rate limiting]
     end
-    CL[Clerk Auth]
-    CX[(Convex DB)]
-
-    UI --> RH
-    RH --> CL
-    RH --> CX
+    subgraph Convex["Convex Backend"]
+        CA[Convex Auth]
+        DT[Device Token Issuer HMAC]
+        CX[(Convex DB)]
+    end
+    UI -- ConvexReactClient: queries + mutations --> CX
     UI -- offline check-in --> OB
     OB --> SW
-    SW -- Background Sync replay --> RH
-    DT --> UI
+    SW -- outbox flush --> CX
+    RH --> CX
+    CA --- CX
+    DT -- issued token --> UI
 ```
 
 ### 10.2 Database ERD
@@ -377,7 +378,7 @@ sequenceDiagram
         UI-->>E: "Weak GPS signal" — retry, nothing stored
     else fix accepted
         UI->>CX: createLog(coords, accuracy, clientTime, deviceToken)
-        CX->>CX: verify Clerk JWT + HMAC device token
+        CX->>CX: verify Convex Auth session + HMAC device token
         CX->>CX: haversine vs assigned site(s) → isWithinGeofence
         CX->>CX: clockSkewMs = now − clientTime
         CX->>CX: shift state machine update (or needsReview flag)
