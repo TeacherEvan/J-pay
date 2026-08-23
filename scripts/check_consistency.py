@@ -65,5 +65,15 @@ if "1MB transaction limit" in doc or "1 MB transaction" in doc.lower():
 if "Fluid compute" not in doc and "300s" not in doc:
     failures.append("M2/V2: Vercel duration figure not updated to Fluid compute reality")
 
+# M3: coord purge must state anonymize-vs-delete choice
+if "purge" in doc.lower() and "zero out lat/lng" not in doc and "anonymize (zero" not in doc:
+    failures.append("M3: coordinate purge outcome (anonymize vs delete) unspecified")
+# M6: sites audit fields
+if "createdBy" not in doc.split("sites: defineTable")[1].split("}),")[0]:
+    failures.append("M6: sites table lacks createdBy audit field")
+# M7 covered by base script (web-push presence) — tighten to require Convex Action wording
+if "web-push" in doc and "Convex Action" not in doc:
+    failures.append("M7: web-push named but sender runtime unspecified")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

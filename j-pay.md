@@ -96,7 +96,7 @@ The architecture is designed around these limits explicitly:
 - Reporting: CSV export by employee + date range (uses `by_user_time` index).
   - **Formula-injection sanitization (v1.1):** any cell value beginning with `=`, `+`, `-`, or `@` is prefixed with `'` on export (employee names, message content are attacker-controllable).
   - **Pagination (v1.1):** exports paginate on `by_user_time` and stream chunks; a single response must never approach the 4.5MB Vercel cap.
-- **Push subscription maintenance (v1.1):** when a push send returns 404/410, delete the `pushSubscriptions` row. Without pruning, dead endpoints accumulate indefinitely.
+- **Push subscription maintenance (v1.1):** when a push send returns 404/410, delete the `pushSubscriptions` row. Without pruning, dead endpoints accumulate indefinitely. Push dispatch runs as a **Convex Action** calling the `web-push` npm package (v3.6.7, registry-verified 2026-08-23); VAPID private key lives ONLY in Convex env — no second secret surface.
 - **Moderator manual check-in attestation (v1.1):** override flow for weak-GPS sites (see §5.1).
 
 ### 5.3 Device Binding
@@ -137,6 +137,9 @@ export default defineSchema({
     geofenceRadiusMeters: v.number(),
     timezone: v.string(),                      // IANA tz — payroll day boundaries are LOCAL (v1.1)
     archivedAt: v.optional(v.number()),
+    createdBy: v.id("users"),                  // site provisioning audit (v1.2, M6)
+    updatedAt: v.optional(v.number()),
+    updatedBy: v.optional(v.id("users")),
   }),
 
   userSites: defineTable({                     // employees assigned to one+ sites
@@ -271,9 +274,9 @@ Derivation rules (v1.1):
 
 - **Lawful basis:** legitimate interest (employment context consent is invalid under GDPR Art. 7 due to power imbalance). Consent modal = transparency notice.
 - **Retention schedule (defaults, exact durations = Open Question):**
-  - Raw GPS coordinates: purged after **N days** post-payroll finalization.
+  - Raw GPS coordinates: **anonymized, not deleted** — purge jobs **zero out lat/lng** and retain the row (status/timestamps/geofence result survive as payroll-dispute evidence); payroll-finalized periods hold anonymization until the dispute window (default 90 days) closes. Exact N days remains Open Question 1.
   - Aggregated hours / shift totals: retained per local labor statute (typically 2–7 years).
-- **Retention enforcement mechanism (v1.1):** retention is executed, not aspirational — **Vercel Cron → Convex purge mutation** runs daily, deletes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
+- **Retention enforcement mechanism (v1.2):** retention is executed, not aspirational — a **native Convex cron** (`convex/crons.ts` → internal purge mutation) runs daily, zeroes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
 - **Worker rights:** access/export request procedure defined (self-serve CSV of own logs; includes their push subscription endpoints — these are personal data under Art. 4(1)).
 - **Minimization:** no third-party ad/analytics trackers; location recorded only at explicit badge events, never continuous tracking.
 
@@ -333,6 +336,9 @@ erDiagram
         number longitude
         number geofenceRadiusMeters
         number archivedAt "SOFT DELETE"
+        id createdBy "FK users"
+        number updatedAt
+        id updatedBy "FK users"
     }
     userSites {
         id userId
@@ -448,8 +454,8 @@ stateDiagram-v2
 
 ## 11. Open Questions
 
-1. Exact raw-coordinate retention duration (days) after payroll finalization — depends on jurisdiction.
-2. Applicable labor-record retention statute(s) for aggregated hours.
+1. Exact raw-coordinate retention duration (days) after payroll finalization — depends on jurisdiction. **Blocked on jurisdiction research.**
+2. Applicable labor-record retention statute(s) for aggregated hours. **Blocked on jurisdiction research.**
 3. Multi-site assignment policy: can one employee be geofence-active at multiple sites simultaneously? If yes, `shifts` needs a `siteId` array or per-site split shifts.
 4. Side-mission handling within shift math: RESOLVED in v1.1 default (deducted from worked minutes via substate exit pairing) — confirm with payroll stakeholder.
 5. Push notification cadence/quiet-hours policy for logging reminders.

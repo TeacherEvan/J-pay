@@ -43,6 +43,7 @@ These rules apply to the executing agent and any subagent. Violating a guardrail
 - **Rev A (Task 1):** The D4 gate in `scripts/check_consistency.py` is document-wide (`\bClerk\b` anywhere fails), but Task 1's original edit list could not clear Clerk residue in §5.2, §5.3, §7 (device-binding bullet + AuthN/AuthZ), and §10.3. The global Clerk→Convex Auth sweep — including Task 7 Step 3's §5.3 issuance text — is pulled forward into Task 1 so its stated Step 5 gate ("D4/B1 failure lines gone") is achievable. Task 7's D4/M5 checks become residual verification.
 - **Rev B (Task 2):** Task 2 Step 2 greps for `side_mission` inside the §10.5 diagram body, but the Step 3 diagram aliased the substate as `sm` (no underscore) — the test could never clear. Diagram amended: `state "in side mission" as side_mission`.
 - **Rev C (Task 5):** Task 5's M2 test greps `1MB transaction limit`, which also occurs in §8 item 4 (outside Task 5's original file list). Task 5 extended to rewrite §8 item 4 to the 16 MiB write-budget wording.
+- **Rev D (Task 6):** The M3 gate matches only literal `zero out lat/lng` or `anonymize (zero`, but Step 3's replacement prose said "lat/lng zeroed" / "anonymized, not deleted" — neither phrase, so the test could never clear on the snippet alone. §9 wording amended to include `zero out lat/lng` explicitly.
 
 ---
 
