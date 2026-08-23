@@ -75,5 +75,15 @@ if "createdBy" not in doc.split("sites: defineTable")[1].split("}),")[0]:
 if "web-push" in doc and "Convex Action" not in doc:
     failures.append("M7: web-push named but sender runtime unspecified")
 
+# M5: HMAC secret single-surface
+if "HMAC" in doc and "Vercel env" in doc and "Convex env holds the HMAC" not in doc:
+    failures.append("M5: HMAC secret appears bound to Vercel env (two-surface problem)")
+# version bump gate
+if "**Version:** 1.2" not in doc and "Version:** 1.1" in doc:
+    failures.append("VERSION: header not bumped to 1.2")
+# D4 case-insensitive residual sweep
+if re.search(r"clerk", doc, re.I):
+    failures.append("D4: lowercase/residual Clerk reference remains")
+
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

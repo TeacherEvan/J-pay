@@ -2,10 +2,10 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** TeacherEvan/J-pay-webb_logger
-**Version:** 1.1 (senior-review revision)
+**Version:** 1.2 (remediation of senior-review findings)
 **Status:** Draft for review
 
-### Revision Log (v1.1)
+### Revision Log (v1.1 → v1.2)
 
 | # | Section | Change |
 |---|---|---|
@@ -23,6 +23,14 @@
 | R12 | §5.2 | Push subscription pruning on 404/410 |
 | R13 | §4 | Consent modal links privacy notice |
 | R14 | §11 | Open Questions updated |
+| R15 | §7/§3 | Impossible-travel previous-fix lookup specified (`by_user_time` desc, ≤5-entry scan); skew filter honest two-tail `by_user_skew` query |
+| R16 | §3/§8 | Limits corrected to live-verified values (Convex 1 MiB doc / 16 MiB tx budget; Vercel Fluid compute 300s/800s, 4.5MB cap) |
+| R17 | §8/§5.1 | Offline replay foreground-primary (`visibilitychange`/`online`); Background Sync demoted to Chromium-only bonus with platform-support table |
+| R18 | §9 | Purge = anonymize-on-purge (zero out lat/lng, row retained); enforced by native Convex cron (`convex/crons.ts`) writing purge-audit rows |
+| R19 | §6 | `sites` audit fields added (`createdBy`, `updatedAt`, `updatedBy`); ERD synced |
+| R20 | §5.2 | Push sender named: `web-push` (v3.6.7) via Convex Action; VAPID key single surface in Convex env |
+| R21 | §10 | Diagrams refreshed: client-direct topology (§10.1), `flushOutbox()` primary replay lane (§10.4), side-mission substate (§10.5) |
+| R22 | Global | Legacy third-party auth vendor removed (see REVIEW-v1.1) → Convex Auth (password provider) per owner decision 2026-08-23; device-token issuance inside Convex (single HMAC secret surface) |
 
 ---
 
