@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "convex:dev": "convex dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test scripts/test-shift-engine.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
     "@auth/core": "0.41.1",
