@@ -72,7 +72,8 @@ export default defineSchema({
     .index("by_user_time", ["userId", "_creationTime"])
     .index("by_status", ["status"])
     .index("by_site_time", ["siteId", "_creationTime"])
-    .index("by_user_skew", ["userId", "clockSkewMs"]),
+    .index("by_user_skew", ["userId", "clockSkewMs"])
+    .index("by_user_idem", ["userId", "idempotencyKey"]),
 
   shifts: defineTable({
     userId: v.id("users"),
@@ -103,4 +104,11 @@ export default defineSchema({
     keysP256dh: v.string(),
     keysAuth: v.string(),
   }).index("by_user", ["userId"]),
+
+  reviewResolutions: defineTable({
+    userId: v.id("users"),
+    shiftKey: v.string(),
+    resolvedAt: v.number(),
+    byModeratorId: v.id("users"),
+  }).index("by_user_key", ["userId", "shiftKey"]),
 });

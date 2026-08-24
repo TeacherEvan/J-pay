@@ -40,19 +40,19 @@ export const createLog = mutation({
       throw new ConvexError("WEAK_GPS_SIGNAL");
     }
 
+    const secret = process.env.DEVICE_TOKEN_SECRET;
+    if (!secret) throw new ConvexError("DEVICE_TOKEN_SECRET_NOT_SET");
     const user = await ctx.db.get(userId);
-    if (!user || !verifyDeviceToken(args.deviceToken, userId, process.env.DEVICE_TOKEN_SECRET ?? "", user.deviceId)) {
+    if (!user || !verifyDeviceToken(args.deviceToken, userId, secret, user.deviceId)) {
       throw new ConvexError("DEVICE_TOKEN_INVALID");
     }
 
-    const recent = await ctx.db
+    const duplicate = await ctx.db
       .query("logs")
-      .withIndex("by_user_time", (q) =>
-        q.eq("userId", userId).gte("_creationTime", Date.now() - 48 * 3600 * 1000)
+      .withIndex("by_user_idem", (q) =>
+        q.eq("userId", userId).eq("idempotencyKey", args.idempotencyKey)
       )
-      .order("desc")
-      .take(100);
-    const duplicate = recent.find((l) => l.idempotencyKey === args.idempotencyKey);
+      .first();
     if (duplicate) return { logId: duplicate._id, duplicate: true as const };
 
     const site = await ctx.db.get(args.siteId);

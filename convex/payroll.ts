@@ -21,10 +21,10 @@ export const calcForEmployee = query({
     const shifts = await ctx.db
       .query("shifts")
       .withIndex("by_user_start", (q) =>
-        q.eq("userId", args.userId).gte("startedAt", args.fromMs)
+        q.eq("userId", args.userId).gte("startedAt", args.fromMs).lte("startedAt", args.toMs)
       )
       .collect();
-    const inRange = shifts.filter((s) => s.startedAt < args.toMs);
+    const inRange = shifts;
 
     let timezone = "UTC";
     const firstAssignment = await ctx.db
@@ -78,11 +78,11 @@ export const exportLogsCsv = action({
   handler: async (ctx, args) => {
     const callerId = await getAuthUserId(ctx);
     if (!callerId) throw new ConvexError("UNAUTHENTICATED");
-    const caller = await ctx.runQuery(api.users_queries.getById, { id: callerId });
+    const caller = await ctx.runQuery(internal.users_queries.getById, { id: callerId });
     if (!caller || caller.role !== "moderator" || !caller.isActive || caller.archivedAt !== undefined) {
       throw new ConvexError("FORBIDDEN");
     }
-    const logs = await ctx.runQuery(internal.payroll_data.logsForExport, args);
+    const { rows, truncated } = await ctx.runQuery(internal.payroll_data.logsForExport, args);
     const csv = toCsv(
       [
         "client_time_utc",
@@ -95,7 +95,7 @@ export const exportLogsCsv = action({
         "travel_flag",
         "skew_s",
       ],
-      logs.map((l) => [
+      rows.map((l) => [
         new Date(l.clientTime).toISOString(),
         new Date(l.serverTime).toISOString(),
         l.status,
@@ -107,6 +107,12 @@ export const exportLogsCsv = action({
         l.skewSeconds,
       ])
     );
+    if (truncated) {
+      return {
+        filename: `jpay-logs-TRUNCATED-5000-${args.userId}.csv`,
+        csv,
+      };
+    }
     return {
       filename: `jpay-logs-${args.userId}-${new Date(args.fromMs).toISOString().slice(0, 10)}.csv`,
       csv,

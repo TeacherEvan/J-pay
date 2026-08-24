@@ -38,6 +38,7 @@
 | R27 | Scripts | Gates hardened: ERD-sync, README-version, day_finish-edge, retentionDays-wiring checks; document paths resolved from script location (portable across checkouts) |
 | R28 | Global | Implementation landed in THIS workspace per owner directive 2026-08-24 (supersedes the historical `J-pay-webb_logger` target): Next.js 15 + Convex backend implementing §6 verbatim, moderator console, offline outbox, payroll, messaging, push scaffolding. See README + docs/notes/. |
 | R29 | §1/§11 context | Fork-per-client model adopted (ADR-002) resolving multi-tenancy D1; shift grammar extracted to pure module with 15-case unit suite (ADR-003); `npm test` added to repo gates |
+| R31 | §6/§7 | Schema amendments (additive): `logs.by_user_idem` index for unbounded idempotency dedupe; `reviewResolutions` table so moderator Resolve survives re-derivation (was silently reset by next check-in). Unguarded moderator queries closed; device-token HMAC refuses missing secret; site/provisioning input validation added |
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 
 ---
@@ -197,7 +198,8 @@ export default defineSchema({
     .index("by_user_time", ["userId", "_creationTime"])
     .index("by_status", ["status"])
     .index("by_site_time", ["siteId", "_creationTime"])
-    .index("by_user_skew", ["userId", "clockSkewMs"]),
+    .index("by_user_skew", ["userId", "clockSkewMs"])
+    .index("by_user_idem", ["userId", "idempotencyKey"]),
 
   shifts: defineTable({                        // DERIVED cache; logs are truth
     userId: v.id("users"),
@@ -229,6 +231,14 @@ export default defineSchema({
     keysAuth: v.string(),
   })
     .index("by_user", ["userId"]),
+
+  reviewResolutions: defineTable({             // moderator "Resolve" survives re-derivation
+    userId: v.id("users"),
+    shiftKey: v.string(),                      // `${startedAt}` of the flagged segment
+    resolvedAt: v.number(),
+    byModeratorId: v.id("users"),
+  })
+    .index("by_user_key", ["userId", "shiftKey"]),
 });
 ```
 
@@ -403,6 +413,12 @@ erDiagram
         string endpoint
         string keysP256dh
         string keysAuth
+    }
+    reviewResolutions {
+        id userId
+        string shiftKey
+        number resolvedAt
+        id byModeratorId
     }
 ```
 

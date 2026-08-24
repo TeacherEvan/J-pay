@@ -19,7 +19,8 @@ export type TableNames =
   | "authRefreshTokens"
   | "authVerificationCodes"
   | "authVerifiers"
-  | "authRateLimits";
+  | "authRateLimits"
+  | "reviewResolutions";
 
 export type Id<TableName extends TableNames = TableNames> = GenericId<TableName>;
 
@@ -116,6 +117,7 @@ export interface DataModel extends GenericDataModel {
       by_status: ["status"];
       by_site_time: ["siteId", "_creationTime"];
       by_user_skew: ["userId", "clockSkewMs"];
+      by_user_idem: ["userId", "idempotencyKey"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -170,6 +172,20 @@ export interface DataModel extends GenericDataModel {
     };
     fieldPaths: GenericFieldPaths;
     indexes: SystemIndexes & { by_user: ["userId"] };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  reviewResolutions: {
+    document: {
+      _id: Id<"reviewResolutions">;
+      _creationTime: number;
+      userId: Id<"users">;
+      shiftKey: string;
+      resolvedAt: number;
+      byModeratorId: Id<"users">;
+    };
+    fieldPaths: GenericFieldPaths;
+    indexes: SystemIndexes & { by_user_key: ["userId", "shiftKey"] };
     searchIndexes: {};
     vectorIndexes: {};
   };

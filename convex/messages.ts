@@ -2,14 +2,19 @@ import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireActiveUser, requireModerator, currentUserId } from "./access";
+import { requireModerator, currentUserId } from "./access";
+
+function validContent(content: string): string {
+  const text = content.trim();
+  if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
+  return text;
+}
 
 export const sendToModerators = mutation({
   args: { content: v.string() },
   handler: async (ctx, args) => {
     const userId = await currentUserId(ctx);
-    const text = args.content.trim();
-    if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
+    const text = validContent(args.content);
     await ctx.db.insert("messages", {
       senderId: userId,
       modQueue: true,
@@ -73,10 +78,8 @@ export const myInbox = query({
 export const replyToEmployee = mutation({
   args: { recipientId: v.id("users"), content: v.string() },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
-    const text = args.content.trim();
-    if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
     const moderatorId = await requireModerator(ctx);
+    const text = validContent(args.content);
     await ctx.db.insert("messages", {
       senderId: moderatorId,
       recipientId: args.recipientId,
@@ -96,8 +99,7 @@ export const broadcast = mutation({
   args: { content: v.string() },
   handler: async (ctx, args) => {
     const moderatorId = await requireModerator(ctx);
-    const text = args.content.trim();
-    if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
+    const text = validContent(args.content);
     const employees = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
@@ -123,7 +125,7 @@ export const markThreadRead = mutation({
       .query("messages")
       .withIndex("by_recipient_read", (q) => q.eq("recipientId", userId).eq("isRead", false))
       .collect();
-    for (const m of unread) await ctx.db.patch(m._id, { isRead: true });
+    await Promise.all(unread.map((m) => ctx.db.patch(m._id, { isRead: true })));
     return unread.length;
   },
 });

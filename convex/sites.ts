@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { ConvexError } from "convex/values";
 import { requireModerator, requireActiveUser } from "./access";
 
 export const listMine = query({
@@ -32,11 +33,26 @@ export const createSite = mutation({
   },
   handler: async (ctx, args) => {
     const moderatorId = await requireModerator(ctx);
-    if (args.geofenceRadiusMeters <= 0 || args.geofenceRadiusMeters > 10000) {
-      throw new Error("GEOFENCE_RADIUS_OUT_OF_RANGE");
+    const name = args.name.trim();
+    if (!name || name.length > 100) throw new ConvexError("INVALID_NAME");
+    if (
+      !Number.isFinite(args.latitude) ||
+      Math.abs(args.latitude) > 90 ||
+      !Number.isFinite(args.longitude) ||
+      Math.abs(args.longitude) > 180
+    ) {
+      throw new ConvexError("INVALID_COORDS");
     }
+    if (args.geofenceRadiusMeters <= 0 || args.geofenceRadiusMeters > 10000) {
+      throw new ConvexError("GEOFENCE_RADIUS_OUT_OF_RANGE");
+    }
+    if (!args.timezone.includes("/")) throw new ConvexError("INVALID_TIMEZONE");
     return await ctx.db.insert("sites", {
-      ...args,
+      name,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      geofenceRadiusMeters: args.geofenceRadiusMeters,
+      timezone: args.timezone,
       createdBy: moderatorId,
     });
   },
@@ -47,15 +63,15 @@ export const assignEmployee = mutation({
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "employee") throw new Error("NOT_AN_EMPLOYEE");
+    if (!user || user.role !== "employee") throw new ConvexError("NOT_AN_EMPLOYEE");
     const site = await ctx.db.get(args.siteId);
-    if (!site) throw new Error("SITE_NOT_FOUND");
+    if (!site) throw new ConvexError("SITE_NOT_FOUND");
     const existing = await ctx.db
       .query("userSites")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
     if (existing.some((a) => a.siteId === args.siteId)) {
-      throw new Error("ALREADY_ASSIGNED");
+      throw new ConvexError("ALREADY_ASSIGNED");
     }
     await ctx.db.insert("userSites", { userId: args.userId, siteId: args.siteId });
   },
@@ -70,7 +86,7 @@ export const unassignEmployee = mutation({
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
     const match = rows.find((a) => a.siteId === args.siteId);
-    if (!match) throw new Error("NOT_ASSIGNED");
+    if (!match) throw new ConvexError("NOT_ASSIGNED");
     await ctx.db.delete(match._id);
   },
 });

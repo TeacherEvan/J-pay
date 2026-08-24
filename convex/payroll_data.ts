@@ -10,8 +10,9 @@ export const logsForExport = internalQuery({
         q.eq("userId", args.userId).gte("_creationTime", args.fromMs)
       )
       .order("asc")
-      .take(5000);
-    return logs.filter((l) => l._creationTime < args.toMs).map((l) => ({
+      .take(5001);
+    const inRange = logs.filter((l) => l._creationTime < args.toMs);
+    const rows = inRange.slice(0, 5000).map((l) => ({
       clientTime: l.clientReportedTime,
       serverTime: l._creationTime,
       status: l.status as string,
@@ -22,5 +23,6 @@ export const logsForExport = internalQuery({
       travelFlag: l.impossibleTravelFlag === true,
       skewSeconds: Math.round((l.clockSkewMs ?? 0) / 1000),
     }));
+    return { rows, truncated: inRange.length > 5000 };
   },
 });

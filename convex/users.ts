@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 import { createAccount, getAuthUserId } from "@convex-dev/auth/server";
 import { issueDeviceToken } from "./deviceTokens";
 import { currentUserId, requireModerator } from "./access";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -20,7 +20,7 @@ function generateIdCode(): string {
 async function requireModeratorActionCtx(ctx: ActionCtx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("UNAUTHENTICATED");
-  const user = await ctx.runQuery(api.users_queries.getById, { id: userId });
+  const user = await ctx.runQuery(internal.users_queries.getById, { id: userId });
   if (!user || user.role !== "moderator" || !user.isActive || user.archivedAt !== undefined) {
     throw new ConvexError("FORBIDDEN");
   }
@@ -32,7 +32,9 @@ export const provisionEmployee = action({
   handler: async (ctx, args) => {
     await requireModeratorActionCtx(ctx);
     const email = args.email.trim().toLowerCase();
-    const existing = await ctx.runQuery(api.users_queries.getByEmail, {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ConvexError("INVALID_EMAIL");
+    if (!args.name.trim() || args.name.trim().length > 100) throw new ConvexError("INVALID_NAME");
+    const existing = await ctx.runQuery(internal.users_queries.getByEmail, {
       email,
     });
     if (existing) throw new ConvexError("USER_EXISTS");
@@ -57,7 +59,7 @@ export const bootstrapFirstModerator = internalAction({
     if (!process.env.BOOTSTRAP_KEY || args.key !== process.env.BOOTSTRAP_KEY) {
       throw new ConvexError("BOOTSTRAP_KEY_INVALID");
     }
-    const moderators = await ctx.runQuery(api.users_queries.listByRole, {
+    const moderators = await ctx.runQuery(internal.users_queries.listByRole, {
       role: "moderator",
     });
     if (moderators.length > 0) throw new ConvexError("MODERATOR_EXISTS");

@@ -11,6 +11,12 @@ export const deriveForUser = internalMutation({
       .withIndex("by_user_time", (q) => q.eq("userId", args.userId))
       .collect();
 
+    const resolutions = await ctx.db
+      .query("reviewResolutions")
+      .withIndex("by_user_key", (q) => q.eq("userId", args.userId))
+      .collect();
+    const resolvedKeys = new Set(resolutions.map((r) => r.shiftKey));
+
     const engineLogs: EngineLog[] = all.map((l) => ({
       _creationTime: l._creationTime,
       idempotencyKey: l.idempotencyKey,
@@ -29,6 +35,13 @@ export const deriveForUser = internalMutation({
     for (const row of old) await ctx.db.delete(row._id);
 
     for (const seg of segments) {
+      if (
+        seg.needsReview &&
+        resolvedKeys.has(String(seg.startedAt))
+      ) {
+        seg.needsReview = false;
+        seg.reviewReason = `resolved:${seg.reviewReason ?? "flagged"}`;
+      }
       const row: {
         userId: typeof args.userId;
         startedAt: number;
