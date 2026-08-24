@@ -1,7 +1,12 @@
 import { action, internalAction, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { createAccount, getAuthUserId } from "@convex-dev/auth/server";
+import {
+  createAccount,
+  getAuthUserId,
+  modifyAccountCredentials,
+  retrieveAccount,
+} from "@convex-dev/auth/server";
 import { issueDeviceToken } from "./deviceTokens";
 import { currentUserId, requireModerator } from "./access";
 import { api, internal } from "./_generated/api";
@@ -75,6 +80,58 @@ export const bootstrapFirstModerator = internalAction({
       },
     });
     return { email: args.email.trim().toLowerCase(), idCode };
+  },
+});
+
+export const provisionModerator = action({
+  args: { name: v.string(), email: v.string(), key: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const viaBreakGlass =
+      args.key !== undefined &&
+      process.env.BOOTSTRAP_KEY !== undefined &&
+      args.key === process.env.BOOTSTRAP_KEY;
+    if (!viaBreakGlass) {
+      await requireModeratorActionCtx(ctx);
+    }
+    const email = args.email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ConvexError("INVALID_EMAIL");
+    if (!args.name.trim() || args.name.trim().length > 100) throw new ConvexError("INVALID_NAME");
+    const existing = await ctx.runQuery(internal.users_queries.getByEmail, { email });
+    if (existing) throw new ConvexError("USER_EXISTS");
+    const idCode = generateIdCode();
+    await createAccount(ctx, {
+      provider: "password",
+      account: { id: email, secret: idCode },
+      profile: {
+        name: args.name,
+        email,
+        role: "moderator" as const,
+        isActive: true,
+      },
+    });
+    return { email, idCode };
+  },
+});
+
+export const changeMyPassword = action({
+  args: { currentSecret: v.string(), newSecret: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("UNAUTHENTICATED");
+    const user = await ctx.runQuery(internal.users_queries.getById, { id: userId });
+    if (!user?.email) throw new ConvexError("NO_EMAIL_ON_ACCOUNT");
+    if (args.newSecret.length < 8 || args.newSecret.length > 200) {
+      throw new ConvexError("INVALID_PASSWORD_LENGTH");
+    }
+    await retrieveAccount(ctx, {
+      provider: "password",
+      account: { id: user.email, secret: args.currentSecret },
+    });
+    await modifyAccountCredentials(ctx, {
+      provider: "password",
+      account: { id: user.email, secret: args.newSecret },
+    });
+    return { ok: true as const };
   },
 });
 

@@ -1,7 +1,7 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireEmployee } from "./access";
+import { requireEmployee, maybeCurrentUserId } from "./access";
 import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
@@ -113,7 +113,10 @@ export const createLog = mutation({
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireEmployee(ctx);
+    const userId = await maybeCurrentUserId(ctx);
+    if (!userId) return [];
+    const u = await ctx.db.get(userId);
+    if (!u || !u.isActive || u.archivedAt !== undefined || u.role !== "employee") return [];
     return await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", userId))

@@ -1,0 +1,24 @@
+# CDP probe — http://localhost:3000
+timestamp: 2026-08-24T10:42:35.165Z
+
+## DOM state
+{
+  "title": "J-Pay",
+  "h1": "J-Pay",
+  "buttons": [
+    "Sign in",
+    "First time? Activate with your ID code"
+  ],
+  "inputs": [
+    "email",
+    "password",
+    "flow"
+  ],
+  "bodyErrorOverlay": true
+}
+
+## Console errors/warnings
+(none)
+
+## Failed requests (non-convex)
+(none)

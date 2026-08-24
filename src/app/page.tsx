@@ -9,6 +9,7 @@ import { useOutbox } from "./use-outbox";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
+import { ChangePassword } from "./change-password";
 import { errMsg } from "@/lib/errors";
 
 const STATUSES = [
@@ -109,6 +110,7 @@ export default function Home() {
           <>
             <EmployeePanel />
             <MessagesPanel role="employee" />
+            <ChangePassword />
           </>
         ) : (
           <ModeratorLink />

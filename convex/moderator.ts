@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator } from "./access";
+import { requireModerator, maybeCurrentUserId } from "./access";
 import { internal } from "./_generated/api";
 
 export const auditRecentLogs = query({
@@ -40,7 +40,10 @@ export const auditRecentLogs = query({
 export const auditNeedsReview = query({
   args: {},
   handler: async (ctx) => {
-    await requireModerator(ctx);
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
     return await ctx.db
       .query("shifts")
       .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
@@ -56,7 +59,10 @@ function zip<A, B>(a: A[], b: B[]): [A, B][] {
 export const listEmployeesWithAssignments = query({
   args: {},
   handler: async (ctx) => {
-    await requireModerator(ctx);
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
     const employees = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
@@ -87,7 +93,10 @@ export const listEmployeesWithAssignments = query({
 export const listAllSites = query({
   args: {},
   handler: async (ctx) => {
-    await requireModerator(ctx);
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
     return await ctx.db.query("sites").collect();
   },
 });

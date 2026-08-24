@@ -1,12 +1,12 @@
 import { internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
-import { currentUserId } from "./access";
+import { maybeCurrentUserId } from "./access";
 
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await currentUserId(ctx);
-    return await ctx.db.get(userId);
+    const userId = await maybeCurrentUserId(ctx);
+    return userId ? await ctx.db.get(userId) : null;
   },
 });
 

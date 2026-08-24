@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessagesPanel } from "../messages";
 import { PayrollPanel, ReviewPanel } from "../payroll";
+import { ChangePassword } from "../change-password";
 import { errMsg } from "@/lib/errors";
 
 export default function ModeratorPage() {
@@ -37,6 +38,7 @@ export default function ModeratorPage() {
         <Link href="/" className="text-xs text-neutral-400 underline">
           employee view
         </Link>
+        <ChangePassword />
       </header>
 
       <section className="grid gap-6 md:grid-cols-2">
@@ -149,9 +151,11 @@ export default function ModeratorPage() {
 }
 
 function ProvisionPanel() {
-  const provision = useAction(api.users.provisionEmployee);
+  const provisionEmployeeAction = useAction(api.users.provisionEmployee);
+  const provisionModeratorAction = useAction(api.users.provisionModerator);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"employee" | "moderator">("employee");
   const [code, setCode] = useState<{ email: string; idCode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -166,13 +170,19 @@ function ProvisionPanel() {
           className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email"
           className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        <select value={role} onChange={(e) => setRole(e.target.value as "employee" | "moderator")}
+          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm">
+          <option value="employee">Employee</option>
+          <option value="moderator">Moderator</option>
+        </select>
         <button
           disabled={busy || !name || !email}
           onClick={async () => {
             setBusy(true);
             setError(null);
             try {
-              setCode(await provision({ name, email }));
+              const fn = role === "employee" ? provisionEmployeeAction : provisionModeratorAction;
+              setCode(await fn({ name, email }));
               setName("");
               setEmail("");
             } catch (e) {
@@ -183,7 +193,7 @@ function ProvisionPanel() {
           }}
           className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-50"
         >
-          Create account + ID code
+          Create account + ID code ({role})
         </button>
         {error && <p className="text-xs text-red-400">{error}</p>}
         {code && (

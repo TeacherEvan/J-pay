@@ -11,6 +11,10 @@ export async function currentUserId(ctx: Ctx): Promise<Id<"users">> {
   return userId;
 }
 
+export async function maybeCurrentUserId(ctx: Ctx): Promise<Id<"users"> | null> {
+  return await auth.getUserId(ctx);
+}
+
 export async function requireActiveUser(
   ctx: Ctx
 ): Promise<{ userId: Id<"users">; role: "moderator" | "employee" }> {

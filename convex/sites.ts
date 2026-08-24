@@ -1,15 +1,19 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, requireActiveUser } from "./access";
+import { requireModerator, maybeCurrentUserId } from "./access";
+import type { Id } from "./_generated/dataModel";
 
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
-    const { userId, role } = await requireActiveUser(ctx);
-    if (role === "moderator") {
+    const viewer = await maybeCurrentUserId(ctx);
+    const viewerDoc = viewer ? await ctx.db.get(viewer) : null;
+    if (!viewerDoc || !viewerDoc.isActive || viewerDoc.archivedAt !== undefined) return [];
+    if (viewerDoc.role === "moderator") {
       return await ctx.db.query("sites").collect();
     }
+    const userId = viewer as Id<"users">;
     const assignments = await ctx.db
       .query("userSites")
       .withIndex("by_user", (q) => q.eq("userId", userId))
