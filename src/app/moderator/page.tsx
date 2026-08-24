@@ -64,6 +64,7 @@ export default function ModeratorPage() {
                 <th className="p-2">Email</th>
                 <th className="p-2">Sites</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">Rate/h</th>
                 <th className="p-2"></th>
               </tr>
             </thead>
@@ -80,6 +81,9 @@ export default function ModeratorPage() {
                   </td>
                   <td className={`p-2 ${e.archivedAt ? "text-red-400" : "text-emerald-400"}`}>
                     {e.archivedAt ? "deactivated" : "active"}
+                  </td>
+                  <td className="p-2">
+                    <RateCell userId={e._id} initial={e.hourlyRateOverride} />
                   </td>
                   <td className="p-2 text-right">
                     {!e.archivedAt && (
@@ -336,5 +340,36 @@ function DeactivateButton({ userId }: { userId: string }) {
     <button onClick={() => setConfirming(true)} className="text-neutral-500 underline hover:text-red-400">
       deactivate
     </button>
+  );
+}
+
+function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }) {
+  const setRate = useMutation(api.moderator.setHourlyOverride);
+  const [value, setValue] = useState(initial === undefined ? "" : String(initial));
+  const [saved, setSaved] = useState(false);
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setSaved(false);
+        }}
+        inputMode="decimal"
+        placeholder="default"
+        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right"
+      />
+      <button
+        onClick={async () => {
+          const n = value.trim() === "" ? undefined : Number(value);
+          if (value.trim() !== "" && Number.isNaN(n)) return;
+          await setRate({ userId, rate: n });
+          setSaved(true);
+        }}
+        className="rounded border border-neutral-700 px-1 py-0.5 text-[10px]"
+      >
+        {saved ? "✓" : "set"}
+      </button>
+    </span>
   );
 }
