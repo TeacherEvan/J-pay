@@ -1,4 +1,4 @@
-import { action, internalAction, mutation } from "./_generated/server";
+import { action, internalAction, internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import {
@@ -10,7 +10,8 @@ import {
 import { issueDeviceToken } from "./deviceTokens";
 import { currentUserId, requireModerator } from "./access";
 import { api, internal } from "./_generated/api";
-import type { ActionCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -22,7 +23,7 @@ function generateIdCode(): string {
   return `JP-${code}`;
 }
 
-async function requireModeratorActionCtx(ctx: ActionCtx) {
+async function requireModeratorActionCtx(ctx: import("./_generated/server").ActionCtx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("UNAUTHENTICATED");
   const user = await ctx.runQuery(internal.users_queries.getById, { id: userId });
@@ -110,6 +111,29 @@ export const provisionModerator = action({
       },
     });
     return { email, idCode };
+  },
+});
+
+export const archiveUserBreakGlass = internalAction({
+  args: { key: v.string(), email: v.string() },
+  handler: async (ctx, args): Promise<{ archived: string }> => {
+    if (!process.env.BOOTSTRAP_KEY || args.key !== process.env.BOOTSTRAP_KEY) {
+      throw new ConvexError("BOOTSTRAP_KEY_INVALID");
+    }
+    const user: { _id: Id<"users">; email?: string | null } | null = await ctx.runQuery(
+      internal.users_queries.getByEmail,
+      { email: args.email.trim().toLowerCase() }
+    );
+    if (!user) throw new ConvexError("USER_NOT_FOUND");
+    await ctx.runMutation(internal.users.archiveUserInternal, { userId: user._id });
+    return { archived: user.email ?? "" };
+  },
+});
+
+export const archiveUserInternal = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { archivedAt: Date.now(), isActive: false });
   },
 });
 

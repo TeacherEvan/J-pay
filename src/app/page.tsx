@@ -306,7 +306,7 @@ function EmployeePanel() {
           className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
         >
           {(sites ?? []).length === 0 && <option value="">No sites assigned</option>}
-          {(sites ?? []).map((s) => (
+          {(sites ?? []).map((s: { _id: Id<"sites">; name: string }) => (
             <option key={s._id} value={s._id}>
               {s.name}
             </option>

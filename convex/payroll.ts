@@ -95,7 +95,18 @@ export const exportLogsCsv = action({
         "travel_flag",
         "skew_s",
       ],
-      rows.map((l) => [
+      rows.map(
+        (l: {
+          clientTime: number;
+          serverTime: number;
+          status: string;
+          lat: number;
+          lng: number;
+          accuracyMeters: number;
+          geofence: boolean;
+          travelFlag: boolean;
+          skewSeconds: number;
+        }) => [
         new Date(l.clientTime).toISOString(),
         new Date(l.serverTime).toISOString(),
         l.status,
@@ -104,9 +115,9 @@ export const exportLogsCsv = action({
         l.accuracyMeters,
         l.geofence ? "in" : "out",
         l.travelFlag ? "flagged" : "",
-        l.skewSeconds,
-      ])
-    );
+          l.skewSeconds,
+        ])
+      );
     if (truncated) {
       return {
         filename: `jpay-logs-TRUNCATED-5000-${args.userId}.csv`,

@@ -126,7 +126,7 @@ export default function ModeratorPage() {
               </tr>
             </thead>
             <tbody>
-              {(audit ?? []).map((l) => (
+              {(audit ?? []).map((l: { _id: Id<"logs">; at: number; employeeName: string; siteName: string; status: string; accuracyMeters: number; clockSkewMs: number; isWithinGeofence: boolean; impossibleTravelFlag: boolean }) => (
                 <tr key={l._id} className="border-t border-neutral-900">
                   <td className="p-2">{new Date(l.at).toLocaleString()}</td>
                   <td className="p-2">{l.employeeName}</td>
