@@ -82,8 +82,12 @@ export default defineSchema({
     totalMinutes: v.optional(v.number()),
     needsReview: v.boolean(),
     reviewReason: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    sealed: v.optional(v.boolean()),
   })
     .index("by_user_start", ["userId", "startedAt"])
+    .index("by_started", ["startedAt"])
+    .index("by_active", ["endedAt"])
     .index("by_needs_review", ["needsReview"]),
 
   messages: defineTable({

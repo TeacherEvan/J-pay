@@ -6,9 +6,11 @@ import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
 
-const MAX_ACCURACY_METERS = 50;
-const IMPOSSIBLE_TRAVEL_KMH = 200;
-const RETENTION_DAYS = 90;
+import { jpayConfig } from "../src/config/jpay.config";
+
+const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
+const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
+const RETENTION_DAYS = jpayConfig.geoRules.retentionDays;
 
 export const createLog = mutation({
   args: {

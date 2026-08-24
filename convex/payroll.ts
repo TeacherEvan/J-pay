@@ -5,8 +5,10 @@ import { requireActiveUser } from "./access";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 import { localDayKey } from "../src/lib/shift-engine";
+import { computePay, type PayStrategyName } from "../src/lib/payroll-strategies";
 import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
+import { jpayConfig } from "../src/config/jpay.config";
 
 export const calcForEmployee = query({
   args: { userId: v.id("users"), fromMs: v.number(), toMs: v.number() },
@@ -44,27 +46,32 @@ export const calcForEmployee = query({
         flagged.push({ startedAt: s.startedAt, reason: s.reviewReason, minutes: s.totalMinutes });
         continue;
       }
-      const key = localDayKey(s.startedAt, timezone);
+      const key = localDayKey(
+        s.startedAt,
+        (s as { timezone?: string }).timezone ?? timezone
+      );
       const mins = s.totalMinutes ?? 0;
       days.set(key, (days.get(key) ?? 0) + mins);
-      payableMinutes += mins;
     }
-    const dayRows = [...days.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([day, minutes]) => ({
-        day,
-        minutes,
-        pay: Math.round((minutes / 60) * rate * 100) / 100,
-      }));
+    const result = computePay(
+      [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, minutes]) => ({ day, minutes })),
+      rate,
+      (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ?? undefined
+    );
+    for (const l of result.lines) payableMinutes += l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes;
 
     return {
       rate,
-      currency: process.env.PAYROLL_CURRENCY ?? "ZAR",
+      currency: process.env.PAYROLL_CURRENCY ?? jpayConfig.payrollRules.currency,
+      strategy: result.strategy,
       timezone,
-      days: dayRows,
+      days: result.lines.map((l) => ({ day: l.day, minutes: l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes, pay: l.pay })),
       totals: {
         payableMinutes,
-        pay: Math.round(((payableMinutes / 60) * rate * 100)) / 100,
+        pay: result.totals.pay,
+        ordinaryMinutes: result.totals.ordinaryMinutes,
+        overtimeMinutes: result.totals.overtimeMinutes,
+        sundayMinutes: result.totals.sundayMinutes,
         shiftCount: inRange.length,
         flaggedCount: flagged.length,
       },

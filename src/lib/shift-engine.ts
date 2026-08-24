@@ -1,3 +1,5 @@
+import { jpayConfig } from "../config/jpay.config";
+
 export type EngineLog = {
   _creationTime: number;
   idempotencyKey: string;
@@ -5,6 +7,7 @@ export type EngineLog = {
   clockSkewMs?: number;
   status: string;
   sideMissionDurationMinutes?: number;
+  siteTimezone?: string;
 };
 
 export type Segment = {
@@ -13,15 +16,17 @@ export type Segment = {
   totalMinutes?: number;
   needsReview: boolean;
   reviewReason?: string;
+  timezone?: string;
 };
 
-export const MAX_SHIFT_MS = 16 * 3600 * 1000;
-export const DEFAULT_LUNCH_MINUTES = 60;
-export const PICKER_MAX_MINUTES = 120;
+const L = jpayConfig.laborRules;
+export const MAX_SHIFT_MS = L.maxShiftHours * 3600 * 1000;
+export const DEFAULT_LUNCH_MINUTES = L.defaultLunchMinutes;
+export const PICKER_MAX_MINUTES = L.maxSideMissionMinutes;
 
 function skewCorrectedTime(log: EngineLog): number {
   const skew = log.clockSkewMs ?? 0;
-  return Math.abs(skew) <= 30000 ? log.clientReportedTime : log._creationTime;
+  return Math.abs(skew) <= L.skewToleranceMs ? log.clientReportedTime : log._creationTime;
 }
 
 export function deriveSegments(allLogs: EngineLog[]): Segment[] {
@@ -82,7 +87,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (phase !== "none") {
           closeCurrent(t, true, `illegal_transition:${phase}->arrived`);
         }
-        current = { startedAt: t, needsReview: false };
+        current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
         phase = "active";
         break;
       case "checkpoint":
@@ -100,7 +105,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
       case "lunch":
         if (phase === "sideMission") {
           closeCurrent(t, true, "illegal_transition:side_mission->lunch");
-          current = { startedAt: t, needsReview: false };
+          current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
           phase = "lunch";
           lunchOpenedAt = t;
         } else if (phase === "active") {
@@ -108,7 +113,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
           lunchOpenedAt = t;
         } else {
           closeCurrent(t, true, `illegal_transition:${phase}->lunch`);
-          current = { startedAt: t, needsReview: false };
+          current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
           phase = "lunch";
           lunchOpenedAt = t;
         }
@@ -117,7 +122,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (current && phase === "sideMission") {
           closeCurrent(t, true, "illegal_transition:side_mission->side_mission");
         }
-        if (!current) current = { startedAt: t, needsReview: false };
+        if (!current) current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
         phase = "sideMission";
         sideEntryAt = t;
         sideDeclared = log.sideMissionDurationMinutes ?? 0;
@@ -138,6 +143,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
             startedAt: t,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
+            timezone: log.siteTimezone,
           });
         } else {
           closeCurrent(t, false);
@@ -152,7 +158,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
           deductionMinutes += Math.min(sideDeclared, wall);
         } else if (phase === "lunch" && lunchOpenedAt !== null) {
           deductionMinutes += DEFAULT_LUNCH_MINUTES;
-          if (t - lunchOpenedAt > 2 * DEFAULT_LUNCH_MINUTES * 60000) {
+          if (t - lunchOpenedAt > L.unpairedLunchThresholdMultiplier * DEFAULT_LUNCH_MINUTES * 60000) {
             excessiveLunch = true;
           }
         }
@@ -161,6 +167,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
             startedAt: t,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
+            timezone: log.siteTimezone,
           });
         } else {
           closeCurrent(
@@ -180,13 +187,13 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
     const end = Math.min(now, seg.startedAt + MAX_SHIFT_MS);
     if (phase === "sideMission") {
       deductionMinutes += sideDeclared;
-      if (sideDeclared > 2 * PICKER_MAX_MINUTES) {
+      if (sideDeclared > L.unpairedLunchThresholdMultiplier * PICKER_MAX_MINUTES) {
         seg.needsReview = true;
         seg.reviewReason = "unpaired_side_mission_excessive";
       }
     } else if (phase === "lunch" && lunchOpenedAt !== null) {
       deductionMinutes += DEFAULT_LUNCH_MINUTES;
-      if (now - lunchOpenedAt > 2 * DEFAULT_LUNCH_MINUTES * 60000) {
+      if (now - lunchOpenedAt > L.unpairedLunchThresholdMultiplier * DEFAULT_LUNCH_MINUTES * 60000) {
         seg.needsReview = true;
         seg.reviewReason = "unpaired_lunch_excessive";
       }

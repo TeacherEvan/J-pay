@@ -1,7 +1,7 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
 import { deriveSegments, type EngineLog } from "../src/lib/shift-engine";
+import type { Id } from "./_generated/dataModel";
 
 export const deriveForUser = internalMutation({
   args: { userId: v.id("users") },
@@ -10,6 +10,13 @@ export const deriveForUser = internalMutation({
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", args.userId))
       .collect();
+
+    const siteIds = [...new Set(all.map((l) => l.siteId))];
+    const tzBySite = new Map<Id<"sites">, string>();
+    for (const siteId of siteIds) {
+      const site = await ctx.db.get(siteId);
+      if (site?.timezone) tzBySite.set(siteId, site.timezone);
+    }
 
     const resolutions = await ctx.db
       .query("reviewResolutions")
@@ -24,6 +31,7 @@ export const deriveForUser = internalMutation({
       clockSkewMs: l.clockSkewMs,
       status: l.status as string,
       sideMissionDurationMinutes: l.sideMissionDurationMinutes,
+      siteTimezone: tzBySite.get(l.siteId),
     }));
 
     const segments = deriveSegments(engineLogs);
@@ -32,9 +40,18 @@ export const deriveForUser = internalMutation({
       .query("shifts")
       .withIndex("by_user_start", (q) => q.eq("userId", args.userId))
       .collect();
-    for (const row of old) await ctx.db.delete(row._id);
+    const sealedStarts = new Set(
+      old.filter((r) => r.sealed === true).map((r) => r.startedAt)
+    );
+    for (const row of old) {
+      // Bounded rewrite: sealed history is never deleted or recomputed.
+      if (row.sealed === true) continue;
+      await ctx.db.delete(row._id);
+    }
 
     for (const seg of segments) {
+      // Sealed rows stay frozen; skip reinsert to avoid duplicates.
+      if (sealedStarts.has(seg.startedAt)) continue;
       if (
         seg.needsReview &&
         resolvedKeys.has(String(seg.startedAt))
@@ -49,6 +66,8 @@ export const deriveForUser = internalMutation({
         totalMinutes?: number;
         needsReview: boolean;
         reviewReason?: string;
+        timezone?: string;
+        sealed?: boolean;
       } = {
         userId: args.userId,
         startedAt: seg.startedAt,
@@ -57,9 +76,8 @@ export const deriveForUser = internalMutation({
       if (seg.endedAt !== undefined) row.endedAt = seg.endedAt;
       if (seg.totalMinutes !== undefined) row.totalMinutes = seg.totalMinutes;
       if (seg.reviewReason !== undefined) row.reviewReason = seg.reviewReason;
+      if (seg.timezone !== undefined) row.timezone = seg.timezone;
       await ctx.db.insert("shifts", row);
     }
   },
 });
-
-export type ShiftDocLike = Doc<"shifts">;

@@ -34,6 +34,11 @@ export const auditRecentLogs = query({
         accuracyMeters: log.accuracyMeters,
         employeeName: user?.name ?? user?.email ?? "unknown",
         siteName: site?.name ?? "unknown",
+        lat: log.latitude,
+        lng: log.longitude,
+        siteLat: site?.latitude,
+        siteLng: site?.longitude,
+        siteRadius: site?.geofenceRadiusMeters,
       });
     }
     return out;
@@ -116,6 +121,7 @@ export const resolveShift = mutation({
     await ctx.db.patch(args.shiftId, {
       needsReview: false,
       reviewReason: `resolved:${shift.reviewReason ?? "flagged"}`,
+      sealed: true,
     });
     await ctx.db.insert("reviewResolutions", {
       userId: shift.userId,
