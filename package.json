@@ -8,7 +8,7 @@
     "start": "next start",
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test scripts/test-shift-engine.mjs && node --experimental-strip-types scripts/test-csv.mjs"
+    "test": "node --experimental-strip-types --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
     "@auth/core": "0.41.1",
