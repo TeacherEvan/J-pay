@@ -38,6 +38,7 @@
 | R27 | Scripts | Gates hardened: ERD-sync, README-version, day_finish-edge, retentionDays-wiring checks; document paths resolved from script location (portable across checkouts) |
 | R28 | Global | Implementation landed in THIS workspace per owner directive 2026-08-24 (supersedes the historical `J-pay-webb_logger` target): Next.js 15 + Convex backend implementing §6 verbatim, moderator console, offline outbox, payroll, messaging, push scaffolding. See README + docs/notes/. |
 | R29 | §1/§11 context | Fork-per-client model adopted (ADR-002) resolving multi-tenancy D1; shift grammar extracted to pure module with 15-case unit suite (ADR-003); `npm test` added to repo gates |
+| R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 
 ---
 
@@ -491,6 +492,7 @@ stateDiagram-v2
 5. Push notification cadence/quiet-hours policy for logging reminders.
 6. Site default lunch minutes (v1.1 §6.1 rule 4): confirm 60min default and 2× review threshold per site.
 7. WebAuthn platform authenticator rollout timing (v1.1 §5.3 Phase 2): which devices in the field support it?
+9. `feeling sick` transition semantics (v1.2.1 implementation note): the grammar (§6.1, §10.5) defines no transitions for this status; current engine treats it as a soft terminal that closes the shift without review. Confirm intended behavior with stakeholders — terminal vs. pausable state.
 8. Payroll multiplier modeling: §5.2 historically promised "editable hourly rates and multipliers," but the schema carries only `users.hourlyRateOverride` (§1.1 conflict rule invoked). Decide between a dedicated `payrollConfig` table vs per-user overrides only — blocked on payroll stakeholder input.
 
 ---
