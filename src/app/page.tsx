@@ -245,7 +245,11 @@ function EmployeePanel() {
       }
       const chosen: Id<"sites"> | "" = siteId || sites?.[0]?._id || "";
       if (!chosen) {
-        setMessage("No site assigned — ask your moderator.");
+        setMessage(
+          sites === undefined
+            ? "Loading your sites…"
+            : "No site assigned — ask your moderator."
+        );
         return;
       }
       const entry: OutboxEntry = {

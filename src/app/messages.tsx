@@ -7,7 +7,10 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   const inbox = useQuery(api.messages.myInbox);
-  const modInbox = useQuery(api.messages.moderatorInbox);
+  const modInbox = useQuery(
+    api.messages.moderatorInbox,
+    role === "moderator" ? {} : "skip"
+  );
   const sendToModerators = useMutation(api.messages.sendToModerators);
   const replyToEmployee = useMutation(api.messages.replyToEmployee);
   const broadcast = useMutation(api.messages.broadcast);
