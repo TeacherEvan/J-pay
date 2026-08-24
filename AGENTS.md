@@ -36,12 +36,17 @@ generated types, or copy the committed `.d.ts` set from an initialized fork.
   missed Convex-checker circular-inference and index-rule errors repeatedly.
 - This shell strips double quotes during `source file.sh` — never `source`
   generated secret files; extract values with sed instead.
+- After ANY `npx next build`, `rm -rf .next` before restarting `next dev` — a
+  dev server started over production output serves 404 chunks forever.
+- `kill`ing the npm wrapper orphans `next-server` — pkill by name, and never
+  run two dev servers against one checkout.
 
 ## Verification commands
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
 npm run typecheck                      # tsc --strict over app + convex
 npm test                               # shift-engine grammar + CSV injection guard
+JPAY_EMAIL=... JPAY_PASSWORD=... npm run e2e   # full browser walkthrough (dev server + headless Chrome CDP :9300 required)
 
 ## Execution plan
 The hermes-era remediation plan was owner-deleted (2026-08-24) — it referenced a
