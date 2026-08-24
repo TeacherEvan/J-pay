@@ -46,10 +46,25 @@ python3 scripts/check_diagrams.py      # mermaid structural gate
 npm run typecheck                      # tsc --strict over app + convex
 ```
 
+## Included features
+
+- Employee: GPS check-in (±50m gate), 7 statuses + side-mission picker, offline
+  outbox with foreground replay, one-way messages to moderators, push opt-in,
+  consent gate, installable PWA.
+- Moderator console (`/moderator`): site geofences, employee provisioning with
+  one-time ID codes, assignment management, deactivation, live audit log with
+  skew/geofence/travel flags, needs-review queue (resolve/recompute), payroll
+  by day with flagged-shift exclusion, hourly-rate override, CSV log export
+  (formula-injection sanitized), direct reply + broadcast messaging.
+- Backend: §6 schema verbatim, row-scoped authz everywhere, HMAC device tokens,
+  idempotency dedupe, impossible-travel flag, daily coordinate-purge cron.
+
 ## Known preview limitations (polish phase pending)
 
-- Shift derivation rules 4/5/9 are conservative approximations (default-lunch deduction,
-  UTC day attribution).
-- Moderator payroll calculator / CSV export / messaging not yet built.
+- Shift rule 5 day-attribution uses the employee's first assigned site timezone;
+  multi-site DST edge cases untested.
+- Payroll rates: per-user override or `PAYROLL_DEFAULT_RATE` env; no overtime
+  multipliers (Open Question 8).
+- Push requires VAPID env vars; silently disabled without them.
 - Deactivation blocks new sign-ins; existing sessions expire within the JWT window.
 - Consent acceptance stored locally only.
