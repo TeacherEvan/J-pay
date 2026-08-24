@@ -22,6 +22,11 @@ name is historical — do NOT create, clone, or reference sibling directories.
    `python3 scripts/check_diagrams.py`; both must pass.
 8. **Commits:** scoped conventional commits (`docs(j-pay): ...`). No push without explicit ask.
 
+## Convex generated types
+`convex/_generated/` contains hand-authored stand-ins so typecheck works before
+`npx convex dev` login. The CLI overwrites them with identical-shape output on
+first run — never hand-edit them to change behavior.
+
 ## Verification commands
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
