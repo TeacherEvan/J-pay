@@ -11,9 +11,12 @@
 import type * as access from "../access.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as demo from "../demo.js";
+import type * as demo_seed from "../demo_seed.js";
 import type * as deviceTokens from "../deviceTokens.js";
 import type * as geo from "../geo.js";
 import type * as http from "../http.js";
+import type * as kpi from "../kpi.js";
 import type * as logs from "../logs.js";
 import type * as messages from "../messages.js";
 import type * as moderator from "../moderator.js";
@@ -36,9 +39,12 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   auth: typeof auth;
   crons: typeof crons;
+  demo: typeof demo;
+  demo_seed: typeof demo_seed;
   deviceTokens: typeof deviceTokens;
   geo: typeof geo;
   http: typeof http;
+  kpi: typeof kpi;
   logs: typeof logs;
   messages: typeof messages;
   moderator: typeof moderator;
