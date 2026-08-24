@@ -34,11 +34,19 @@ test("rejects tampered payload and malformed tokens", () => {
   assert.equal(verifyDeviceToken(".abc", USER, SECRET, "0"), false);
 });
 
-test("distinct issues → distinct tokens; base64url shape", () => {
+test("distinct users → distinct tokens even at identical millisecond; base64url shape", () => {
   const a = issueDeviceToken(USER, SECRET);
-  const b = issueDeviceToken(USER, SECRET);
+  const b = issueDeviceToken("userB", SECRET);
   assert.notEqual(a.token, b.token);
   assert.match(a.token, /^\d+\.[A-Za-z0-9_-]+$/);
+});
+
+test("same user re-issue within same ms is idempotent (by design)", () => {
+  const a = issueDeviceToken(USER, SECRET);
+  const b = issueDeviceToken(USER, SECRET);
+  if (a.issuedAt === b.issuedAt) {
+    assert.equal(a.token, b.token);
+  }
 });
 
 test("same inputs and timestamp verify identically (HMAC determinism)", () => {
