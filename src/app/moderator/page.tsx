@@ -5,6 +5,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { MessagesPanel } from "../messages";
+import { PayrollPanel, ReviewPanel } from "../payroll";
 
 export default function ModeratorPage() {
   const me = useQuery(api.users_queries.me);
@@ -45,6 +47,10 @@ export default function ModeratorPage() {
         employees={employees ?? []}
         sites={sites ?? []}
       />
+
+      <PayrollPanel employees={(employees ?? []) as never} />
+      <ReviewPanel />
+      <MessagesPanel role="moderator" />
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">

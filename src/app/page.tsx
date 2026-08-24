@@ -7,6 +7,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import type { OutboxEntry } from "@/lib/outbox";
 import { useOutbox } from "./use-outbox";
 import { SignIn } from "./sign-in";
+import { MessagesPanel } from "./messages";
+import { EnableNotifications } from "./notifications";
 
 const STATUSES = [
   "arrived",
@@ -91,6 +93,7 @@ export default function Home() {
                 Install app
               </button>
             )}
+            {me.role === "employee" && <EnableNotifications />}
             <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs uppercase tracking-wide">
               {me.role}
             </span>
@@ -102,7 +105,10 @@ export default function Home() {
           </p>
         )}
         {me.role === "employee" ? (
-          <EmployeePanel />
+          <>
+            <EmployeePanel />
+            <MessagesPanel role="employee" />
+          </>
         ) : (
           <ModeratorLink />
         )}
