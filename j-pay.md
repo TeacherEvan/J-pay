@@ -1,9 +1,9 @@
 # J-Pay — Technical Requirements Document (TRD)
 
 **Project:** PWA Payroll & Geolocation Logger
-**Repository:** TeacherEvan/J-pay-webb_logger
+**Repository:** This workspace (`J-pay`) — one fork per client per ADR-002
 **Version:** 1.2.1 (post-audit sync: ERD↔schema, review residue)
-**Status:** Draft for review
+**Status:** Implemented — working preview (see docs/notes/)
 
 ### Revision Log (v1.1 → v1.2)
 
@@ -36,6 +36,8 @@
 | R25 | §9/§6 | `messages.retentionDays` wired into retention policy text (was schema-orphaned) |
 | R26 | §10.5 | side-mission → `day_finish` implicit-exit edge added (matches §6.1 rule 8); gate-enforced |
 | R27 | Scripts | Gates hardened: ERD-sync, README-version, day_finish-edge, retentionDays-wiring checks; document paths resolved from script location (portable across checkouts) |
+| R28 | Global | Implementation landed in THIS workspace per owner directive 2026-08-24 (supersedes the historical `J-pay-webb_logger` target): Next.js 15 + Convex backend implementing §6 verbatim, moderator console, offline outbox, payroll, messaging, push scaffolding. See README + docs/notes/. |
+| R29 | §1/§11 context | Fork-per-client model adopted (ADR-002) resolving multi-tenancy D1; shift grammar extracted to pure module with 15-case unit suite (ADR-003); `npm test` added to repo gates |
 
 ---
 
@@ -479,6 +481,8 @@ stateDiagram-v2
 ---
 
 ## 11. Open Questions
+
+> Multi-tenancy (former decision D1): **RESOLVED** — one fork per client, single org per deployment (ADR-002).
 
 1. Exact raw-coordinate retention duration (days) after payroll finalization — depends on jurisdiction. **Blocked on jurisdiction research.**
 2. Applicable labor-record retention statute(s) for aggregated hours. **Blocked on jurisdiction research.**
