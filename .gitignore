@@ -29,3 +29,4 @@ tsconfig.tsbuildinfo
 out/
 public/sw.js
 public/swe-worker*.js
+user-review/

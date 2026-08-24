@@ -28,6 +28,15 @@ hand-edit it to change behavior. Pre-login stubs are no longer needed; fresh
 clones run `npm install && npx tsc --noEmit` only after `npx convex dev` has
 generated types, or copy the committed `.d.ts` set from an initialized fork.
 
+## Local-run pitfalls (hard-won)
+- NEVER run `npx next build` while `npm run dev` is live — build wipes `.next`
+  and the dev server starts throwing ENOENT on routes-manifest.json.
+- When touching anything under `convex/`, finish every task with a real push
+  check (`timeout 110 npx convex dev`) before committing — local tsc alone has
+  missed Convex-checker circular-inference and index-rule errors repeatedly.
+- This shell strips double quotes during `source file.sh` — never `source`
+  generated secret files; extract values with sed instead.
+
 ## Verification commands
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate

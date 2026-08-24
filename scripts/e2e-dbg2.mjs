@@ -1,0 +1,11 @@
+import puppeteer from "puppeteer-core";
+const b = await puppeteer.connect({ browserURL: "http://127.0.0.1:9300", defaultViewport: null, protocolTimeout: 60000 });
+const pages = await b.pages();
+const p = pages.find(pg => pg.url().includes("/moderator"));
+p.on("pageerror", e => console.log("PAGEERROR:", String(e).slice(0, 250)));
+p.on("console", m => { if (["error","warning"].includes(m.type())) console.log("CONSOLE:", m.type(), m.text().slice(0, 200)); });
+await p.reload({ waitUntil: "networkidle2" });
+await new Promise(r => setTimeout(r, 4000));
+console.log("TEXT:", (await p.evaluate(() => document.body.innerText)).replace(/\n+/g," | ").slice(0, 300));
+console.log("INPUTS:", await p.evaluate(() => document.querySelectorAll("input").length));
+await b.disconnect(); process.exit(0);

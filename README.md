@@ -52,7 +52,8 @@ npm run typecheck                      # tsc --strict over app + convex
 - Employee: GPS check-in (±50m gate), 7 statuses + side-mission picker, offline
   outbox with foreground replay, one-way messages to moderators, push opt-in,
   consent gate, installable PWA.
-- Moderator console (`/moderator`): site geofences, employee provisioning with
+- Moderator console (`/moderator`): site geofences with interactive OSM map picker,
+  address autocomplete (Nominatim), GPS capture and Google-Maps verification link, employee provisioning with
   one-time ID codes, assignment management, deactivation, live audit log with
   skew/geofence/travel flags, needs-review queue (resolve/recompute), payroll
   by day with flagged-shift exclusion, hourly-rate override, CSV log export
