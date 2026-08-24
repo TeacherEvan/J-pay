@@ -2,7 +2,7 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** TeacherEvan/J-pay-webb_logger
-**Version:** 1.2 (remediation of senior-review findings)
+**Version:** 1.2.1 (post-audit sync: ERD↔schema, review residue)
 **Status:** Draft for review
 
 ### Revision Log (v1.1 → v1.2)
@@ -31,6 +31,11 @@
 | R20 | §5.2 | Push sender named: `web-push` (v3.6.7) via Convex Action; VAPID key single surface in Convex env |
 | R21 | §10 | Diagrams refreshed: client-direct topology (§10.1), `flushOutbox()` primary replay lane (§10.4), side-mission substate (§10.5) |
 | R22 | Global | Legacy third-party auth vendor removed (see REVIEW-v1.1) → Convex Auth (password provider) per owner decision 2026-08-23; device-token issuance inside Convex (single HMAC secret surface) |
+| R23 | §10.2 | ERD synced to §6 schema: 11 missing attributes restored across logs/shifts/users/messages/sites; mechanical ERD-sync gate added to `check_consistency.py` |
+| R24 | §5.2/§11 | Payroll "multipliers" over-promise aligned to schema (`hourlyRateOverride` only); payroll-config gap logged as Open Question 8 per §1.1 conflict rule |
+| R25 | §9/§6 | `messages.retentionDays` wired into retention policy text (was schema-orphaned) |
+| R26 | §10.5 | side-mission → `day_finish` implicit-exit edge added (matches §6.1 rule 8); gate-enforced |
+| R27 | Scripts | Gates hardened: ERD-sync, README-version, day_finish-edge, retentionDays-wiring checks; document paths resolved from script location (portable across checkouts) |
 
 ---
 
@@ -97,7 +102,7 @@ The architecture is designed around these limits explicitly:
 
 - Access provisioned backend-only (invite-only internal Convex mutation sets role; not self-service).
 - Real-time audit log of employee locations (Convex reactive queries).
-- Payroll calculator over derived **shifts** (§6), editable hourly rates and multipliers.
+- Payroll calculator over derived **shifts** (§6), editable hourly rates (per-user `users.hourlyRateOverride`). Overtime/site pay multipliers are NOT modeled in schema — tracked as Open Question 8 (flagged per §1.1 conflict rule).
 - Lightweight diagram tool (canvas or mermaid render-only).
 - Constraint management: geofence radius per site assignment; IP ranges displayed as advisory signals, clearly labeled non-enforcing.
 - Two-way messaging: Mod-to-Mod broadcast; Mod-to-Employee direct (Convex reactive queries).
@@ -284,6 +289,7 @@ Derivation rules (v1.1):
 - **Retention schedule (defaults, exact durations = Open Question):**
   - Raw GPS coordinates: **anonymized, not deleted** — purge jobs **zero out lat/lng** and retain the row (status/timestamps/geofence result survive as payroll-dispute evidence); payroll-finalized periods hold anonymization until the dispute window (default 90 days) closes. Exact N days remains Open Question 1.
   - Aggregated hours / shift totals: retained per local labor statute (typically 2–7 years).
+  - Messages: archived rows honor an optional per-row `messages.retentionDays` override; absent it, message retention defaults follow Open Questions 1–2.
 - **Retention enforcement mechanism (v1.2):** retention is executed, not aspirational — a **native Convex cron** (`convex/crons.ts` → internal purge mutation) runs daily, zeroes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
 - **Worker rights:** access/export request procedure defined (self-serve CSV of own logs; includes their push subscription endpoints — these are personal data under Art. 4(1)).
 - **Minimization:** no third-party ad/analytics trackers; location recorded only at explicit badge events, never continuous tracking.
@@ -337,12 +343,15 @@ erDiagram
         boolean isActive
         string deviceId
         number archivedAt "SOFT DELETE"
+        number hourlyRateOverride "OPTIONAL"
+        string pushSubscriptionTokens "OPTIONAL string[]"
     }
     sites {
         string name
         number latitude
         number longitude
         number geofenceRadiusMeters
+        string timezone "IANA tz"
         number archivedAt "SOFT DELETE"
         id createdBy "FK users"
         number updatedAt
@@ -362,13 +371,20 @@ erDiagram
         number longitude
         number accuracyMeters
         boolean isWithinGeofence
+        number sideMissionDurationMinutes "OPTIONAL enum 15..120"
+        string deviceMetadata
         string ipAddress "ADVISORY"
+        string idempotencyKey "DEDUPE"
+        boolean isModeratorOverride "OPTIONAL"
+        boolean impossibleTravelFlag "OPTIONAL"
     }
     shifts {
         id userId
         number startedAt
         number endedAt
+        number totalMinutes "DERIVED CACHE"
         boolean needsReview
+        string reviewReason "needsReview cause"
     }
     messages {
         id senderId
@@ -377,6 +393,7 @@ erDiagram
         string content
         boolean isRead
         number archivedAt "SOFT DELETE"
+        number retentionDays "per-row override"
     }
     pushSubscriptions {
         id userId
@@ -444,6 +461,7 @@ stateDiagram-v2
     lunch --> side_mission
     side_mission --> checkpoint : exit
     side_mission --> job_finish : implicit exit
+    side_mission --> day_finish : implicit exit
     note right of side_mission
         duration = min(picker value,
         wall-clock elapsed).
@@ -469,6 +487,7 @@ stateDiagram-v2
 5. Push notification cadence/quiet-hours policy for logging reminders.
 6. Site default lunch minutes (v1.1 §6.1 rule 4): confirm 60min default and 2× review threshold per site.
 7. WebAuthn platform authenticator rollout timing (v1.1 §5.3 Phase 2): which devices in the field support it?
+8. Payroll multiplier modeling: §5.2 historically promised "editable hourly rates and multipliers," but the schema carries only `users.hourlyRateOverride` (§1.1 conflict rule invoked). Decide between a dedicated `payrollConfig` table vs per-user overrides only — blocked on payroll stakeholder input.
 
 ---
 

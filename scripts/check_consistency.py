@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Mechanical consistency gate for j-pay.md. Fails while contradictions exist."""
 import re, sys
+from pathlib import Path
 
-doc = open("/home/ewaldt/Documents/VS/Other/J-pay/j-pay.md", encoding="utf-8").read()
+ROOT = Path(__file__).resolve().parents[1]
+doc = (ROOT / "j-pay.md").read_text(encoding="utf-8")
 failures = []
 
 # D4: Clerk must be fully removed
@@ -84,6 +86,48 @@ if "**Version:** 1.2" not in doc and "Version:** 1.1" in doc:
 # D4 case-insensitive residual sweep
 if re.search(r"clerk", doc, re.I):
     failures.append("D4: lowercase/residual Clerk reference remains")
+
+# ERD sync (AGENTS.md rule 2): every §6 schema field must appear in §10.2
+ts_block = re.search(r"```ts\n(.*?)```", doc, re.S)
+erd_block = re.search(r"```mermaid\n(erDiagram.*?)```", doc, re.S)
+if not (ts_block and erd_block):
+    failures.append("ERD-SYNC: §6 ts block or §10.2 erDiagram block missing")
+else:
+    schema_fields = {}
+    for m in re.finditer(r"(\w+): defineTable\(\{(.*?)\n  \}\)", ts_block.group(1), re.S):
+        schema_fields[m.group(1)] = set(re.findall(r"^    (\w+):", m.group(2), re.M))
+    erd_attrs = {}
+    for m in re.finditer(r"^    (\w+) \{\n(.*?)^    \}", erd_block.group(1), re.S | re.M):
+        erd_attrs[m.group(1)] = set(re.findall(r"^\s+\w+\s+(\w+)", m.group(2), re.M))
+    if not schema_fields or not erd_attrs:
+        failures.append("ERD-SYNC: extraction found no tables — check regex vs doc structure")
+    else:
+        for t in sorted(schema_fields):
+            missing = sorted(schema_fields[t] - erd_attrs.get(t, set()))
+            if missing:
+                failures.append(f"ERD-SYNC: {t} attributes missing from §10.2: {missing}")
+        unknown = sorted(set(erd_attrs) - set(schema_fields))
+        if unknown:
+            failures.append(f"ERD-SYNC: §10.2 entities absent from schema: {unknown}")
+
+# README must cite the live TRD version (drift guard)
+version = re.search(r"\*\*Version:\*\* ([\d.]+)", doc)
+readme_path = ROOT / "README.md"
+if version and readme_path.exists():
+    if version.group(1) not in readme_path.read_text(encoding="utf-8"):
+        failures.append(f"README: stale — does not cite TRD version {version.group(1)}")
+
+# R26: side-mission implicit exits must include day_finish (§6.1 rule 8)
+if "stateDiagram-v2" in doc:
+    sd = doc.split("stateDiagram-v2")[1].split(FENCE)[0]
+    if "side_mission --> checkpoint" in sd and "side_mission --> day_finish" not in sd:
+        failures.append("B2/R26: side-mission lacks day_finish implicit exit (§6.1 rule 8)")
+
+# messages.retentionDays must be wired into §9 policy text, not exist in schema only
+if "retentionDays" in doc:
+    sec9 = doc.split("## 9.")[1].split("\n## ")[0]
+    if "retentionDays" not in sec9:
+        failures.append("RESIDUE: messages.retentionDays in schema but unwired in §9 policy text")
 
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

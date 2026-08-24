@@ -1,6 +1,8 @@
 # J-Pay v1.1 → v1.2 Remediation Implementation Plan
 
 > **For Hermes/Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+>
+> **Status:** ✅ Executed complete 2026-08-23 (final task commit `5c6624d`). A post-execution audit on 2026-08-24 produced follow-up v1.2.1 (ERD↔schema sync, review residue, gate extensions — TRD revision log R23–R27). Note: the pre-flight citations below (D1/D3) use v1.1-era Open Question numbering; TRD §11 was renumbered in v1.2.
 
 **Goal:** Close the four blocking findings (B1–B3 + second-pass Background Sync escalation) and the seven medium findings from `REVIEW-v1.1.md`, producing a TRD v1.2 that is internally consistent and verified against live platform limits before any code exists.
 

@@ -9,8 +9,10 @@ node-declaration lines (ID[label] etc.), fixing the known false-positive
 where legitimate structural lines were flagged as missing arrows.
 """
 import re, sys
+from pathlib import Path
 
-doc = open("/home/ewaldt/Documents/VS/Other/J-pay/j-pay.md", encoding="utf-8").read()
+ROOT = Path(__file__).resolve().parents[1]
+doc = (ROOT / "j-pay.md").read_text(encoding="utf-8")
 FENCE = chr(96) * 3  # avoid literal fence inside this snippet
 blocks = re.findall(FENCE + r"mermaid\n(.*?)" + FENCE, doc, re.S)
 failures = []
