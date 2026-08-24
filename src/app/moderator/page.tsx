@@ -10,12 +10,15 @@ import { PayrollPanel, ReviewPanel } from "../payroll";
 import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { SiteMapPicker } from "../site-map-picker";
 import { errMsg } from "@/lib/errors";
+import { KpiBanner } from "./kpi-banner";
+import { GeofenceModal, type GeofenceFix } from "./geofence-modal";
 
 export default function ModeratorPage() {
   const me = useQuery(api.users_queries.me);
   const employees = useQuery(api.moderator.listEmployeesWithAssignments);
   const sites = useQuery(api.moderator.listAllSites);
   const audit = useQuery(api.moderator.auditRecentLogs, { limit: 50 });
+  const [geofenceFix, setGeofenceFix] = useState<GeofenceFix | null>(null);
   const review = useQuery(api.moderator.auditNeedsReview);
 
   if (me === undefined) {
@@ -37,6 +40,7 @@ export default function ModeratorPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6">
+      <KpiBanner />
       <header className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Moderator console</h1>
         <Link href="/" className="text-xs text-neutral-400 underline">
@@ -130,7 +134,7 @@ export default function ModeratorPage() {
               </tr>
             </thead>
             <tbody>
-              {(audit ?? []).map((l: { _id: Id<"logs">; at: number; employeeName: string; siteName: string; status: string; accuracyMeters: number; clockSkewMs: number; isWithinGeofence: boolean; impossibleTravelFlag: boolean }) => (
+              {(audit ?? []).map((l) => (
                 <tr key={l._id} className="border-t border-neutral-900">
                   <td className="p-2">{new Date(l.at).toLocaleString()}</td>
                   <td className="p-2">{l.employeeName}</td>
@@ -143,6 +147,28 @@ export default function ModeratorPage() {
                   <td className="p-2">
                     {!l.isWithinGeofence && <span className="mr-1 text-red-400">geofence✗</span>}
                     {l.impossibleTravelFlag && <span className="text-red-400">travel!</span>}
+                    {l.siteLat !== undefined && l.siteLng !== undefined && (
+                      <button
+                        onClick={() =>
+                          setGeofenceFix({
+                            employeeName: l.employeeName,
+                            status: l.status,
+                            lat: l.lat,
+                            lng: l.lng,
+                            accuracyMeters: l.accuracyMeters,
+                            siteName: l.siteName,
+                            siteLat: l.siteLat!,
+                            siteLng: l.siteLng!,
+                            siteRadius: l.siteRadius ?? 0,
+                            isWithinGeofence: l.isWithinGeofence,
+                            impossibleTravelFlag: l.impossibleTravelFlag,
+                          })
+                        }
+                        className="ml-2 rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-sky-300 hover:bg-neutral-800"
+                      >
+                        map
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -150,6 +176,7 @@ export default function ModeratorPage() {
           </table>
         </div>
       </section>
+      {geofenceFix && <GeofenceModal fix={geofenceFix} onClose={() => setGeofenceFix(null)} />}
     </main>
   );
 }

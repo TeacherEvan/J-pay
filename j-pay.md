@@ -39,6 +39,10 @@
 | R28 | Global | Implementation landed in THIS workspace per owner directive 2026-08-24 (supersedes the historical `J-pay-webb_logger` target): Next.js 15 + Convex backend implementing §6 verbatim, moderator console, offline outbox, payroll, messaging, push scaffolding. See README + docs/notes/. |
 | R29 | §1/§11 context | Fork-per-client model adopted (ADR-002) resolving multi-tenancy D1; shift grammar extracted to pure module with 15-case unit suite (ADR-003); `npm test` added to repo gates |
 | R31 | §6/§7 | Schema amendments (additive): `logs.by_user_idem` index for unbounded idempotency dedupe; `reviewResolutions` table so moderator Resolve survives re-derivation (was silently reset by next check-in). Unguarded moderator queries closed; device-token HMAC refuses missing secret; site/provisioning input validation added |
+| R32 | §5.2 | One-time forced password change: `users.passwordChangedAt` (undefined = must change); non-dismissable modal on first sign-in for both roles |
+| R33 | §7 | Key-gated break-glass ops: `provisionModerator`, `resetPasswordBreakGlass`, `archiveUserBreakGlass` (BOOTSTRAP_KEY); placeholder owner archived |
+| R34 | §10.1 | Live-auth loop fixed: CORS on `/.well-known/*` (+OPTIONS); anonymous-tolerant queries end UNAUTHENTICATED crashes; dead sessions auto-sign-out |
+| R35 | §6/§5.2/§9 | Investor/fork hardening: `shifts.timezone`+`sealed`, `by_started`/`by_active` indexes; bounded re-derivation (sealed rows immutable, writes windowed); per-site tz day bucketing; pluggable payroll strategies (`src/lib/payroll-strategies.ts`: flat/BCEA/dailyOT, BCEA default 1.5× >45h/wk + 2× Sunday — ⚠ UNVERIFIED citation pending); `src/config/jpay.config.ts` pure-constant contract (engine/logs/crons wired); KPI banner (`convex/kpi.ts`), geofence modal (Leaflet reuse), `/~offline` fallback precached; `DEMO_MODE=1`-gated idempotent demo seeder through real pipeline (`convex/demo*.ts`) |
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 
 ---
@@ -209,8 +213,12 @@ export default defineSchema({
     totalMinutes: v.optional(v.number()),
     needsReview: v.boolean(),                  // malformed/out-of-order sequences land here
     reviewReason: v.optional(v.string()),
+    timezone: v.optional(v.string()),          // site tz captured at derive time (per-site day bucketing)
+    sealed: v.optional(v.boolean()),           // resolved/moderator-finalized rows are immutable to re-derivation
   })
     .index("by_user_start", ["userId", "startedAt"])
+    .index("by_started", ["startedAt"])        // weekly KPI aggregation
+    .index("by_active", ["endedAt"])           // active-on-site count
     .index("by_needs_review", ["needsReview"]),
 
   messages: defineTable({
@@ -358,6 +366,7 @@ erDiagram
         string deviceId
         number archivedAt "SOFT DELETE"
         number passwordChangedAt "OPTIONAL force-set at provisioning"
+
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
     }
@@ -400,6 +409,8 @@ erDiagram
         number totalMinutes "DERIVED CACHE"
         boolean needsReview
         string reviewReason "needsReview cause"
+        string timezone "OPTIONAL site tz at derive"
+        boolean sealed "OPTIONAL immutable once resolved"
     }
     messages {
         id senderId
@@ -511,7 +522,7 @@ stateDiagram-v2
 6. Site default lunch minutes (v1.1 §6.1 rule 4): confirm 60min default and 2× review threshold per site.
 7. WebAuthn platform authenticator rollout timing (v1.1 §5.3 Phase 2): which devices in the field support it?
 9. `feeling sick` transition semantics (v1.2.1 implementation note): the grammar (§6.1, §10.5) defines no transitions for this status; current engine treats it as a soft terminal that closes the shift without review. Confirm intended behavior with stakeholders — terminal vs. pausable state.
-8. Payroll multiplier modeling: §5.2 historically promised "editable hourly rates and multipliers," but the schema carries only `users.hourlyRateOverride` (§1.1 conflict rule invoked). Decide between a dedicated `payrollConfig` table vs per-user overrides only — blocked on payroll stakeholder input.
+8. Payroll multiplier modeling: **RESOLVED-DEFAULT (R35)** — pluggable strategy module (`src/lib/payroll-strategies.ts`), BCEA default (1.5× beyond 45h/week; 2.0× Sundays, Sundays excluded from weekly OT accumulation), switchable via `PAYROLL_STRATEGY` env or `jpayConfig.payrollRules.strategy`. Multiplier figures ⚠ UNVERIFIED against BCEA source text — verify before first client fork.
 
 ---
 
