@@ -1,6 +1,6 @@
 "use client";
 
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery, useAction } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -9,8 +9,9 @@ import { useOutbox } from "./use-outbox";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
-import { ChangePassword } from "./change-password";
+import { ChangePassword, ForcedPasswordChange } from "./change-password";
 import { errMsg } from "@/lib/errors";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 const STATUSES = [
   "arrived",
@@ -46,7 +47,13 @@ function isIos(): boolean {
 
 export default function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const me = useQuery(api.users_queries.me) ?? null;
+  const me = useQuery(api.users_queries.me);
+  const { signOut } = useAuthActions();
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && me === null) {
+      void signOut().then(() => window.location.reload());
+    }
+  }, [isLoading, isAuthenticated, me, signOut]);
   const [consented, setConsented] = useState(true);
   const installEvent = useRef<{ prompt: () => Promise<void> } | null>(null);
   const [showInstall, setShowInstall] = useState(false);
@@ -73,8 +80,13 @@ export default function Home() {
     );
   }
 
+  const mustChangePassword = me.passwordChangedAt === undefined;
+
   return (
     <>
+      {mustChangePassword && (
+        <ForcedPasswordChange />
+      )}
       {!consented && (
         <ConsentGate
           onAccept={() => {
@@ -106,7 +118,7 @@ export default function Home() {
             iPhone: add J-Pay to your Home Screen via Share → “Add to Home Screen”.
           </p>
         )}
-        {me.role === "employee" ? (
+        {!mustChangePassword && (me.role === "employee" ? (
           <>
             <EmployeePanel />
             <MessagesPanel role="employee" />
@@ -114,7 +126,7 @@ export default function Home() {
           </>
         ) : (
           <ModeratorLink />
-        )}
+        ))}
         <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-neutral-600">
           Location is recorded only when you press CHECK IN — never continuous tracking. Raw
           coordinates are anonymized after the payroll dispute window. No ads, no trackers.

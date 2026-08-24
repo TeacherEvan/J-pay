@@ -7,7 +7,8 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessagesPanel } from "../messages";
 import { PayrollPanel, ReviewPanel } from "../payroll";
-import { ChangePassword } from "../change-password";
+import { ChangePassword, ForcedPasswordChange } from "../change-password";
+import { SiteMapPicker } from "../site-map-picker";
 import { errMsg } from "@/lib/errors";
 
 export default function ModeratorPage() {
@@ -19,6 +20,9 @@ export default function ModeratorPage() {
 
   if (me === undefined) {
     return <main className="grid min-h-dvh place-items-center text-sm text-neutral-400">Loading…</main>;
+  }
+  if (me !== null && me !== undefined && me.passwordChangedAt === undefined) {
+    return <ForcedPasswordChange />;
   }
   if (me === null || me.role !== "moderator") {
     return (
@@ -217,13 +221,20 @@ function ProvisionPanel() {
 function SitePanel() {
   const createSite = useMutation(api.sites.createSite);
   const [form, setForm] = useState({ name: "", lat: "", lng: "", radius: "150", tz: "Africa/Johannesburg" });
+  const coord = (v: string): number | null => {
+    const n = Number(v);
+    return v.trim() !== "" && Number.isFinite(n) ? n : null;
+  };
+  const latNum = coord(form.lat);
+  const lngNum = coord(form.lng);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">Create site</h2>
-      <div className="grid grid-cols-2 gap-2">
+      <SiteMapPicker lat={latNum} lng={lngNum} onPick={(a, b) => setForm({ ...form, lat: String(a), lng: String(b) })} />
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name"
           className="col-span-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
         <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="Latitude" inputMode="decimal"
