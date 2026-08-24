@@ -23,9 +23,10 @@ name is historical — do NOT create, clone, or reference sibling directories.
 8. **Commits:** scoped conventional commits (`docs(j-pay): ...`). No push without explicit ask.
 
 ## Convex generated types
-`convex/_generated/` contains hand-authored stand-ins so typecheck works before
-`npx convex dev` login. The CLI overwrites them with identical-shape output on
-first run — never hand-edit them to change behavior.
+`convex/_generated/` is CLI-generated (real output since first login) — never
+hand-edit it to change behavior. Pre-login stubs are no longer needed; fresh
+clones run `npm install && npx tsc --noEmit` only after `npx convex dev` has
+generated types, or copy the committed `.d.ts` set from an initialized fork.
 
 ## Verification commands
 python3 scripts/check_consistency.py   # TRD internal consistency
@@ -38,3 +39,17 @@ The hermes-era remediation plan was owner-deleted (2026-08-24) — it referenced
 phantom sibling workspace. The TRD (`j-pay.md`) remains the contract; the app in
 this directory is the live implementation. Fork model: one deployment per client
 (`jpay-<client>`), single-org per deployment.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

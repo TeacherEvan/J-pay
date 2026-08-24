@@ -138,7 +138,7 @@ export function ReviewPanel() {
         Shifts needing review
       </h2>
       {(review ?? []).length === 0 && <p className="text-xs text-neutral-600">Nothing flagged.</p>}
-      {(review ?? []).map((s) => (
+      {(review ?? []).map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
         <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-900 py-2 text-xs first:border-0">
           <span>
             {new Date(s.startedAt).toLocaleString()}

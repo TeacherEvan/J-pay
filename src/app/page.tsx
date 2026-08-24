@@ -363,7 +363,7 @@ function EmployeePanel() {
         <section className="mt-4">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent</h2>
           <ul className="flex flex-col gap-1">
-            {recentLogs!.slice(0, 10).map((log) => (
+            {recentLogs!.slice(0, 10).map((log: { _id: string; status: string; isWithinGeofence: boolean; impossibleTravelFlag?: boolean; _creationTime: number }) => (
               <li key={log._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-xs">
                 <span>{log.status}</span>
                 <span className="text-neutral-500">

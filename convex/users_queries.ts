@@ -22,7 +22,7 @@ export const getByEmail = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .withIndex("email", (q) => q.eq("email", args.email))
       .first();
   },
 });

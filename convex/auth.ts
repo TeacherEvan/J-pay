@@ -22,7 +22,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       if (!email) throw new ConvexError("EMAIL_REQUIRED");
       const existing = await db
         .query("users")
-        .withIndex("by_email", (q) => q.eq("email", email))
+        .withIndex("email", (q) => q.eq("email", email))
         .first();
       if (existing) {
         if (existing.archivedAt !== undefined) throw new ConvexError("ACCOUNT_ARCHIVED");

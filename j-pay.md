@@ -143,7 +143,7 @@ export default defineSchema({
     hourlyRateOverride: v.optional(v.number()),
     pushSubscriptionTokens: v.optional(v.array(v.string())),
   })
-    .index("by_email", ["email"])
+    .index("email", ["email"])
     .index("by_role", ["role"])
     .index("by_active", ["isActive"]),
 
@@ -195,9 +195,9 @@ export default defineSchema({
     isModeratorOverride: v.optional(v.boolean()), // manual attestation for weak-GPS sites (v1.1)
     impossibleTravelFlag: v.optional(v.boolean()), // >200 km/h vs previous fix (v1.1)
   })
-    .index("by_user_time", ["userId", "_creationTime"])
+    .index("by_user_time", ["userId"])  // _creationTime tiebreaker auto-appended
     .index("by_status", ["status"])
-    .index("by_site_time", ["siteId", "_creationTime"])
+    .index("by_site_time", ["siteId"])
     .index("by_user_skew", ["userId", "clockSkewMs"])
     .index("by_user_idem", ["userId", "idempotencyKey"]),
 

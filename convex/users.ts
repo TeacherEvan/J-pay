@@ -109,7 +109,7 @@ export const issueMyDeviceToken = mutation({
     }
     const secret = process.env.DEVICE_TOKEN_SECRET;
     if (!secret) throw new ConvexError("DEVICE_TOKEN_SECRET_NOT_SET");
-    const { token, issuedAt } = issueDeviceToken(userId, secret);
+    const { token, issuedAt } = await issueDeviceToken(userId, secret);
     await ctx.db.patch(userId, { deviceId: String(issuedAt) });
     return token;
   },

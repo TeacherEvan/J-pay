@@ -43,7 +43,7 @@ export const createLog = mutation({
     const secret = process.env.DEVICE_TOKEN_SECRET;
     if (!secret) throw new ConvexError("DEVICE_TOKEN_SECRET_NOT_SET");
     const user = await ctx.db.get(userId);
-    if (!user || !verifyDeviceToken(args.deviceToken, userId, secret, user.deviceId)) {
+    if (!user || !(await verifyDeviceToken(args.deviceToken, userId, secret, user.deviceId))) {
       throw new ConvexError("DEVICE_TOKEN_INVALID");
     }
 

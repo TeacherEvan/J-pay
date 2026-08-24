@@ -1,38 +1,49 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-
 const encoder = new TextEncoder();
 
-function b64url(bytes: Buffer): string {
-  return bytes.toString("base64url");
+function b64url(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function sign(payload: string, secret: string): string {
-  return b64url(createHmac("sha256", secret).update(payload).digest());
+async function sign(payload: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  return b64url(new Uint8Array(mac));
 }
 
 function safeEqual(a: string, b: string): boolean {
-  const ab = encoder.encode(a);
-  const bb = encoder.encode(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(Buffer.from(ab), Buffer.from(bb));
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
-export function issueDeviceToken(userId: string, secret: string): { token: string; issuedAt: number } {
+export async function issueDeviceToken(
+  userId: string,
+  secret: string
+): Promise<{ token: string; issuedAt: number }> {
   const issuedAt = Date.now();
   const payload = `${userId}:${issuedAt}`;
-  return { token: `${issuedAt}.${sign(payload, secret)}`, issuedAt };
+  return { token: `${issuedAt}.${await sign(payload, secret)}`, issuedAt };
 }
 
-export function verifyDeviceToken(
+export async function verifyDeviceToken(
   token: string,
   userId: string,
   secret: string,
   storedIssuedAt: string | undefined
-): boolean {
+): Promise<boolean> {
   const dot = token.indexOf(".");
   if (dot <= 0 || !storedIssuedAt) return false;
   const issuedAtStr = token.slice(0, dot);
   const mac = token.slice(dot + 1);
   if (issuedAtStr !== storedIssuedAt) return false;
-  return safeEqual(mac, sign(`${userId}:${issuedAtStr}`, secret));
+  return safeEqual(mac, await sign(`${userId}:${issuedAtStr}`, secret));
 }
