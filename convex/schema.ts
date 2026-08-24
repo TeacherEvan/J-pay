@@ -13,6 +13,7 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     role: v.union(v.literal("moderator"), v.literal("employee")),
     isActive: v.boolean(),
+    passwordChangedAt: v.optional(v.number()),
     deviceId: v.optional(v.string()),
     archivedAt: v.optional(v.number()),
     hourlyRateOverride: v.optional(v.number()),

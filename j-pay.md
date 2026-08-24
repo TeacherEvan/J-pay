@@ -138,6 +138,7 @@ export default defineSchema({
     email: v.string(),
     role: v.union(v.literal("moderator"), v.literal("employee")),
     isActive: v.boolean(),
+    passwordChangedAt: v.optional(v.number()), // undefined = still using provisioned ID code
     deviceId: v.optional(v.string()),          // signed device token id
     archivedAt: v.optional(v.number()),        // soft delete (payroll compliance)
     hourlyRateOverride: v.optional(v.number()),
@@ -356,6 +357,7 @@ erDiagram
         boolean isActive
         string deviceId
         number archivedAt "SOFT DELETE"
+        number passwordChangedAt "OPTIONAL force-set at provisioning"
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
     }

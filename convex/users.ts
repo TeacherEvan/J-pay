@@ -114,6 +114,50 @@ export const provisionModerator = action({
   },
 });
 
+export const resetPasswordBreakGlass = internalAction({
+  args: { key: v.string(), email: v.string(), newSecret: v.string(), keepForceChange: v.optional(v.boolean()) },
+  handler: async (ctx, args): Promise<{ reset: string }> => {
+    if (!process.env.BOOTSTRAP_KEY || args.key !== process.env.BOOTSTRAP_KEY) {
+      throw new ConvexError("BOOTSTRAP_KEY_INVALID");
+    }
+    const email = args.email.trim().toLowerCase();
+    const user: { _id: Id<"users"> } | null = await ctx.runQuery(
+      internal.users_queries.getByEmail,
+      { email }
+    );
+    if (!user) throw new ConvexError("USER_NOT_FOUND");
+    await modifyAccountCredentials(ctx, {
+      provider: "password",
+      account: { id: email, secret: args.newSecret },
+    });
+    await ctx.runMutation(internal.users.markPasswordChanged, {
+      userId: user._id as Id<"users">,
+    });
+    if (args.keepForceChange === true) {
+      await ctx.runMutation(internal.users.forceChangeOn, { userId: user._id as Id<"users"> });
+    } else {
+      await ctx.runMutation(internal.users.clearForceChange, {
+        userId: user._id as Id<"users">,
+      });
+    }
+    return { reset: email };
+  },
+});
+
+export const forceChangeOn = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { passwordChangedAt: undefined });
+  },
+});
+
+export const clearForceChange = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { passwordChangedAt: Date.now() });
+  },
+});
+
 export const archiveUserBreakGlass = internalAction({
   args: { key: v.string(), email: v.string() },
   handler: async (ctx, args): Promise<{ archived: string }> => {
@@ -127,6 +171,13 @@ export const archiveUserBreakGlass = internalAction({
     if (!user) throw new ConvexError("USER_NOT_FOUND");
     await ctx.runMutation(internal.users.archiveUserInternal, { userId: user._id });
     return { archived: user.email ?? "" };
+  },
+});
+
+export const markPasswordChanged = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { passwordChangedAt: Date.now() });
   },
 });
 
@@ -155,6 +206,7 @@ export const changeMyPassword = action({
       provider: "password",
       account: { id: user.email, secret: args.newSecret },
     });
+    await ctx.runMutation(internal.users.markPasswordChanged, { userId });
     return { ok: true as const };
   },
 });

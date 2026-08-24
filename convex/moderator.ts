@@ -7,7 +7,10 @@ import { internal } from "./_generated/api";
 export const auditRecentLogs = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
     const logs = await ctx.db
       .query("logs")
       .withIndex("by_creation_time", (q) =>
@@ -104,7 +107,10 @@ export const listAllSites = query({
 export const resolveShift = mutation({
   args: { shiftId: v.id("shifts") },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
     await ctx.db.patch(args.shiftId, {

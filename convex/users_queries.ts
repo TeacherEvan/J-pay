@@ -6,7 +6,10 @@ export const me = query({
   args: {},
   handler: async (ctx) => {
     const userId = await maybeCurrentUserId(ctx);
-    return userId ? await ctx.db.get(userId) : null;
+    if (!userId) return null;
+    const user = await ctx.db.get(userId);
+    if (!user || !user.isActive || user.archivedAt !== undefined) return null;
+    return user;
   },
 });
 
