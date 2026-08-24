@@ -1,0 +1,75 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  outboxAll,
+  outboxCount,
+  outboxEnqueue,
+  outboxRemove,
+  type OutboxEntry,
+} from "@/lib/outbox";
+
+export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
+  const [count, setCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    outboxCount()
+      .then(setCount)
+      .catch(() => setCount(0));
+  }, []);
+
+  const flush = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const items = await outboxAll();
+      for (const { key, entry } of items) {
+        try {
+          await flushOne(entry);
+          await outboxRemove(key);
+        } catch (e) {
+          const msg = String(e);
+          if (/WEAK_GPS|DEVICE_TOKEN|SITE_NOT|INACTIVE|INVITE/.test(msg)) {
+            await outboxRemove(key);
+            setLastError(`Dropped queued entry: ${msg}`);
+          } else {
+            setLastError(null);
+            break;
+          }
+        }
+      }
+    } finally {
+      setSyncing(false);
+      refresh();
+    }
+  }, [flushOne, syncing, refresh]);
+
+  const enqueue = useCallback(
+    async (entry: OutboxEntry) => {
+      await outboxEnqueue(entry);
+      refresh();
+      void flush();
+    },
+    [refresh, flush]
+  );
+
+  useEffect(() => {
+    refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void flush();
+    };
+    const onOnline = () => void flush();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    const interval = setInterval(refresh, 15000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      clearInterval(interval);
+    };
+  }, [flush, refresh]);
+
+  return { count, enqueue, flush, syncing, lastError };
+}

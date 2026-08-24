@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: "J-Pay",
   description: "PWA Payroll & Geolocation Logger",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "J-Pay" },
 };
 
 export const viewport: Viewport = {
