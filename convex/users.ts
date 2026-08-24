@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { createAccount, getAuthUserId } from "@convex-dev/auth/server";
 import { issueDeviceToken } from "./deviceTokens";
-import { currentUserId } from "./access";
+import { currentUserId, requireModerator } from "./access";
 import { api } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 
@@ -73,6 +73,16 @@ export const bootstrapFirstModerator = internalAction({
       },
     });
     return { email: args.email.trim().toLowerCase(), idCode };
+  },
+});
+
+export const deactivateEmployee = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "employee") throw new ConvexError("NOT_AN_EMPLOYEE");
+    await ctx.db.patch(args.userId, { archivedAt: Date.now() });
   },
 });
 

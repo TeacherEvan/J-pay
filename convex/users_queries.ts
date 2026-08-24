@@ -36,3 +36,20 @@ export const listByRole = query({
       .collect();
   },
 });
+
+export const listEmployees = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "employee"))
+      .collect();
+  },
+});
+
+export const listAllSites = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("sites").collect();
+  },
+});
