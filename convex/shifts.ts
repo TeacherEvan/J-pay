@@ -6,6 +6,24 @@ const MAX_SHIFT_MS = 16 * 3600 * 1000;
 const DEFAULT_LUNCH_MINUTES = 60;
 const PICKER_MAX_MINUTES = 120;
 
+export function localDayKey(epochMs: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(epochMs));
+  } catch {
+    return new Date(epochMs).toISOString().slice(0, 10);
+  }
+}
+
+function skewCorrectedTime(log: Doc<"logs">): number {
+  const skew = log.clockSkewMs ?? 0;
+  return Math.abs(skew) <= 30000 ? log.clientReportedTime : log._creationTime;
+}
+
 type Segment = {
   startedAt: number;
   endedAt?: number;
@@ -13,11 +31,6 @@ type Segment = {
   needsReview: boolean;
   reviewReason?: string;
 };
-
-function skewCorrectedTime(log: Doc<"logs">): number {
-  const skew = log.clockSkewMs ?? 0;
-  return Math.abs(skew) <= 30000 ? log.clientReportedTime : log._creationTime;
-}
 
 export const deriveForUser = internalMutation({
   args: { userId: v.id("users") },
@@ -133,46 +146,60 @@ export const deriveForUser = internalMutation({
           }
           break;
         case "day finish":
-        case "job finish":
+        case "job finish": {
+          let excessiveLunch = false;
           if (phase === "sideMission") {
             const wall = sideEntryAt !== null ? Math.round((t - sideEntryAt) / 60000) : sideDeclared;
             deductionMinutes += Math.min(sideDeclared, wall);
           } else if (phase === "lunch" && lunchOpenedAt !== null) {
             deductionMinutes += DEFAULT_LUNCH_MINUTES;
+            if (t - lunchOpenedAt > 2 * DEFAULT_LUNCH_MINUTES * 60000) {
+              excessiveLunch = true;
+            }
           }
           if (!current) {
-            current = { startedAt: t, needsReview: true, reviewReason: "terminal_without_arrival" };
-            segments.push(current);
-            current = null;
+            const orphan: Segment = {
+              startedAt: t,
+              needsReview: true,
+              reviewReason: "terminal_without_arrival",
+            };
+            segments.push(orphan);
           } else {
-            closeCurrent(t, false);
+            closeCurrent(
+              t,
+              excessiveLunch || current.needsReview,
+              excessiveLunch ? "unpaired_lunch_excessive" : current.reviewReason
+            );
           }
           break;
+        }
       }
     }
 
     if (current) {
       const now = Date.now();
-      const end = Math.min(now, (current as Segment).startedAt + MAX_SHIFT_MS);
+      const seg = current;
+      const end = Math.min(now, seg.startedAt + MAX_SHIFT_MS);
       if (phase === "sideMission") {
         deductionMinutes += sideDeclared;
         if (sideDeclared > 2 * PICKER_MAX_MINUTES) {
-          (current as Segment).needsReview = true;
-          (current as Segment).reviewReason = "unpaired_side_mission_excessive";
+          seg.needsReview = true;
+          seg.reviewReason = "unpaired_side_mission_excessive";
         }
-      } else if (phase === "lunch") {
+      } else if (phase === "lunch" && lunchOpenedAt !== null) {
         deductionMinutes += DEFAULT_LUNCH_MINUTES;
+        if (now - lunchOpenedAt > 2 * DEFAULT_LUNCH_MINUTES * 60000) {
+          seg.needsReview = true;
+          seg.reviewReason = "unpaired_lunch_excessive";
+        }
       }
-      (current as Segment).endedAt = end;
-      (current as Segment).totalMinutes = Math.max(
-        0,
-        Math.round((end - (current as Segment).startedAt) / 60000) - deductionMinutes
-      );
-      if ((current as Segment).startedAt + MAX_SHIFT_MS < now && !(current as Segment).needsReview) {
-        (current as Segment).needsReview = true;
-        (current as Segment).reviewReason = (current as Segment).reviewReason ?? "auto_closed_no_terminal";
+      seg.endedAt = end;
+      seg.totalMinutes = Math.max(0, Math.round((end - seg.startedAt) / 60000) - deductionMinutes);
+      if (seg.startedAt + MAX_SHIFT_MS < now && !seg.needsReview) {
+        seg.needsReview = true;
+        seg.reviewReason = seg.reviewReason ?? "auto_closed_no_terminal";
       }
-      segments.push(current as Segment);
+      segments.push(seg);
     }
 
     const old = await ctx.db

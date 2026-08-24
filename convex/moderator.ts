@@ -1,5 +1,7 @@
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireModerator } from "./access";
+import { internal } from "./_generated/api";
 
 export const auditRecentLogs = query({
   args: { limit: v.optional(v.number()) },
@@ -61,9 +63,42 @@ export const listEmployeesWithAssignments = query({
         email: e.email,
         archivedAt: e.archivedAt,
         isActive: e.isActive,
+        hourlyRateOverride: e.hourlyRateOverride,
         assignedSiteIds: assignments.map((a) => a.siteId),
       });
     }
     return out;
+  },
+});
+
+export const resolveShift = mutation({
+  args: { shiftId: v.id("shifts") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const shift = await ctx.db.get(args.shiftId);
+    if (!shift) throw new Error("SHIFT_NOT_FOUND");
+    await ctx.db.patch(args.shiftId, {
+      needsReview: false,
+      reviewReason: `resolved:${shift.reviewReason ?? "flagged"}`,
+    });
+  },
+});
+
+export const recomputeEmployeeShifts = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId: args.userId });
+  },
+});
+
+export const setHourlyOverride = mutation({
+  args: { userId: v.id("users"), rate: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    if (args.rate !== undefined && (args.rate < 0 || args.rate > 100000)) {
+      throw new Error("RATE_OUT_OF_RANGE");
+    }
+    await ctx.db.patch(args.userId, { hourlyRateOverride: args.rate });
   },
 });

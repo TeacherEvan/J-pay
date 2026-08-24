@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 import { requireEmployee } from "./access";
 import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 const MAX_ACCURACY_METERS = 50;
 const IMPOSSIBLE_TRAVEL_KMH = 200;
@@ -104,7 +104,7 @@ export const createLog = mutation({
       impossibleTravelFlag,
     });
 
-    await ctx.scheduler.runAfter(0, api.shifts.deriveForUser, { userId });
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
 
     return { logId, duplicate: false as const };
   },
