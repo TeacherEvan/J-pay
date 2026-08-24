@@ -1,12 +1,15 @@
-# AGENTS.md — J-Pay Docs Workspace
+# AGENTS.md — J-Pay Workspace
 
 ## What this folder is
-Documentation-only workspace holding the J-Pay TRD (`j-pay.md`), its reviews,
-ADR records, and implementation plans. The future app repo is
-`TeacherEvan/J-pay-webb_logger` — do NOT scaffold or clone it here.
+The J-Pay application workspace (owner directive 2026-08-24, superseding the
+earlier docs-only split): the TRD (`j-pay.md`), its reviews/ADRs/plans, AND the
+live Next.js + Convex application all live here. The `TeacherEvan/J-pay-webb_logger`
+name is historical — do NOT create, clone, or reference sibling directories.
 
 ## Hard rules for any agent working here
-1. **Scope:** touch only files under this directory. No sibling repos, no scaffolding.
+1. **Scope:** touch ONLY files under this directory. Never enumerate, read, or
+   write any sibling directory or other repo — no exceptions without a fresh,
+   explicit owner instruction in-session.
 2. **Schema truth:** the TypeScript block in `j-pay.md` §6 is the contract. When you edit it,
    keep it syntactically valid Convex code and keep the ERD (§10.2) in sync.
 3. **Conflict rule:** where feature text and schema disagree, schema wins — flag the
