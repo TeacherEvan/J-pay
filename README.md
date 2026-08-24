@@ -41,6 +41,7 @@ Each client company gets an isolated fork + Convex deployment:
 ## Gates
 
 ```bash
+npm test                               # shift-engine grammar (§6.1 rules 1–9) + CSV guard
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
 npm run typecheck                      # tsc --strict over app + convex

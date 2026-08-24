@@ -25,6 +25,8 @@ name is historical — do NOT create, clone, or reference sibling directories.
 ## Verification commands
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
+npm run typecheck                      # tsc --strict over app + convex
+npm test                               # shift-engine grammar + CSV injection guard
 
 ## Execution plan
 The hermes-era remediation plan was owner-deleted (2026-08-24) — it referenced a
