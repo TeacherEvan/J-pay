@@ -87,7 +87,10 @@ export default function ModeratorPage() {
                   </td>
                   <td className="p-2 text-right">
                     {!e.archivedAt && (
-                      <DeactivateButton userId={e._id} />
+                      <span className="inline-flex gap-2">
+                        {e.deviceId && <ResetDeviceButton userId={e._id} />}
+                        <DeactivateButton userId={e._id} />
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -371,5 +374,24 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
         {saved ? "✓" : "set"}
       </button>
     </span>
+  );
+}
+
+function ResetDeviceButton({ userId }: { userId: Id<"users"> }) {
+  const reset = useMutation(api.users.resetDeviceToken);
+  const [confirming, setConfirming] = useState(false);
+  return confirming ? (
+    <span className="inline-flex gap-1">
+      <button onClick={() => void reset({ userId }).catch(() => {})} className="text-amber-400 underline">
+        confirm
+      </button>
+      <button onClick={() => setConfirming(false)} className="text-neutral-500 underline">
+        cancel
+      </button>
+    </span>
+  ) : (
+    <button onClick={() => setConfirming(true)} className="text-neutral-500 underline hover:text-amber-400">
+      reset device
+    </button>
   );
 }

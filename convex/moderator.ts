@@ -63,6 +63,7 @@ export const listEmployeesWithAssignments = query({
         email: e.email,
         archivedAt: e.archivedAt,
         isActive: e.isActive,
+        deviceId: e.deviceId,
         hourlyRateOverride: e.hourlyRateOverride,
         assignedSiteIds: assignments.map((a) => a.siteId),
       });

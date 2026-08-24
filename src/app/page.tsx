@@ -213,8 +213,11 @@ function EmployeePanel() {
     let token: string;
     try {
       token = await getToken();
-    } catch {
-      setMessage("Device activation failed — reload the page.");
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+        setMessage(m.includes("DEVICE_ALREADY_ACTIVE")
+          ? "Device already activated — ask your moderator to reset it."
+          : "Device activation failed — reload the page.");
       return;
     }
     try {

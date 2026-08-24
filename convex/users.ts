@@ -86,6 +86,14 @@ export const deactivateEmployee = mutation({
   },
 });
 
+export const resetDeviceToken = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    await ctx.db.patch(args.userId, { deviceId: undefined });
+  },
+});
+
 export const issueMyDeviceToken = mutation({
   args: {},
   handler: async (ctx) => {
@@ -93,6 +101,9 @@ export const issueMyDeviceToken = mutation({
     const user = await ctx.db.get(userId);
     if (!user || user.archivedAt !== undefined || !user.isActive) {
       throw new ConvexError("INACTIVE_ACCOUNT");
+    }
+    if (user.deviceId !== undefined) {
+      throw new ConvexError("DEVICE_ALREADY_ACTIVE");
     }
     const secret = process.env.DEVICE_TOKEN_SECRET;
     if (!secret) throw new ConvexError("DEVICE_TOKEN_SECRET_NOT_SET");
