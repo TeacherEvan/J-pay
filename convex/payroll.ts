@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 import { requireActiveUser } from "./access";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
-import { localDayKey } from "./shifts";
+import { localDayKey } from "../src/lib/shift-engine";
 import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
 
