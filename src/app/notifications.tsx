@@ -7,11 +7,13 @@ import { api } from "../../convex/_generated/api";
 export function EnableNotifications() {
   const vapidKey = useQuery(api.push_subs.publicVapidKey);
   const save = useMutation(api.push_subs.saveSubscription);
-  const [state, setState] = useState<"idle" | "on" | "off">("idle");
-
-  if (typeof Notification !== "undefined" && state === "idle") {
-    setState(Notification.permission === "granted" ? "on" : "off");
-  }
+  const [state, setState] = useState<"idle" | "on" | "off">(() =>
+    typeof Notification === "undefined"
+      ? "idle"
+      : Notification.permission === "granted"
+        ? "on"
+        : "off"
+  );
 
   async function enable() {
     if (!vapidKey) {

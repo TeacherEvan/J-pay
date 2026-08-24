@@ -9,6 +9,8 @@ import {
   type OutboxEntry,
 } from "@/lib/outbox";
 
+let flushing = false;
+
 export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
   const [count, setCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -21,7 +23,8 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
   }, []);
 
   const flush = useCallback(async () => {
-    if (syncing) return;
+    if (flushing) return;
+    flushing = true;
     setSyncing(true);
     try {
       const items = await outboxAll();
@@ -31,16 +34,16 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
           await outboxRemove(key);
         } catch (e) {
           const msg = String(e);
-          if (/WEAK_GPS|DEVICE_TOKEN|SITE_NOT|INACTIVE|INVITE/.test(msg)) {
+          if (/WEAK_GPS|DEVICE_TOKEN|SITE_NOT|INACTIVE|FORBIDDEN/.test(msg)) {
             await outboxRemove(key);
             setLastError(`Dropped queued entry: ${msg}`);
           } else {
-            setLastError(null);
             break;
           }
         }
       }
     } finally {
+      flushing = false;
       setSyncing(false);
       refresh();
     }

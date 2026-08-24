@@ -9,6 +9,7 @@ import { useOutbox } from "./use-outbox";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
+import { errMsg } from "@/lib/errors";
 
 const STATUSES = [
   "arrived",
@@ -277,7 +278,7 @@ function EmployeePanel() {
           tokenReady.current = null;
           setMessage("Device was reset by moderator — tap CHECK IN again.");
         } else {
-          setMessage(msg.replace(/^Uncaught Error: /, ""));
+          setMessage(errMsg(e));
         }
       }
     } catch (e) {

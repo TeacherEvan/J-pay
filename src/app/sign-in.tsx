@@ -2,6 +2,7 @@
 
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
+import { errMsg } from "@/lib/errors";
 
 export function SignIn() {
   const { signIn } = useAuthActions();
@@ -16,7 +17,7 @@ export function SignIn() {
         setError(null);
         const formData = new FormData(event.currentTarget);
         signIn("password", formData).catch((e: Error) =>
-          setError(e.message.replace(/^Uncaught Error: /, ""))
+          setError(errMsg(e))
         );
       }}
     >

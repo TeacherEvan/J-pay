@@ -7,11 +7,12 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessagesPanel } from "../messages";
 import { PayrollPanel, ReviewPanel } from "../payroll";
+import { errMsg } from "@/lib/errors";
 
 export default function ModeratorPage() {
   const me = useQuery(api.users_queries.me);
   const employees = useQuery(api.moderator.listEmployeesWithAssignments);
-  const sites = useQuery(api.users_queries.listAllSites);
+  const sites = useQuery(api.moderator.listAllSites);
   const audit = useQuery(api.moderator.auditRecentLogs, { limit: 50 });
   const review = useQuery(api.moderator.auditNeedsReview);
 
@@ -175,7 +176,7 @@ function ProvisionPanel() {
               setName("");
               setEmail("");
             } catch (e) {
-              setError(String(e).replace(/^Uncaught Error: /, ""));
+              setError(errMsg(e));
             } finally {
               setBusy(false);
             }
@@ -239,7 +240,7 @@ function SitePanel() {
               setMsg(`Created ${form.name}`);
               setForm({ ...form, name: "", lat: "", lng: "" });
             } catch (e) {
-              setMsg(String(e).replace(/^Uncaught Error: /, ""));
+              setMsg(errMsg(e));
             } finally {
               setBusy(false);
             }
@@ -296,7 +297,7 @@ function AssignPanel({
               await assign({ userId: userId as never, siteId: siteId as never });
               setMsg("Assigned.");
             } catch (e) {
-              setMsg(String(e).replace(/^Uncaught Error: /, ""));
+              setMsg(errMsg(e));
             }
           }}
           className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-50"
@@ -311,7 +312,7 @@ function AssignPanel({
               await unassign({ userId: userId as never, siteId: siteId as never });
               setMsg("Unassigned.");
             } catch (e) {
-              setMsg(String(e).replace(/^Uncaught Error: /, ""));
+              setMsg(errMsg(e));
             }
           }}
           className="rounded-md border border-neutral-700 px-3 py-2 text-sm disabled:opacity-50"
