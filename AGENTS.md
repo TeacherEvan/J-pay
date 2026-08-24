@@ -27,6 +27,7 @@ python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
 
 ## Execution plan
-The active implementation plan lives at `docs/plans/2026-08-23-jpay-v12-remediation.md`
-(writing-plans-enhanced format). Execute it task-by-task with its TDD gates; do not skip
-the failing-test-first steps.
+The hermes-era remediation plan was owner-deleted (2026-08-24) — it referenced a
+phantom sibling workspace. The TRD (`j-pay.md`) remains the contract; the app in
+this directory is the live implementation. Fork model: one deployment per client
+(`jpay-<client>`), single-org per deployment.
