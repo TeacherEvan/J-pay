@@ -23,5 +23,11 @@ if (occupied) {
   process.exit(1);
 }
 
-const child = spawn("npx", ["next", "dev"], { stdio: "inherit", env: { ...process.env, PORT: String(PORT) } });
+// --webpack is mandatory: Next 16.3.2 defaults `next dev` to Turbopack, but
+// @serwist/next 10.0.0-preview.14 requires webpack for SW bundling. Dev mode
+// does not actually build the SW (`disable: process.env.NODE_ENV === "development"`
+// in next.config.ts), but the withSerwist wrapper still injects webpack
+// configuration that Turbopack refuses to use. See docs/plans/2026-08-25-
+// next-16-upgrade.md §M2.
+const child = spawn("npx", ["next", "dev", "--webpack"], { stdio: "inherit", env: { ...process.env, PORT: String(PORT) } });
 child.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));

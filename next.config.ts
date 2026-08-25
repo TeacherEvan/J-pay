@@ -17,9 +17,16 @@ const nextConfig: import("next").NextConfig = {
   // (https://github.com/serwist/serwist/issues/54). The `next build` script
   // in package.json passes `--webpack` for the same reason.
   //
-  // When @serwist/next ships Turbopack support, revisit and add a
-  // `turbopack: {}` config here (or remove this comment block) — see
+  // Dev mode (`npm run dev` → scripts/dev-strict.mjs → `npx next dev`) also
+  // passes `--webpack` so dev and prod stay aligned. The empty
+  // `turbopack: {}` below silences Next 16's "you have a webpack config but
+  // Turbopack is the default" error on commands that don't take the flag
+  // (e.g. `npx next info`).
+  //
+  // When @serwist/next ships Turbopack support, remove `turbopack: {}` and
+  // the dev/build --webpack flags, and add real Turbopack config — see
   // docs/plans/2026-08-25-next-16-upgrade.md §M2 + TRD Open Question #2.
+  turbopack: {},
 };
 
 export default withSerwist(nextConfig);
