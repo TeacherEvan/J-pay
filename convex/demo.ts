@@ -322,13 +322,12 @@ export const demoAudit = query({
 export const demoNeedsReview = query({
   args: {},
   handler: async (ctx) => {
-    const { personaUserId } = await requireDemoReviewer(ctx);
+    await requireDemoReviewer(ctx);
     return await ctx.db
       .query("shifts")
       .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
       .order("desc")
-      .take(50)
-      .then((rows) => rows.filter((r) => r.userId === personaUserId));
+      .take(50);
   },
 });
 
@@ -375,10 +374,11 @@ export const demoEmployeeRoster = query({
   args: {},
   handler: async (ctx) => {
     await requireDemoReviewer(ctx);
-    return await ctx.db
+    const employees = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .take(50);
+    return employees.filter((u) => u.isAnonymous !== true);
   },
 });
 

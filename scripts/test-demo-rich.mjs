@@ -43,65 +43,51 @@ function buildThaboLogs() {
 
 test("Thabo: deriveSegments produces a non-zero shift count from a 13-weekday seed", () => {
   const logs = buildThaboLogs();
-  assert.equal(logs.length, 9 * 5, `expected 45 logs, got ${logs.length}`);
+  assert.equal(logs.length, 9 * 5);
   const segments = deriveSegments(logs);
-  assert.ok(segments.length >= 9, `expected >= 9 segments, got ${segments.length}`);
-  for (const s of segments) {
-    assert.equal(s.needsReview, false);
-  }
+  assert.ok(segments.length >= 9);
+  for (const s of segments) assert.equal(s.needsReview, false);
 });
 
 test("Thabo: derived shift minutes are 540 per day (paired lunch)", () => {
-  const logs = buildThaboLogs();
-  const segments = deriveSegments(logs);
-  for (const s of segments) {
-    assert.equal(s.totalMinutes, 540, `expected 540 min/day, got ${s.totalMinutes}`);
-  }
+  const segments = deriveSegments(buildThaboLogs());
+  for (const s of segments) assert.equal(s.totalMinutes, 540);
 });
 
 test("Thabo: localDayKey produces 9 unique YYYY-MM-DD days", () => {
-  const logs = buildThaboLogs();
-  const segments = deriveSegments(logs);
+  const segments = deriveSegments(buildThaboLogs());
   const days = new Set(segments.map((s) => localDayKey(s.startedAt, SITE_TZ)));
   assert.equal(days.size, segments.length);
-  for (const d of days) {
-    assert.match(d, /^\d{4}-\d{2}-\d{2}$/);
-  }
+  for (const d of days) assert.match(d, /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("Thabo: boundPersonaPayroll-equivalent: pay > 0", () => {
-  const logs = buildThaboLogs();
-  const segments = deriveSegments(logs);
+  const segments = deriveSegments(buildThaboLogs());
   const days = new Map();
   for (const s of segments) {
     if (s.needsReview) continue;
     const key = localDayKey(s.startedAt, s.timezone ?? SITE_TZ);
     days.set(key, (days.get(key) ?? 0) + (s.totalMinutes ?? 0));
   }
-  const input = [...days.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, minutes]) => ({ day, minutes }));
+  const input = [...days.entries()].sort().map(([day, minutes]) => ({ day, minutes }));
   const result = computePay(input, RATE, "bcea");
-  assert.ok(result.totals.pay > 0, `expected non-zero pay, got ${result.totals.pay}`);
+  assert.ok(result.totals.pay > 0);
   assert.ok(result.totals.payableMinutes > 0);
   assert.ok(result.totals.pay >= 14000 && result.totals.pay <= 22500);
   assert.equal(result.strategy, "bcea");
 });
 
-test("Paired lunch is not deducted: removing the lunch log leaves the total unchanged", () => {
+test("Paired lunch is not deducted", () => {
   const logs = buildThaboLogs();
-  const noLunch = logs.filter((l) => l.status !== "lunch");
-  const withLunchSegments = deriveSegments(logs);
-  const noLunchSegments = deriveSegments(noLunch);
-  assert.equal(withLunchSegments.length, noLunchSegments.length);
-  for (let i = 0; i < withLunchSegments.length; i++) {
-    const a = withLunchSegments[i];
-    const b = noLunchSegments[i];
-    assert.equal((b.totalMinutes ?? 0) - (a.totalMinutes ?? 0), 0);
+  const a = deriveSegments(logs);
+  const b = deriveSegments(logs.filter((l) => l.status !== "lunch"));
+  assert.equal(a.length, b.length);
+  for (let i = 0; i < a.length; i++) {
+    assert.equal((b[i].totalMinutes ?? 0) - (a[i].totalMinutes ?? 0), 0);
   }
 });
 
-test("Unpaired lunch IS deducted: lunch as last status costs 60 min", () => {
+test("Unpaired lunch IS deducted: 60 min", () => {
   const dayStart = Date.UTC(2026, 7, 3, 6);
   const segs = deriveSegments([
     { _creationTime: dayStart + 1000, idempotencyKey: "a1", clientReportedTime: dayStart, clockSkewMs: 0, status: "arrived", siteTimezone: "UTC" },
