@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev-strict.mjs",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
-    "@serwist/next": "^9.5.12",
+    "@serwist/next": "^10.0.0-preview.14",
     "convex": "^1.45.0",
     "leaflet": "^1.9.4",
     "next": "^16.3.2",
