@@ -30,3 +30,4 @@ out/
 public/sw.js
 public/swe-worker*.js
 user-review/
+.vercel
