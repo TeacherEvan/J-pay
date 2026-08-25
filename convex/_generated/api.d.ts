@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as auth from "../auth.js";
+import type * as changePassword from "../changePassword.js";
 import type * as crons from "../crons.js";
 import type * as demo from "../demo.js";
 import type * as demo_seed from "../demo_seed.js";
@@ -39,6 +40,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   auth: typeof auth;
+  changePassword: typeof changePassword;
   crons: typeof crons;
   demo: typeof demo;
   demo_seed: typeof demo_seed;
