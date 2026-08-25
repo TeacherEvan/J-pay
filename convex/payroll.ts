@@ -6,7 +6,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 import { localDayKey } from "../src/lib/shift-engine";
 import { computePay, type PayStrategyName } from "../src/lib/payroll-strategies";
-import { listSupportedJurisdictions } from "../src/lib/payroll-jurisdictions";
+import { listSupportedJurisdictions, getPayStrategy } from "../src/lib/payroll-jurisdictions";
 import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
 import { jpayConfig } from "../src/config/jpay.config";
@@ -101,6 +101,16 @@ export const setPayStrategy = mutation({
     await requireModerator(ctx);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
+    if (target.locale) {
+      try {
+        const row = getPayStrategy(target.locale);
+        if (row.strategy !== args.strategy) {
+          throw new ConvexError("JURISDICTION_UNSUPPORTED");
+        }
+      } catch (e) {
+        if (e instanceof ConvexError) throw e;
+      }
+    }
     await ctx.db.patch(args.userId, { payStrategy: args.strategy });
     return { ok: true as const };
   },
@@ -111,6 +121,19 @@ export const listSupportedStrategies = query({
   handler: async (ctx) => {
     await requireActiveUser(ctx);
     return listSupportedJurisdictions();
+  },
+});
+
+export const listJurisdictionsForLocale = query({
+  args: { locale: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireActiveUser(ctx);
+    if (!args.locale) return listSupportedJurisdictions();
+    try {
+      return [getPayStrategy(args.locale)];
+    } catch {
+      return listSupportedJurisdictions();
+    }
   },
 });
 

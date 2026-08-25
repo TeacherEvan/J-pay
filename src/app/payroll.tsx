@@ -26,7 +26,7 @@ type SupportedStrategy = {
   displayName: string;
 };
 
-export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number }[]; role?: "moderator" | "employee" }) {
+export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee" }) {
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
@@ -35,9 +35,12 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
     api.payroll.calcForEmployee,
     userId ? ({ userId, fromMs, toMs: Date.now() + 3600_000 } as never) : "skip"
   ) as PayrollResult | undefined;
-  const supported = useQuery(api.payroll.listSupportedStrategies, {} as never) as
-    | SupportedStrategy[]
-    | undefined;
+  const me = useQuery(api.users_queries.me);
+  const myLocale = me?.locale;
+  const supported = useQuery(
+    api.payroll.listJurisdictionsForLocale,
+    myLocale ? ({ locale: myLocale } as never) : ({ locale: undefined } as never)
+  ) as SupportedStrategy[] | undefined;
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
   const isModerator = role === "moderator";
