@@ -26,7 +26,14 @@ npx convex run users:bootstrapFirstModerator '{"key":"<random>","email":"you@exa
 
 Sign in as moderator at `/moderator` → create sites, provision employees (one-time
 `JP-XXXXXXXXXX` ID code), assign employee↔site. Employees sign in with email + ID code,
-then CHECK IN.
+then CHECK IN. When `DEMO_MODE=1` is set on the Convex deployment, the login screen also
+offers **"Enter demo preview"** — a throwaway anonymous employee session with demo sites
+(purged after 7 days); real sign-in is unaffected.
+
+> **Port note:** `npm run dev` guards its port — if :3000 is already taken by another
+> app (e.g. a sibling project), J-pay **refuses to start** instead of silently drifting
+> to :3001 and serving the wrong app at the canonical URL. Stop the other process, or
+> run `PORT=3001 npm run dev` and open that URL explicitly.
 
 ## Fork model — one client per deployment (`jpay-<client>`)
 

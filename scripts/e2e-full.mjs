@@ -1,7 +1,11 @@
 import puppeteer from "puppeteer-core";
 
 // Canonical end-to-end walkthrough (black-box, UI-only).
-// Env: JPAY_EMAIL / JPAY_PASSWORD (moderator creds), JPAY_DEBUG=1. Chrome CDP on :9300.
+// Env: JPAY_EMAIL / JPAY_PASSWORD (moderator creds), JPAY_DEBUG=1, JPAY_BASE_URL (default http://localhost:3000).
+// Chrome CDP on :9300.
+// NOTE: if another Next.js app occupies :3000, J-pay auto-increments (:3001, …). The
+// port-collision sentinel below aborts rather than driving the wrong app.
+const BASE = process.env.JPAY_BASE_URL ?? "http://localhost:3000";
 const MOD_EMAIL = process.env.JPAY_EMAIL;
 // (JPAY_EMAIL required too — see guard below)
 const MOD_PW = process.env.JPAY_PASSWORD;
@@ -50,7 +54,7 @@ await cdp.send("Emulation.setGeolocationOverride", {
 try {
   await cdp.send("Browser.grantPermissions", {
     permissions: ["geolocation"],
-    origin: "http://localhost:3000",
+    origin: BASE,
   });
 } catch {}
 
@@ -72,11 +76,11 @@ const fillInput = async (selector, value) => {
 async function wipe() {
   await cdp.send("Network.clearBrowserCookies");
   try {
-    await cdp.send("Storage.clearDataForOrigin", { origin: "http://localhost:3000", storageTypes: "all" });
+    await cdp.send("Storage.clearDataForOrigin", { origin: BASE, storageTypes: "all" });
   } catch {}
 }
 async function signIn(email, pw) {
-  await p.goto("http://localhost:3000/", { waitUntil: "networkidle2" });
+  await p.goto(BASE + "/", { waitUntil: "networkidle2" });
   await sleep(3000);
   const haveForm = await p.$('input[name=email], input[type=email], input[placeholder*="mail" i]');
   if (!haveForm) {
@@ -95,12 +99,59 @@ async function signIn(email, pw) {
   }
 }
 
+// ---------- 0. PORT-COLLISION SENTINEL ----------
+await p.goto(BASE + "/", { waitUntil: "networkidle2" });
+let sentinel = "";
+for (let i = 0; i < 15; i++) {
+  sentinel = await text();
+  if (/J-Pay/.test(sentinel)) break;
+  await sleep(1500);
+}
+if (!/J-Pay/.test(sentinel)) {
+  console.error(`ABORT: ${BASE} is not serving J-Pay (got: "${sentinel.slice(0, 120)}").`);
+  console.error("Another app likely holds this port and J-pay auto-incremented (try JPAY_BASE_URL=http://localhost:3001).");
+  await b.disconnect();
+  process.exit(3);
+}
+await log("port-collision sentinel: J-Pay served", true, BASE);
+
+// ---------- A0. DEMO PREVIEW LEG (R36: demo optional + selectable at login) ----------
+await wipe();
+{
+  let t = await text();
+  let clicked = false;
+  for (let i = 0; i < 20 && !clicked; i++) {
+    if (/Enter demo preview/.test(t)) clicked = await clickBtn("Enter demo preview");
+    else { await sleep(1500); t = await text(); }
+  }
+  await log("demo preview selectable at login", clicked);
+  for (let i = 0; i < 25; i++) { await sleep(2000); t = await text(); if (/CHECK IN/.test(t)) break; }
+  await log("demo session → employee panel", /CHECK IN/.test(t));
+  await log("demo role = employee", /EMPLOYEE/i.test(t));
+  await log("demo reviewer has sites", !/No site assigned/.test(t));
+  await log("forced password skipped for reviewer", !/Set your own password/.test(t));
+  await clickBtn("I understand");
+  await sleep(800);
+  await clickBtn("CHECK IN");
+  let logged = false;
+  for (let i = 0; i < 12; i++) {
+    await sleep(2000); t = await text();
+    if (/Logged \w+/.test(t)) { logged = true; break; }
+    if (/Weak GPS|denied/i.test(t)) break;
+  }
+  await log("demo check-in writes real log", logged, t.match(/Logged \w+|Weak GPS[^\n]*|denied[^\n]*/)?.[0] ?? "");
+  await p.screenshot({ path: "user-review/00-demo-checkin.png" });
+  await clickBtn("Sign out");
+  for (let i = 0; i < 10; i++) { await sleep(1500); t = await text(); if (/Sign in/.test(t)) break; }
+  await log("demo sign out returns to login", /Sign in/.test(t));
+}
+
 // ---------- A. MODERATOR LEG ----------
 await wipe();
 await signIn(MOD_EMAIL, MOD_PW);
 await log("moderator sign-in + consent", (await text()).includes("MODERATOR"));
 
-await p.goto("http://localhost:3000/moderator", { waitUntil: "networkidle2" });
+await p.goto(BASE + "/moderator", { waitUntil: "networkidle2" });
 await sleep(5000);
 await log("console loads", (await text()).includes("Moderator console"));
 
