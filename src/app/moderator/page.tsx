@@ -229,6 +229,9 @@ function ProvisionPanel() {
             try {
               const fn = role === "employee" ? provisionEmployeeAction : provisionModeratorAction;
               setCode(await fn({ name, email }));
+              if (role === "employee" && typeof window !== "undefined") {
+                (window as unknown as { __JPAY_LAST_EMPLOYEE_EMAIL?: string }).__JPAY_LAST_EMPLOYEE_EMAIL = email;
+              }
               setName("");
               setEmail("");
             } catch (e) {
