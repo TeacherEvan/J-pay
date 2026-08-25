@@ -176,7 +176,7 @@ export default function ModeratorPage() {
                           })
                         }
                         aria-label={`Open geofence map for ${l.employeeName} at ${l.siteName}`}
-                        className="ml-2 rounded border border-neutral-700 px-2 py-1 text-xs text-sky-300 hover:bg-neutral-800"
+                        className="ml-2 rounded border border-neutral-700 px-3 py-2.5 text-sm text-sky-300 hover:bg-neutral-800"
                       >
                         map
                       </button>
@@ -446,7 +446,7 @@ function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: string 
         )
       }
       aria-label={`Locale for ${userId}`}
-      className="rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-sm"
+      className="rounded border border-neutral-800 bg-neutral-950 px-2 py-2.5 text-sm"
     >
       {LOCALES.map((l) => (
         <option key={l} value={l}>
@@ -476,7 +476,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
         }}
         inputMode="decimal"
         placeholder="default"
-        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right text-sm"
+        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-2 py-2.5 text-right text-sm"
       />
       <button
         onClick={async () => {
@@ -486,7 +486,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
           setSaved(true);
         }}
         aria-label={saved ? `Rate saved for ${userId}` : `Set hourly rate for ${userId}`}
-        className="rounded border border-neutral-700 px-1.5 py-0.5 text-sm"
+        className="rounded border border-neutral-700 px-2 py-2.5 text-sm"
       >
         {saved ? "✓" : "set"}
       </button>

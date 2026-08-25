@@ -44,7 +44,7 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
   }
 
   const inputCls = compact
-    ? "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm"
+    ? "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm"
     : "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm w-full";
   const idSuffix = compact ? "compact" : "forced";
 
@@ -57,7 +57,7 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
       <label className="sr-only" htmlFor={`${idSuffix}-pw-confirm`}>Confirm new password</label>
       <input id={`${idSuffix}-pw-confirm`} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" type="password" className={inputCls} />
       <button ref={buttonRef} onClick={() => void submit()} disabled={busy || !current || next.length < 8}
-        className={compact ? "self-start rounded border border-neutral-700 px-2 py-1 disabled:opacity-50" : "rounded-md bg-emerald-500 px-3 py-2 font-semibold text-emerald-950 disabled:opacity-50"}>
+        className={compact ? "self-start rounded border border-neutral-700 px-3 py-2.5 text-sm disabled:opacity-50" : "rounded-md bg-emerald-500 px-3 py-2 font-semibold text-emerald-950 disabled:opacity-50"}>
         {busy ? "Saving…" : "Update password"}
       </button>
       {msg && <p role="status" aria-live="polite" className={compact ? "text-neutral-300" : "text-center text-sm"}>{msg}</p>}

@@ -142,7 +142,7 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
           </h3>
           <button
             onClick={onClose}
-            className="rounded border border-neutral-700 px-2 py-1 text-sm hover:bg-neutral-800"
+            className="rounded border border-neutral-700 px-3 py-2.5 text-sm hover:bg-neutral-800"
           >
             Close
           </button>

@@ -105,7 +105,7 @@ export default function Home() {
               <button
                 data-testid="pwa-install-cta"
                 onClick={() => void installEvent.current?.prompt()}
-                className="rounded-full border border-emerald-500 px-2 py-0.5 text-sm text-emerald-300"
+                className="rounded-full border border-emerald-500 px-3 py-2.5 text-sm text-emerald-300"
               >
                 Install app
               </button>
@@ -117,7 +117,7 @@ export default function Home() {
             <button
               data-testid="auth-signout"
               onClick={() => void signOut().then(() => window.location.reload())}
-              className="text-xs text-neutral-500 underline hover:text-neutral-300"
+              className="rounded text-xs text-neutral-500 px-2 py-2.5 underline hover:text-neutral-300"
             >
               Sign out
             </button>

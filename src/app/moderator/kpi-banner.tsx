@@ -40,7 +40,7 @@ export function KpiBanner() {
                 setSeedMsg(`Seed failed: ${String(e).slice(0, 120)}`);
               }
             }}
-            className="rounded border border-neutral-700 px-2 py-1 text-emerald-300 hover:bg-neutral-800"
+            className="rounded border border-neutral-700 px-3 py-2.5 text-sm text-emerald-300 hover:bg-neutral-800"
           >
             Seed investor demo
           </button>

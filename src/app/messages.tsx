@@ -107,7 +107,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
               value={replyText[m._id] ?? ""}
               onChange={(e) => setReplyText({ ...replyText, [m._id]: e.target.value })}
               placeholder="Reply directly…"
-              className="flex-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-1"
+              className="flex-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-2.5 text-sm"
             />
             <button
               onClick={async () => {
@@ -118,14 +118,14 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
                 setReplyText({ ...replyText, [m._id]: "" });
                 setMsg("Reply sent.");
               }}
-              className="rounded bg-neutral-200 px-2 py-1 font-semibold text-neutral-900"
+              className="rounded bg-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-900"
             >
               Reply
             </button>
             {!m.isRead && (
               <button
                 onClick={() => void markQueueItemRead({ messageId: m._id as Id<"messages"> })}
-                className="rounded border border-neutral-700 px-2 py-1"
+                className="rounded border border-neutral-700 px-3 py-2.5 text-sm"
               >
                 Dismiss
               </button>

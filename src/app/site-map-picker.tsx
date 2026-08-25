@@ -129,7 +129,7 @@ export function SiteMapPicker({
               pickRef.current(pos.coords.latitude, pos.coords.longitude)
             )
           }
-          className="rounded border border-neutral-700 px-2 py-1"
+          className="rounded border border-neutral-700 px-3 py-2.5 text-sm"
         >
           Use my location
         </button>

@@ -78,7 +78,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
           <button
             key={d}
             onClick={() => setRange(d)}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
+            className={`rounded-full border px-3 py-2.5 text-sm ${
               range === d
                 ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
                 : "border-neutral-800 bg-neutral-900 text-neutral-400"
@@ -114,7 +114,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
               });
               download(out.filename, out.csv);
             }}
-            className="ml-auto rounded-md border border-neutral-700 px-3 py-1.5 text-sm"
+            className="ml-auto rounded-md border border-neutral-700 px-3 py-2.5 text-sm"
           >
             Export logs CSV
           </button>
@@ -187,14 +187,14 @@ export function ReviewPanel() {
             <button
               data-testid="review-recompute"
               onClick={() => void recompute({ userId: s.userId })}
-              className="rounded border border-neutral-700 px-2 py-1"
+              className="rounded border border-neutral-700 px-3 py-2.5 text-sm"
             >
               Recompute
             </button>
             <button
               data-testid="review-resolve"
               onClick={() => void resolveShift({ shiftId: s._id })}
-              className="rounded bg-emerald-500 px-2 py-1 font-semibold text-emerald-950"
+              className="rounded bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-emerald-950"
             >
               Resolve
             </button>

@@ -88,7 +88,7 @@ export default function PersonaSwitcher() {
               type="button"
               onClick={() => void pick(p.email)}
               disabled={busyEmail === p.email || binding?.personaEmail === p.email}
-              className="rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
+              className="rounded-md bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
               data-testid="persona-play-button"
             >
               {binding?.personaEmail === p.email
