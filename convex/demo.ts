@@ -1,9 +1,14 @@
-import { action, internalMutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
 import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./demo_sites";
+import { requireDemoReviewer } from "./access";
+import { localDayKey } from "../src/lib/shift-engine";
+import { computePay, type PayStrategyName } from "../src/lib/payroll-strategies";
+import { toCsv } from "../src/lib/csv";
+import { jpayConfig } from "../src/config/jpay.config";
 
 export const status = query({
   args: {},
@@ -145,7 +150,7 @@ export const seedDemoData = action({
     const callerId = await getAuthUserId(ctx);
     if (!callerId) throw new ConvexError("UNAUTHENTICATED");
     const caller = await ctx.runQuery(internal.users_queries.getById, { id: callerId });
-    if (!caller || caller.role !== "moderator" || !caller.isActive || caller.archivedAt !== undefined) {
+    if (!caller || (caller.role !== "moderator" && caller.isAnonymous !== true) || !caller.isActive || caller.archivedAt !== undefined) {
       throw new ConvexError("FORBIDDEN");
     }
     const rows = buildRows();
@@ -163,6 +168,406 @@ export const seedDemoData = action({
       });
     }
     return result.summary;
+  },
+});
+
+export const _resolveDemoReviewer = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await requireDemoReviewer(ctx);
+  },
+});
+
+export const bindReviewer = mutation({
+  args: { personaEmail: v.string() },
+  handler: async (ctx, args) => {
+    const { userId, personaUserId } = await requireDemoReviewer(ctx);
+    const persona = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.personaEmail))
+      .first();
+    if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+      throw new ConvexError("PERSONA_NOT_FOUND");
+    }
+    const session = await ctx.db
+      .query("demoSessions")
+      .withIndex("by_reviewer", (q) => q.eq("reviewerId", userId))
+      .first();
+    const now = Date.now();
+    if (session) {
+      await ctx.db.patch(session._id, { personaEmail: args.personaEmail, updatedAt: now });
+    } else {
+      await ctx.db.insert("demoSessions", {
+        reviewerId: userId,
+        personaEmail: args.personaEmail,
+        mode: "full",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    return { userId, personaUserId: persona._id, personaName: persona.name ?? args.personaEmail };
+  },
+});
+
+export const getBinding = query({
+  args: {},
+  handler: async (ctx) => {
+    const binding = await requireDemoReviewer(ctx);
+    const persona = await ctx.db.get(binding.personaUserId);
+    const reviewer = await ctx.db.get(binding.userId);
+    return {
+      reviewerId: binding.userId,
+      reviewerName: reviewer?.name ?? "Demo reviewer",
+      personaUserId: binding.personaUserId,
+      personaEmail: binding.personaEmail,
+      personaName: persona?.name ?? binding.personaEmail,
+    };
+  },
+});
+
+export const boundPersonaLogs = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    return await ctx.db
+      .query("logs")
+      .withIndex("by_user_time", (q) => q.eq("userId", personaUserId))
+      .order("desc")
+      .take(200);
+  },
+});
+
+export const boundPersonaShifts = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    return await ctx.db
+      .query("shifts")
+      .withIndex("by_user_start", (q) => q.eq("userId", personaUserId))
+      .order("desc")
+      .take(100);
+  },
+});
+
+export const boundPersonaPayroll = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const persona = await ctx.db.get(personaUserId);
+    const rate = persona?.hourlyRateOverride ?? Number(process.env.PAYROLL_DEFAULT_RATE ?? 0);
+    const shifts = await ctx.db
+      .query("shifts")
+      .withIndex("by_user_start", (q) => q.eq("userId", personaUserId))
+      .collect();
+    const timezone = "UTC";
+    const days = new Map<string, number>();
+    for (const s of shifts) {
+      if (s.needsReview) continue;
+      const key = localDayKey(s.startedAt, (s as { timezone?: string }).timezone ?? timezone);
+      days.set(key, (days.get(key) ?? 0) + (s.totalMinutes ?? 0));
+    }
+    const result = computePay(
+      [...days.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([day, minutes]) => ({ day, minutes })),
+      rate,
+      (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ?? undefined
+    );
+    const totals = {
+      minutes:
+        result.totals.ordinaryMinutes + result.totals.overtimeMinutes + result.totals.sundayMinutes,
+      pay: result.totals.pay,
+    };
+    return {
+      rate,
+      currency: process.env.PAYROLL_CURRENCY ?? jpayConfig.payrollRules.currency,
+      locale: "en-ZA",
+      days: result.lines.map((l) => ({
+        day: l.day,
+        minutes: l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes,
+        pay: l.pay,
+      })),
+      totals,
+    };
+  },
+});
+
+export const demoAudit = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const all = await ctx.db
+      .query("logs")
+      .withIndex("by_creation_time", (q) =>
+        q.gte("_creationTime", Date.now() - 7 * 24 * 3600 * 1000)
+      )
+      .order("desc")
+      .take(args.limit ?? 100);
+    const filtered = all.filter((l) => l.userId === personaUserId);
+    return await Promise.all(
+      filtered.map(async (log) => ({
+        _id: log._id,
+        status: log.status,
+        at: log.clientReportedTime,
+        accuracyMeters: log.accuracyMeters,
+        clockSkewMs: log.clockSkewMs ?? 0,
+        isWithinGeofence: log.isWithinGeofence,
+        impossibleTravelFlag: log.impossibleTravelFlag === true,
+        siteName: "(seeded)",
+      }))
+    );
+  },
+});
+
+export const demoNeedsReview = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    return await ctx.db
+      .query("shifts")
+      .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
+      .order("desc")
+      .take(50)
+      .then((rows) => rows.filter((r) => r.userId === personaUserId));
+  },
+});
+
+export const demoKpis = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const active = await ctx.db
+      .query("shifts")
+      .withIndex("by_active", (q) => q.eq("endedAt", undefined))
+      .collect();
+    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+    const weekShifts = await ctx.db
+      .query("shifts")
+      .withIndex("by_started", (q) => q.gte("startedAt", weekAgo))
+      .collect();
+    const weeklyBillableMinutes = weekShifts
+      .filter((s) => s.userId === personaUserId && !s.needsReview)
+      .reduce((a, s) => a + (s.totalMinutes ?? 0), 0);
+    const flagged = await ctx.db
+      .query("shifts")
+      .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
+      .collect();
+    const recentLogs = await ctx.db
+      .query("logs")
+      .withIndex("by_creation_time", (q) =>
+        q.gte("_creationTime", Date.now() - 24 * 3600 * 1000)
+      )
+      .take(1000);
+    const anomalies24h = recentLogs.filter(
+      (l) => l.userId === personaUserId && (l.isWithinGeofence === false || l.impossibleTravelFlag === true)
+    ).length;
+    return {
+      activeOnSite: active.filter((s) => s.userId === personaUserId).length,
+      weeklyBillableMinutes,
+      pendingReviews: flagged.filter((s) => s.userId === personaUserId).length,
+      anomalies24h,
+      demoModeEnabled: true,
+    };
+  },
+});
+
+export const demoEmployeeRoster = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireDemoReviewer(ctx);
+    return await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "employee"))
+      .take(50);
+  },
+});
+
+export const checkInAsPersona = action({
+  args: {
+    siteId: v.id("sites"),
+    clientReportedTime: v.number(),
+    status: v.union(
+      v.literal("arrived"),
+      v.literal("checkpoint"),
+      v.literal("lunch"),
+      v.literal("feeling sick"),
+      v.literal("day finish"),
+      v.literal("job finish"),
+      v.literal("quick side mission")
+    ),
+    latitude: v.number(),
+    longitude: v.number(),
+    accuracyMeters: v.number(),
+    sideMissionDurationMinutes: v.optional(
+      v.union(v.literal(15), v.literal(30), v.literal(45), v.literal(60), v.literal(120))
+    ),
+    deviceToken: v.string(),
+    idempotencyKey: v.string(),
+    deviceMetadata: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const binding: { userId: import("./_generated/dataModel").Id<"users">; personaUserId: import("./_generated/dataModel").Id<"users"> } =
+      await ctx.runQuery(internal.demo._resolveDemoReviewer, {});
+    const result: { logId: import("./_generated/dataModel").Id<"logs">; duplicate: boolean } =
+      await ctx.runMutation(internal.logs.createLogAs, {
+        reviewerId: binding.userId,
+        personaUserId: binding.personaUserId,
+        ...args,
+      });
+    return result;
+  },
+});
+
+export const switchPersona = mutation({
+  args: { personaEmail: v.string() },
+  handler: async (ctx, args) => {
+    const binding = await requireDemoReviewer(ctx);
+    const persona = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.personaEmail))
+      .first();
+    if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+      throw new ConvexError("PERSONA_NOT_FOUND");
+    }
+    const session = await ctx.db
+      .query("demoSessions")
+      .withIndex("by_reviewer", (q) => q.eq("reviewerId", binding.userId))
+      .first();
+    if (!session) throw new ConvexError("DEMO_SESSION_NOT_BOUND");
+    await ctx.db.patch(session._id, {
+      personaEmail: args.personaEmail,
+      updatedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, {
+      userId: persona._id,
+    });
+    return { personaName: persona.name ?? args.personaEmail };
+  },
+});
+
+export const demoExportLogsCsv = action({
+  args: { fromMs: v.number(), toMs: v.number() },
+  handler: async (ctx, args) => {
+    const binding: { userId: import("./_generated/dataModel").Id<"users">; personaUserId: import("./_generated/dataModel").Id<"users"> } =
+      await ctx.runQuery(internal.demo._resolveDemoReviewer, {});
+    const { rows }: { rows: { clientTime: number; serverTime: number; status: string; lat: number; lng: number; accuracyMeters: number; geofence: boolean; travelFlag: boolean; skewSeconds: number }[]; truncated: boolean } =
+      await ctx.runQuery(internal.payroll_data.logsForExport, {
+        userId: binding.personaUserId,
+        fromMs: args.fromMs,
+        toMs: args.toMs,
+      });
+    const csv = toCsv(
+      [
+        "client_time_utc",
+        "server_time_utc",
+        "status",
+        "lat",
+        "lng",
+        "accuracy_m",
+        "geofence",
+        "travel_flag",
+        "skew_s",
+      ],
+      rows.map((l) => [
+        new Date(l.clientTime).toISOString(),
+        new Date(l.serverTime).toISOString(),
+        l.status,
+        l.lat,
+        l.lng,
+        l.accuracyMeters,
+        l.geofence ? "in" : "out",
+        l.travelFlag ? "flagged" : "",
+        l.skewSeconds,
+      ])
+    );
+    return {
+      filename: `jpay-logs-demo-${binding.personaUserId}-${new Date(args.fromMs).toISOString().slice(0, 10)}.csv`,
+      csv,
+    };
+  },
+});
+
+export const demoModeratorInbox = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const all = await ctx.db
+      .query("messages")
+      .withIndex("by_modqueue_unread", (q) => q.eq("modQueue", true))
+      .take(150);
+    const filtered = all.filter((m) => m.senderId === personaUserId);
+    return filtered.map((m) => ({
+      _id: m._id,
+      senderId: m.senderId,
+      content: m.content,
+      isRead: m.isRead,
+      at: m._creationTime,
+      senderName: "persona",
+    }));
+  },
+});
+
+export const demoReplyToEmployee = mutation({
+  args: { recipientId: v.id("users"), content: v.string() },
+  handler: async (ctx, args) => {
+    const { userId: reviewerId } = await requireDemoReviewer(ctx);
+    const text = args.content.trim();
+    if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
+    const recipient = await ctx.db.get(args.recipientId);
+    if (!recipient) throw new ConvexError("USER_NOT_FOUND");
+    if (recipient.role !== "employee" || recipient.isAnonymous === true) {
+      throw new ConvexError("OUT_OF_DEMO_SCOPE");
+    }
+    const messageId = await ctx.db.insert("messages", {
+      senderId: reviewerId,
+      recipientId: args.recipientId,
+      modQueue: false,
+      content: text,
+      isRead: false,
+    });
+    return { messageId };
+  },
+});
+
+export const demoMarkQueueItemRead = mutation({
+  args: { messageId: v.id("messages") },
+  handler: async (ctx, args) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const message = await ctx.db.get(args.messageId);
+    if (!message) throw new ConvexError("MESSAGE_NOT_FOUND");
+    if (message.senderId !== personaUserId) {
+      throw new ConvexError("OUT_OF_DEMO_SCOPE");
+    }
+    await ctx.db.patch(args.messageId, { isRead: true });
+    return { ok: true as const };
+  },
+});
+
+export const demoResolveShift = mutation({
+  args: { shiftId: v.id("shifts") },
+  handler: async (ctx, args) => {
+    const { userId: reviewerId } = await requireDemoReviewer(ctx);
+    const shift = await ctx.db.get(args.shiftId);
+    if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
+    await ctx.db.patch(args.shiftId, {
+      needsReview: false,
+      reviewReason: `resolved:${shift.reviewReason ?? "flagged"}`,
+      sealed: true,
+    });
+    await ctx.db.insert("reviewResolutions", {
+      userId: shift.userId,
+      shiftKey: String(shift.startedAt),
+      resolvedAt: Date.now(),
+      byModeratorId: reviewerId,
+    });
+  },
+});
+
+export const demoRecomputeEmployeeShifts = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireDemoReviewer(ctx);
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId: args.userId });
   },
 });
 
@@ -210,6 +615,11 @@ export const purgeStaleReviewers = internalMutation({
         .withIndex("by_user_key", (q) => q.eq("userId", user._id))
         .collect();
       for (const r of resolutions) await ctx.db.delete(r._id);
+      const sessions = await ctx.db
+        .query("demoSessions")
+        .withIndex("by_reviewer", (q) => q.eq("reviewerId", user._id))
+        .collect();
+      for (const s of sessions) await ctx.db.delete(s._id);
       await ctx.db.delete(user._id);
       purged++;
     }

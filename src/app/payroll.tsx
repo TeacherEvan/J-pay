@@ -148,7 +148,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
             </tbody>
           </table>
           {result.flagged.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 text-[11px] text-amber-300/80">
+            <ul className="mt-2 flex flex-col gap-1 text-xs text-amber-300">
               {result.flagged.map((f) => (
                 <li key={f.startedAt}>
                   {formatDateTime(f.startedAt, result.locale ?? locale)} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)

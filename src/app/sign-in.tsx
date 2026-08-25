@@ -60,6 +60,11 @@ export function SignIn() {
               setError(null);
               setDemoBusy(true);
               signIn("anonymous", {})
+                .then(() => {
+                  if (typeof window !== "undefined") {
+                    window.location.assign("/demo");
+                  }
+                })
                 .catch((e: Error) => setError(errMsg(e)))
                 .finally(() => setDemoBusy(false));
             }}

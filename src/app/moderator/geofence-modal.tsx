@@ -18,9 +18,68 @@ export type GeofenceFix = {
   impossibleTravelFlag: boolean;
 };
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getFocusable(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("data-focus-skip")
+  );
+}
+
 export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const [L, setL] = useState<typeof LType | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    triggerRef.current = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    if (dialog) {
+      const focusables = getFocusable(dialog);
+      if (focusables.length > 0) focusables[0].focus();
+    }
+    return () => {
+      triggerRef.current?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handler = (e: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusables = getFocusable(dialog);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !dialog.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last || !dialog.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,9 +130,12 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
       className="fixed inset-0 z-[1000] grid place-items-center bg-black/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={`Geofence detail for ${fix.employeeName}`}
+      aria-label="Geofence and audit detail"
     >
-      <div className="w-full max-w-lg rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+      <div
+        ref={dialogRef}
+        className="w-full max-w-lg rounded-xl border border-neutral-800 bg-neutral-950 p-4"
+      >
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h3 className="text-sm font-semibold">
             {fix.employeeName} · {fix.status}
@@ -85,7 +147,12 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
             Close
           </button>
         </div>
-        <div ref={containerRef} className="h-64 w-full overflow-hidden rounded-md border border-neutral-800" />
+        <div
+          ref={containerRef}
+          className="h-64 w-full overflow-hidden rounded-md border border-neutral-800"
+          data-focus-skip="true"
+          tabIndex={-1}
+        />
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-400">
           <dt>Site</dt>
           <dd className="text-neutral-200">{fix.siteName}</dd>

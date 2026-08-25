@@ -63,6 +63,14 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         for (const site of sites) {
           await db.insert("userSites", { userId, siteId: site._id });
         }
+        const now = Date.now();
+        await db.insert("demoSessions", {
+          reviewerId: userId,
+          personaEmail: "thabo.demo@jpay.local",
+          mode: "full",
+          createdAt: now,
+          updatedAt: now,
+        });
         return userId;
       }
       const email = args.profile.email;

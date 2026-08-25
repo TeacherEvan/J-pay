@@ -116,8 +116,12 @@ export default function ModeratorPage() {
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">
           Audit log (7 days)
           {(review ?? []).length > 0 && (
-            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] normal-case text-red-300">
-              {review!.length} shift(s) need review
+            <span
+              role="status"
+              aria-live="polite"
+              className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs normal-case text-red-300"
+            >
+              {review!.length} shift{review!.length === 1 ? "" : "s"} need review
             </span>
           )}
         </h2>
@@ -165,7 +169,8 @@ export default function ModeratorPage() {
                             impossibleTravelFlag: l.impossibleTravelFlag,
                           })
                         }
-                        className="ml-2 rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-sky-300 hover:bg-neutral-800"
+                        aria-label={`Open geofence map for ${l.employeeName} at ${l.siteName}`}
+                        className="ml-2 rounded border border-neutral-700 px-2 py-1 text-xs text-sky-300 hover:bg-neutral-800"
                       >
                         map
                       </button>
@@ -198,15 +203,24 @@ function ProvisionPanel() {
         Provision employee
       </h2>
       <div className="flex flex-col gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name"
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email"
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <select value={role} onChange={(e) => setRole(e.target.value as "employee" | "moderator")}
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm">
-          <option value="employee">Employee</option>
-          <option value="moderator">Moderator</option>
-        </select>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Full name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Email</span>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Role</span>
+          <select value={role} onChange={(e) => setRole(e.target.value as "employee" | "moderator")}
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm">
+            <option value="employee">Employee</option>
+            <option value="moderator">Moderator</option>
+          </select>
+        </label>
         <button
           disabled={busy || !name || !email}
           onClick={async () => {
@@ -263,16 +277,31 @@ function SitePanel() {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">Create site</h2>
       <SiteMapPicker lat={latNum} lng={lngNum} onPick={(a, b) => setForm({ ...form, lat: String(a), lng: String(b) })} />
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name"
-          className="col-span-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="Latitude" inputMode="decimal"
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="Longitude" inputMode="decimal"
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <input value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="Radius m"
-          inputMode="numeric" className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
-        <input value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} placeholder="IANA timezone"
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        <label className="col-span-2 flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Name</span>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Latitude</span>
+          <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="Latitude" inputMode="decimal"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Longitude</span>
+          <input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="Longitude" inputMode="decimal"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">Radius m</span>
+          <input value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} placeholder="Radius m"
+            inputMode="numeric" className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:text-xs sm:text-neutral-500">IANA timezone</span>
+          <input value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} placeholder="IANA timezone"
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm" />
+        </label>
         <button
           disabled={busy}
           onClick={async () => {
@@ -400,9 +429,14 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
   const setRate = useMutation(api.moderator.setHourlyOverride);
   const [value, setValue] = useState(initial === undefined ? "" : String(initial));
   const [saved, setSaved] = useState(false);
+  const inputId = `rate-${userId}`;
   return (
     <span className="inline-flex items-center gap-1">
+      <label htmlFor={inputId} className="sr-only">
+        Hourly rate
+      </label>
       <input
+        id={inputId}
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
@@ -410,7 +444,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
         }}
         inputMode="decimal"
         placeholder="default"
-        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right"
+        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right text-xs"
       />
       <button
         onClick={async () => {
@@ -419,7 +453,8 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
           await setRate({ userId, rate: n });
           setSaved(true);
         }}
-        className="rounded border border-neutral-700 px-1 py-0.5 text-[10px]"
+        aria-label={saved ? `Rate saved for ${userId}` : `Set hourly rate for ${userId}`}
+        className="rounded border border-neutral-700 px-1.5 py-0.5 text-xs"
       >
         {saved ? "✓" : "set"}
       </button>

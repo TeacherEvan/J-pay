@@ -144,16 +144,26 @@ export default function Home() {
 }
 
 function ConsentGate({ onAccept }: { onAccept: () => void }) {
+  const acceptRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    acceptRef.current?.focus();
+  }, []);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="consent-title"
+    >
       <div className="max-w-sm rounded-xl border border-neutral-800 bg-neutral-950 p-6">
-        <h2 className="mb-3 text-lg font-semibold">All work, no ads!</h2>
+        <h2 id="consent-title" className="mb-3 text-lg font-semibold">All work, no ads!</h2>
         <p className="mb-3 text-sm leading-relaxed text-neutral-300">
           J-Pay records your GPS location and time only at your check-ins so your employer can run
           payroll accurately. Retention follows your local labor statute; raw coordinates are
           zeroed after the dispute window. Your data is never sold or used for advertising.
         </p>
         <button
+          ref={acceptRef}
           onClick={onAccept}
           className="w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950"
         >
@@ -229,6 +239,7 @@ function EmployeePanel() {
   const [sideMinutes, setSideMinutes] = useState<number>(15);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const pillRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   async function checkIn() {
     setMessage(null);
@@ -336,12 +347,32 @@ function EmployeePanel() {
           ))}
         </select>
       </label>
-      <div className="flex flex-wrap gap-2">
-        {STATUSES.map((s) => (
+      <div
+        role="radiogroup"
+        aria-label="Check-in status"
+        className="flex flex-wrap gap-2"
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+          e.preventDefault();
+          const i = STATUSES.indexOf(status);
+          let next = i;
+          if (e.key === "ArrowLeft") next = (i - 1 + STATUSES.length) % STATUSES.length;
+          else if (e.key === "ArrowRight") next = (i + 1) % STATUSES.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = STATUSES.length - 1;
+          setStatus(STATUSES[next]);
+          pillRefs.current[next]?.focus();
+        }}
+      >
+        {STATUSES.map((s, i) => (
           <button
             key={s}
+            ref={(el) => { pillRefs.current[i] = el; }}
+            role="radio"
+            aria-checked={status === s}
+            tabIndex={status === s ? 0 : -1}
             onClick={() => setStatus(s)}
-            className={`rounded-full border px-3 py-1.5 text-xs ${
+            className={`rounded-full border px-4 py-2 text-sm ${
               status === s
                 ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
                 : "border-neutral-800 bg-neutral-900 text-neutral-400"

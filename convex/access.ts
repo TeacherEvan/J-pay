@@ -37,3 +37,27 @@ export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
   if (role !== "employee") throw new ConvexError("FORBIDDEN");
   return userId;
 }
+
+export async function requireDemoReviewer(
+  ctx: Ctx
+): Promise<{ userId: Id<"users">; personaUserId: Id<"users">; personaEmail: string }> {
+  if (process.env.DEMO_MODE !== "1") throw new ConvexError("FORBIDDEN");
+  const userId = await currentUserId(ctx);
+  const user = await ctx.db.get(userId);
+  if (!user || user.isAnonymous !== true || !user.isActive || user.archivedAt !== undefined) {
+    throw new ConvexError("FORBIDDEN");
+  }
+  const session = await ctx.db
+    .query("demoSessions")
+    .withIndex("by_reviewer", (q) => q.eq("reviewerId", userId))
+    .first();
+  if (!session) throw new ConvexError("DEMO_SESSION_NOT_BOUND");
+  const persona = await ctx.db
+    .query("users")
+    .withIndex("email", (q) => q.eq("email", session.personaEmail))
+    .first();
+  if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+    throw new ConvexError("PERSONA_NOT_FOUND");
+  }
+  return { userId, personaUserId: persona._id, personaEmail: session.personaEmail };
+}
