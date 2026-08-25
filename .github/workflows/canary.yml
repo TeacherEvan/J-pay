@@ -1,0 +1,57 @@
+name: canary
+
+# Next 16 canary deployment. Runs only when a PR is labeled `next16-canary`.
+#
+# To enable this workflow, add a `VERCEL_TOKEN` secret to the repo:
+#   1. Visit https://vercel.com/account/tokens
+#   2. Click "Create Token" — name it `j-pay-canary`, scope: full access
+#      to the `j-pay` project only.
+#   3. In GitHub, repo Settings → Secrets and variables → Actions → New
+#      repository secret. Name: `VERCEL_TOKEN`. Value: paste the token.
+#   4. Re-trigger this workflow on a PR with the `next16-canary` label.
+#
+# The canary deploys to a Vercel preview URL (not production). The owner
+# must manually promote the preview to production from the Vercel
+# dashboard after smoke-testing.
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  canary:
+    if: contains(github.event.pull_request.labels.*.name, 'next16-canary')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: TRD consistency gate
+        run: python3 scripts/check_consistency.py
+      - name: Mermaid structural gate
+        run: python3 scripts/check_diagrams.py
+      - name: Unit tests (incl. build-artifact test)
+        run: npm test
+      - name: Typecheck (strict)
+        run: npm run typecheck
+      - name: Production build (Next 16 webpack path)
+        # The build is required so scripts/test-next-build-artifacts.mjs
+        # (asserts public/sw.js exists) passes in CI. This is heavier than
+        # the default `npm ci` gate but is the only way the artifact test
+        # is meaningful. Documented trade-off: +~2 min per canary run.
+        run: npm run build
+      - name: Re-run tests now that build artifacts exist
+        run: npm test
+      - name: Deploy to Vercel preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --target preview --yes
+      - name: Post preview URL
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            Next 16 canary deployed: ${{ steps.deploy.outputs.preview-url }}
