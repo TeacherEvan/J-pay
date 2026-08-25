@@ -142,7 +142,7 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
           </h3>
           <button
             onClick={onClose}
-            className="rounded border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800"
+            className="rounded border border-neutral-700 px-2 py-1 text-sm hover:bg-neutral-800"
           >
             Close
           </button>
@@ -153,7 +153,7 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
           data-focus-skip="true"
           tabIndex={-1}
         />
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-400">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-neutral-400">
           <dt>Site</dt>
           <dd className="text-neutral-200">{fix.siteName}</dd>
           <dt>Geofence radius</dt>

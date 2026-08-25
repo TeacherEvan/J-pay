@@ -60,12 +60,12 @@ export default function PersonaSwitcher() {
         <button
           type="button"
           onClick={() => router.push("/demo")}
-          className="text-xs text-neutral-400 underline"
+          className="text-sm text-neutral-400 underline"
         >
           Back to dashboard
         </button>
       </header>
-      <p className="text-xs text-neutral-400">
+      <p className="text-sm text-neutral-400">
         Currently acting as <span className="text-neutral-200">{binding?.personaName ?? "—"}</span>. Pick a persona below — your demo console will update in real time.
       </p>
       <ul className="flex flex-col gap-3">
@@ -81,14 +81,14 @@ export default function PersonaSwitcher() {
           >
             <div>
               <p className="text-sm font-semibold text-neutral-100">{p.name}</p>
-              <p className="text-xs text-neutral-500">{p.email}</p>
-              <p className="mt-1 text-xs text-neutral-400">{p.narrative}</p>
+              <p className="text-sm text-neutral-500">{p.email}</p>
+              <p className="mt-1 text-sm text-neutral-400">{p.narrative}</p>
             </div>
             <button
               type="button"
               onClick={() => void pick(p.email)}
               disabled={busyEmail === p.email || binding?.personaEmail === p.email}
-              className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
+              className="rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
               data-testid="persona-play-button"
             >
               {binding?.personaEmail === p.email
@@ -100,7 +100,7 @@ export default function PersonaSwitcher() {
           </li>
         ))}
       </ul>
-      {message && <p className="text-xs text-red-400">{message}</p>}
+      {message && <p className="text-sm text-red-400">{message}</p>}
     </div>
   );
 }

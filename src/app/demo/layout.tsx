@@ -43,7 +43,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-neutral-800 pb-3">
         <div>
           <h1 className="text-xl font-semibold text-emerald-300">J-Pay · Demo console</h1>
-          <p className="text-xs text-neutral-400">
+          <p className="text-sm text-neutral-400">
             Reviewer <span className="text-neutral-200">{binding.reviewerName}</span> · playing as{" "}
             <span className="text-neutral-200" data-testid="demo-persona-name">{binding.personaName}</span>
             {recentCount !== undefined && (
@@ -51,7 +51,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
             )}
           </p>
         </div>
-        <nav className="flex items-center gap-3 text-xs">
+        <nav className="flex items-center gap-3 text-sm">
           <Link href="/demo/persona" className="text-emerald-400 underline">Switch persona</Link>
           <Link href="/demo/about" className="text-neutral-400 underline">About</Link>
           <button
@@ -64,7 +64,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
         </nav>
       </header>
       {children}
-      <footer className="mt-auto pt-8 text-xs leading-relaxed text-neutral-600">
+      <footer className="mt-auto pt-8 text-sm leading-relaxed text-neutral-400">
         This is a demo. Seeded data; auto-purged after 7 days. The real product is unaffected.
       </footer>
     </div>

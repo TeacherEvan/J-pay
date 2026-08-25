@@ -11,7 +11,7 @@ export default function AboutPage() {
         <button
           type="button"
           onClick={() => router.push("/demo")}
-          className="text-xs text-neutral-400 underline"
+          className="text-sm text-neutral-400 underline"
         >
           Back to dashboard
         </button>
@@ -41,7 +41,7 @@ export default function AboutPage() {
 
       <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm">
         <h2 className="mb-2 text-sm font-semibold text-neutral-100">What this demo is not</h2>
-        <ul className="ml-5 list-disc text-xs text-neutral-400">
+        <ul className="ml-5 list-disc text-sm text-neutral-400">
           <li>It is not a stress test — the seeded corpus is bounded (5 personas × 13 weekday days).</li>
           <li>It is not a multi-tenant preview — each reviewer gets one persona at a time.</li>
           <li>It is not a production data environment — switching personas does not move real payroll data.</li>

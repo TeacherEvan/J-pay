@@ -71,7 +71,7 @@ export default function ModeratorPage() {
           Employees
         </h2>
         <div className="overflow-x-auto rounded-lg border border-neutral-800">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-sm">
             <thead className="bg-neutral-900 text-neutral-500">
               <tr>
                 <th className="p-2">Name</th>
@@ -132,7 +132,7 @@ export default function ModeratorPage() {
           )}
         </h2>
         <div className="overflow-x-auto rounded-lg border border-neutral-800">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-sm">
             <thead className="bg-neutral-900 text-neutral-500">
               <tr>
                 <th className="p-2">Time (client)</th>
@@ -446,7 +446,7 @@ function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: string 
         )
       }
       aria-label={`Locale for ${userId}`}
-      className="rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-xs"
+      className="rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-sm"
     >
       {LOCALES.map((l) => (
         <option key={l} value={l}>
@@ -476,7 +476,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
         }}
         inputMode="decimal"
         placeholder="default"
-        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right text-xs"
+        className="w-16 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-right text-sm"
       />
       <button
         onClick={async () => {
@@ -486,7 +486,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
           setSaved(true);
         }}
         aria-label={saved ? `Rate saved for ${userId}` : `Set hourly rate for ${userId}`}
-        className="rounded border border-neutral-700 px-1.5 py-0.5 text-xs"
+        className="rounded border border-neutral-700 px-1.5 py-0.5 text-sm"
       >
         {saved ? "✓" : "set"}
       </button>

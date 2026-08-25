@@ -86,7 +86,7 @@ function PersonaHeader({ binding }: { binding: { personaName: string; personaEma
   return (
     <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4" data-testid="demo-persona-header">
       <h2 className="text-lg font-semibold text-neutral-100">{binding?.personaName ?? "—"}</h2>
-      <p className="text-xs text-neutral-400">{binding?.personaEmail}</p>
+      <p className="text-sm text-neutral-400">{binding?.personaEmail}</p>
     </section>
   );
 }
@@ -101,7 +101,7 @@ function KpiCard({ label, value }: { label: string; value: number | string }) {
 }
 
 function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; locale: string; days: { day: string; minutes: number; pay: number }[]; totals: { minutes: number; pay: number } } | null }) {
-  if (!payroll) return <section><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">My week (payroll)</h2><p className="text-xs text-neutral-500">Loading…</p></section>;
+  if (!payroll) return <section><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">My week (payroll)</h2><p className="text-sm text-neutral-500">Loading…</p></section>;
   return (
     <section data-testid="demo-payroll">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">My week (payroll)</h2>
@@ -116,7 +116,7 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
           </thead>
           <tbody>
             {payroll.days.length === 0 && (
-              <tr><td colSpan={3} className="px-3 py-3 text-center text-xs text-neutral-500">No shifts yet</td></tr>
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-sm text-neutral-500">No shifts yet</td></tr>
             )}
             {payroll.days.map((d) => (
               <tr key={d.day} className="border-t border-neutral-800" data-testid="payroll-day-row">
@@ -133,7 +133,7 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-xs text-neutral-500">Rate {formatCurrency(payroll.rate, payroll.currency, payroll.locale)}/h · currency {payroll.currency}</p>
+      <p className="mt-1 text-sm text-neutral-500">Rate {formatCurrency(payroll.rate, payroll.currency, payroll.locale)}/h · currency {payroll.currency}</p>
     </section>
   );
 }
@@ -146,7 +146,7 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; startedA
     <section data-testid="demo-needs-review">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Shifts needing review</h2>
       {(shifts ?? []).length === 0 ? (
-        <p className="text-xs text-neutral-500">No shifts flagged.</p>
+        <p className="text-sm text-neutral-500">No shifts flagged.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {shifts!.map((s) => (
@@ -196,7 +196,7 @@ function AuditTable({ logs, personaLocale }: { logs: { _id: string; status: stri
     <section data-testid="demo-audit-log">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Audit log</h2>
       <div className="overflow-hidden rounded-lg border border-neutral-800">
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <thead className="bg-neutral-900 text-left text-neutral-500">
             <tr>
               <th className="px-3 py-2">Time</th>
@@ -235,7 +235,7 @@ function RosterList({ users }: { users: { _id: string; name?: string; email?: st
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Demo personas</h2>
       <ul className="grid gap-2 sm:grid-cols-2">
         {(users ?? []).map((u) => (
-          <li key={u._id} className="rounded-md border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-xs">
+            <li key={u._id} className="rounded-md border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-sm">
             <p className="text-neutral-200">{u.name ?? u.email ?? "—"}</p>
             <p className="text-neutral-500">{u.email}</p>
           </li>
@@ -251,25 +251,25 @@ function MessagesSection({ inbox, personaLocale }: { inbox: { _id: string; conte
     <section data-testid="demo-messages">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">My moderator messages</h2>
       {(inbox ?? []).length === 0 ? (
-        <p className="text-xs text-neutral-500">No messages from this persona to the moderator queue.</p>
+        <p className="text-sm text-neutral-500">No messages from this persona to the moderator queue.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {inbox!.map((m) => (
             <li
               key={m._id}
-              className="rounded-md border border-neutral-800 bg-neutral-900/40 p-3 text-xs"
+              className="rounded-md border border-neutral-800 bg-neutral-900/40 p-3 text-sm"
               data-testid="message-row"
             >
               <p className="text-neutral-100">{m.content}</p>
               <div className="mt-1 flex items-center justify-between text-neutral-500">
                 <span>{formatMsDateTime(m.at, personaLocale)}</span>
                 {m.isRead ? (
-                  <span className="text-neutral-600">read</span>
+                  <span className="text-neutral-400">read</span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => markRead({ messageId: m._id as Id<"messages"> }).catch(() => {})}
-                    className="rounded-md border border-neutral-700 px-2 py-0.5 text-neutral-300 hover:bg-neutral-800"
+                    className="rounded-md border border-neutral-700 px-2 py-0.5 text-sm text-neutral-300 hover:bg-neutral-800"
                   >
                     Mark read
                   </button>
@@ -343,7 +343,7 @@ function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: st
     <section data-testid="demo-checkin" className="rounded-lg border border-neutral-800 p-4">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">Try a check-in as the persona</h2>
       <div className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-xs text-neutral-300">
+        <label className="flex flex-col gap-1 text-sm text-neutral-300">
           Site
           <select
             value={siteId}
@@ -361,7 +361,7 @@ function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: st
               key={s}
               type="button"
               onClick={() => setStatus(s)}
-              className={`rounded-full border px-2 py-1 text-xs ${
+              className={`rounded-full border px-2 py-1 text-sm ${
                 status === s
                   ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
                   : "border-neutral-800 bg-neutral-900 text-neutral-400"
@@ -372,12 +372,12 @@ function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: st
           ))}
         </div>
         {status === "quick side mission" && (
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 text-sm">
             Duration
             <select
               value={sideMinutes}
               onChange={(e) => setSideMinutes(Number(e.target.value))}
-              className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs"
+              className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-sm"
             >
               {[15, 30, 45, 60, 120].map((m) => (
                 <option key={m} value={m}>{m} min</option>
@@ -394,11 +394,11 @@ function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: st
         >
           {busy ? "Logging…" : "CHECK IN as persona"}
         </button>
-        {message && <p className="text-center text-xs text-neutral-300" data-testid="demo-checkin-message">{message}</p>}
+        {message && <p className="text-center text-sm text-neutral-300" data-testid="demo-checkin-message">{message}</p>}
         {(recent ?? []).length > 0 && (
           <div className="mt-2">
-            <p className="mb-1 text-xs text-neutral-500">Recent (persona)</p>
-            <ul className="flex flex-col gap-1 text-xs">
+            <p className="mb-1 text-sm text-neutral-500">Recent (persona)</p>
+            <ul className="flex flex-col gap-1 text-sm">
               {recent!.slice(0, 5).map((l) => (
                 <li key={l._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-2 py-1">
                   <span>{l.status}</span>
@@ -447,11 +447,11 @@ function ExportPanel() {
         type="button"
         onClick={() => void doExport()}
         disabled={busy}
-        className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+        className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
       >
         {busy ? "Building CSV…" : "Download CSV (last 14 days)"}
       </button>
-      {message && <p className="mt-2 text-xs text-neutral-400">{message}</p>}
+      {message && <p className="mt-2 text-sm text-neutral-400">{message}</p>}
     </section>
   );
 }

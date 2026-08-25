@@ -110,7 +110,7 @@ export function SiteMapPicker({
                     setQuery(h.display_name.split(",").slice(0, 2).join(","));
                     setHits([]);
                   }}
-                  className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-800"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-800"
                 >
                   {h.display_name}
                 </button>
@@ -118,10 +118,10 @@ export function SiteMapPicker({
             ))}
           </ul>
         )}
-        {searching && <span className="absolute right-3 top-2.5 text-xs text-neutral-500">…</span>}
+        {searching && <span className="absolute right-3 top-2.5 text-sm text-neutral-500">…</span>}
       </div>
       <div ref={containerRef} className="h-52 w-full overflow-hidden rounded-md border border-neutral-800" />
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"
           onClick={() =>

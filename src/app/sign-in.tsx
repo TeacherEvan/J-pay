@@ -46,13 +46,13 @@ export function SignIn() {
       <button
         type="button"
         onClick={() => setStep(step === "signIn" ? "signUp" : "signIn")}
-        className="text-xs text-neutral-400 underline hover:text-neutral-200"
+        className="text-sm text-neutral-400 underline hover:text-neutral-200"
       >
         {step === "signIn" ? "First time? Activate with your ID code" : "Back to sign in"}
       </button>
       {demo?.enabled && (
         <>
-          <div className="mt-2 flex items-center gap-2 text-xs text-neutral-600">
+          <div className="mt-2 flex items-center gap-2 text-sm text-neutral-400">
             <span className="h-px flex-1 bg-neutral-800" />
             or
             <span className="h-px flex-1 bg-neutral-800" />
@@ -77,7 +77,7 @@ export function SignIn() {
           >
             {demoBusy ? "Entering preview…" : "Enter demo preview (no account)"}
           </button>
-          <p className="text-center text-xs text-neutral-600">
+          <p className="text-center text-sm text-neutral-400">
             Preview mode uses throwaway demo data — nothing here is real.
           </p>
         </>

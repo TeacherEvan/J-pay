@@ -78,7 +78,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
           <button
             key={d}
             onClick={() => setRange(d)}
-            className={`rounded-full border px-3 py-1.5 text-xs ${
+            className={`rounded-full border px-3 py-1.5 text-sm ${
               range === d
                 ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
                 : "border-neutral-800 bg-neutral-900 text-neutral-400"
@@ -114,7 +114,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
               });
               download(out.filename, out.csv);
             }}
-            className="ml-auto rounded-md border border-neutral-700 px-3 py-1.5 text-xs"
+            className="ml-auto rounded-md border border-neutral-700 px-3 py-1.5 text-sm"
           >
             Export logs CSV
           </button>
@@ -122,13 +122,13 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
       </div>
       {result && (
         <div className="mt-4">
-          <p className="mb-2 text-xs text-neutral-500">
+          <p className="mb-2 text-sm text-neutral-500">
             Rate {formatCurrency(result.rate, result.currency, result.locale ?? locale)}/h · strategy {result.strategy} · tz {result.timezone} ·{" "}
             <span className={result.totals.flaggedCount ? "text-amber-400" : ""}>
               {result.totals.flaggedCount} flagged shift(s) excluded
             </span>
           </p>
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-sm">
             <thead className="bg-neutral-900 text-neutral-500">
               <tr>
                 <th className="p-2">Day</th>
@@ -152,7 +152,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
             </tbody>
           </table>
           {result.flagged.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 text-xs text-amber-300">
+            <ul className="mt-2 flex flex-col gap-1 text-sm text-amber-300">
               {result.flagged.map((f) => (
                 <li key={f.startedAt}>
                   {formatDateTime(f.startedAt, result.locale ?? locale)} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)
@@ -176,9 +176,9 @@ export function ReviewPanel() {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
         Shifts needing review
       </h2>
-      {(review ?? []).length === 0 && <p className="text-xs text-neutral-600">Nothing flagged.</p>}
+      {(review ?? []).length === 0 && <p className="text-sm text-neutral-400">Nothing flagged.</p>}
       {(review ?? []).map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
-        <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-900 py-2 text-xs first:border-0">
+        <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-900 py-2 text-sm first:border-0">
           <span>
             {formatDateTime(s.startedAt, locale)}
             <span className="ml-2 rounded bg-red-500/20 px-1.5 py-0.5 text-red-300">{s.reviewReason}</span>

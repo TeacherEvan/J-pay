@@ -105,13 +105,13 @@ export default function Home() {
               <button
                 data-testid="pwa-install-cta"
                 onClick={() => void installEvent.current?.prompt()}
-                className="rounded-full border border-emerald-500 px-2 py-0.5 text-xs text-emerald-300"
+                className="rounded-full border border-emerald-500 px-2 py-0.5 text-sm text-emerald-300"
               >
                 Install app
               </button>
             )}
             {me.role === "employee" && <EnableNotifications />}
-            <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs uppercase tracking-wide">
+            <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-sm uppercase tracking-wide">
               {me.role}
             </span>
             <button
@@ -137,7 +137,7 @@ export default function Home() {
         ) : (
           <ModeratorLink />
         ))}
-        <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-neutral-600">
+        <footer id="privacy" className="mt-auto pt-8 text-sm leading-relaxed text-neutral-400">
           Location is recorded only when you press CHECK IN — never continuous tracking. Raw
           coordinates are anonymized after the payroll dispute window. No ads, no trackers.
         </footer>
@@ -333,7 +333,7 @@ function EmployeePanel() {
   return (
     <div className="flex flex-col gap-4">
       {sites && sites.length === 0 && (
-        <p className="rounded-md bg-amber-500/10 p-3 text-xs text-amber-300">
+        <p className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-300">
           No site assigned yet. Your moderator must assign you before you can check in.
         </p>
       )}
@@ -412,9 +412,9 @@ function EmployeePanel() {
         {busy ? "Logging…" : "CHECK IN"}
       </button>
       {message && <p className="text-center text-sm text-neutral-300">{message}</p>}
-      {lastError && <p className="text-center text-xs text-red-400">{lastError}</p>}
+      {lastError && <p className="text-center text-sm text-red-400">{lastError}</p>}
       {count > 0 && (
-        <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
           <span>{count} check-in{count === 1 ? "" : "s"} queued offline</span>
           <button
             data-testid="outbox-sync"
@@ -435,7 +435,7 @@ function EmployeePanel() {
                 key={log._id}
                 data-testid="checkin-verdict"
                 data-verdict={log.isWithinGeofence ? (log.impossibleTravelFlag ? "travel" : "inside") : "outside"}
-                className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-xs"
+                className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-sm"
               >
                 <span>{log.status}</span>
                 <span className="text-neutral-500">

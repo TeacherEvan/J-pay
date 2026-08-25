@@ -57,9 +57,9 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
             Send
           </button>
         </div>
-        {msg && <p role="status" aria-live="polite" className="text-xs text-neutral-400">{msg}</p>}
+        {msg && <p role="status" aria-live="polite" className="text-sm text-neutral-400">{msg}</p>}
         {(inbox ?? []).map((m) => (
-          <p key={m._id} className={`rounded-md bg-neutral-900 px-3 py-1.5 text-xs ${m.isRead ? "text-neutral-500" : "text-emerald-300"}`}>
+          <p key={m._id} className={`rounded-md bg-neutral-900 px-3 py-1.5 text-sm ${m.isRead ? "text-neutral-500" : "text-emerald-300"}`}>
             <span className="mr-2 opacity-60">{formatTime(m._creationTime, userLocale)}</span>
             {m.content}
           </p>
@@ -92,9 +92,9 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
           Broadcast
         </button>
       </div>
-      {(modInbox ?? []).length === 0 && <p className="text-xs text-neutral-600">Queue empty.</p>}
+      {(modInbox ?? []).length === 0 && <p className="text-sm text-neutral-400">Queue empty.</p>}
       {(modInbox ?? []).map((m) => (
-        <div key={m._id} className={`rounded-md bg-neutral-900 p-3 text-xs ${m.isRead ? "" : "border-l-2 border-emerald-500"}`}>
+        <div key={m._id} className={`rounded-md bg-neutral-900 p-3 text-sm ${m.isRead ? "" : "border-l-2 border-emerald-500"}`}>
           <p>
             <span className="font-semibold">{m.senderName}</span>
             <span className="ml-2 text-neutral-500">{formatDateTime(m.at, userLocale)}</span>
@@ -133,7 +133,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
           </div>
         </div>
       ))}
-      {msg && <p role="status" aria-live="polite" className="text-xs text-neutral-400">{msg}</p>}
+      {msg && <p role="status" aria-live="polite" className="text-sm text-neutral-400">{msg}</p>}
     </section>
   );
 }

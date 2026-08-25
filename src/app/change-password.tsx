@@ -44,7 +44,7 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
   }
 
   const inputCls = compact
-    ? "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs"
+    ? "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm"
     : "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm w-full";
   const idSuffix = compact ? "compact" : "forced";
 
@@ -67,7 +67,7 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
 
 export function ChangePassword() {
   return (
-    <details className="text-xs">
+    <details className="text-sm">
       <summary className="cursor-pointer text-neutral-400 hover:text-neutral-200">
         Change password (replace your one-time ID code)
       </summary>

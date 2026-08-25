@@ -42,7 +42,7 @@ export function EnableNotifications() {
   return (
     <button
       onClick={() => void enable()}
-      className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-emerald-500"
+      className="rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-300 hover:border-emerald-500"
     >
       {state === "on" ? "Notifications on" : "Enable notifications"}
     </button>
