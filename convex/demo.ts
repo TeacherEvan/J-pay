@@ -1,14 +1,16 @@
-import { action } from "./_generated/server";
+import { action, internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
+import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./demo_sites";
 
-const DEMO_SITES = [
-  { name: "JNB Central Depot", latitude: -26.2041, longitude: 28.0473, geofenceRadiusMeters: 150 },
-  { name: "CPT Harbor Terminal", latitude: -33.9188, longitude: 18.4233, geofenceRadiusMeters: 200 },
-  { name: "Midrand Distribution Hub", latitude: -25.9984, longitude: 28.1263, geofenceRadiusMeters: 100 },
-] as const;
+export const status = query({
+  args: {},
+  handler: async () => ({ enabled: process.env.DEMO_MODE === "1" }),
+});
+
+const REVIEWER_MAX_AGE_DAYS = 7;
 
 type SeedRow = {
   siteName: string;
@@ -161,5 +163,56 @@ export const seedDemoData = action({
       });
     }
     return result.summary;
+  },
+});
+
+export const purgeStaleReviewers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - REVIEWER_MAX_AGE_DAYS * 24 * 3600 * 1000;
+    const stale = await ctx.db
+      .query("users")
+      .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
+      .take(100);
+    let purged = 0;
+    for (const user of stale) {
+      if (user.isAnonymous !== true) continue;
+      const logs = await ctx.db
+        .query("logs")
+        .withIndex("by_user_time", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const log of logs) await ctx.db.delete(log._id);
+      const shifts = await ctx.db
+        .query("shifts")
+        .withIndex("by_user_start", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const shift of shifts) await ctx.db.delete(shift._id);
+      const assignments = await ctx.db
+        .query("userSites")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const a of assignments) await ctx.db.delete(a._id);
+      const pushes = await ctx.db
+        .query("pushSubscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const p of pushes) await ctx.db.delete(p._id);
+      const messages = await ctx.db
+        .query("messages")
+        .filter(
+          (q) =>
+            q.or(q.eq(q.field("senderId"), user._id), q.eq(q.field("recipientId"), user._id))
+        )
+        .collect();
+      for (const m of messages) await ctx.db.delete(m._id);
+      const resolutions = await ctx.db
+        .query("reviewResolutions")
+        .withIndex("by_user_key", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const r of resolutions) await ctx.db.delete(r._id);
+      await ctx.db.delete(user._id);
+      purged++;
+    }
+    return { purged };
   },
 });

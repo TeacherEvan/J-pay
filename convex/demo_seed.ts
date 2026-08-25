@@ -1,6 +1,7 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { DEMO_SITE_TIMEZONE } from "./demo_sites";
 
 type SeedRow = {
   siteName: string;
@@ -55,7 +56,7 @@ export const seedAll = internalMutation({
         existing?._id ??
         (await ctx.db.insert("sites", {
           ...s,
-          timezone: "Africa/Johannesburg",
+          timezone: DEMO_SITE_TIMEZONE,
           createdBy: args.createdBy,
         }));
       siteIdByName.set(s.name, id);

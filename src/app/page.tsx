@@ -111,6 +111,12 @@ export default function Home() {
             <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs uppercase tracking-wide">
               {me.role}
             </span>
+            <button
+              onClick={() => void signOut().then(() => window.location.reload())}
+              className="text-xs text-neutral-500 underline hover:text-neutral-300"
+            >
+              Sign out
+            </button>
           </div>
         </header>
         {isIos() && (

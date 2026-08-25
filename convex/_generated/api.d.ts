@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as demo from "../demo.js";
 import type * as demo_seed from "../demo_seed.js";
+import type * as demo_sites from "../demo_sites.js";
 import type * as deviceTokens from "../deviceTokens.js";
 import type * as geo from "../geo.js";
 import type * as http from "../http.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   demo: typeof demo;
   demo_seed: typeof demo_seed;
+  demo_sites: typeof demo_sites;
   deviceTokens: typeof deviceTokens;
   geo: typeof geo;
   http: typeof http;
