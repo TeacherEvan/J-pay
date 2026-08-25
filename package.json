@@ -12,7 +12,7 @@
     "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
-    "@auth/core": "0.41.1",
+    "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
     "@serwist/next": "^9.5.12",
     "convex": "^1.45.0",
@@ -32,5 +32,8 @@
     "puppeteer-core": "^25.8.0",
     "tailwindcss": "^4.1.0",
     "typescript": "~5.9.0"
+  },
+  "overrides": {
+    "@auth/core": "^0.41.3"
   }
 }

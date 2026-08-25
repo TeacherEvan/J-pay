@@ -31,3 +31,7 @@ public/sw.js
 public/swe-worker*.js
 user-review/
 .vercel
+
+# Surgical-pruning toolkit artifacts (dry-run output, not source)
+.prune/
+surgical-pruning-*.html
