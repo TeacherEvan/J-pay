@@ -285,7 +285,7 @@ export const boundPersonaPayroll = query({
     return {
       rate,
       currency: process.env.PAYROLL_CURRENCY ?? jpayConfig.payrollRules.currency,
-      locale: "en-ZA",
+      locale: persona?.locale ?? "en-ZA",
       days: result.lines.map((l) => ({
         day: l.day,
         minutes: l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes,
