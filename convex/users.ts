@@ -11,6 +11,7 @@ import { issueDeviceToken } from "./deviceTokens";
 import { currentUserId, requireModerator } from "./access";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { mapRetrieveResult } from "./changePassword";
 
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -198,10 +199,23 @@ export const changeMyPassword = action({
     if (args.newSecret.length < 8 || args.newSecret.length > 200) {
       throw new ConvexError("INVALID_PASSWORD_LENGTH");
     }
-    await retrieveAccount(ctx, {
-      provider: "password",
-      account: { id: user.email, secret: args.currentSecret },
-    });
+    // Bypass the high-level retrieveAccount wrapper from @convex-dev/auth:
+    // it rethrows string results as plain Error (verified at
+    // node_modules/@convex-dev/auth/dist/server/implementation/index.js:373-381).
+    // Instead call the internal retrieveAccountWithCredentials mutation directly
+    // so we can map the typed return through mapRetrieveResult.
+    // The "auth:store" string is a private contract of @convex-dev/auth — re-verify
+    // on any minor bump of that package.
+    const result = await ctx.runMutation(
+      "auth:store" as never,
+      {
+        type: "retrieveAccountWithCredentials",
+        provider: "password",
+        account: { id: user.email, secret: args.currentSecret },
+      } as never,
+    );
+    const failure = mapRetrieveResult(result as never);
+    if (failure) throw failure;
     await modifyAccountCredentials(ctx, {
       provider: "password",
       account: { id: user.email, secret: args.newSecret },
