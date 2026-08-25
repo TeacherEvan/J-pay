@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errMsg } from "@/lib/errors";
+import { formatCurrency } from "@/lib/format";
+import { useUserLocale } from "@/lib/use-user-locale";
 
 const STATUSES = [
   "arrived",
@@ -17,18 +19,14 @@ const STATUSES = [
 ] as const;
 type Status = (typeof STATUSES)[number];
 
-function formatZar(pay: number) {
-  return `R ${pay.toFixed(2)}`;
-}
-
 function formatMinutes(m: number) {
   const h = Math.floor(m / 60);
   const min = m % 60;
   return h > 0 ? `${h}h ${min.toString().padStart(2, "0")}m` : `${min}m`;
 }
 
-function formatMsDateTime(ms: number) {
-  return new Intl.DateTimeFormat("en-ZA", {
+function formatMsDateTime(ms: number, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "Africa/Johannesburg",
     year: "numeric",
     month: "short",
@@ -38,8 +36,8 @@ function formatMsDateTime(ms: number) {
   }).format(new Date(ms));
 }
 
-function formatMsTime(ms: number) {
-  return new Intl.DateTimeFormat("en-ZA", {
+function formatMsTime(ms: number, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "Africa/Johannesburg",
     hour: "2-digit",
     minute: "2-digit",
@@ -56,6 +54,8 @@ export default function DemoPage() {
   const roster = useQuery(api.demo.demoEmployeeRoster);
   const sites = useQuery(api.sites.listMine);
   const inbox = useQuery(api.demo.demoModeratorInbox);
+  const userLocale = useUserLocale();
+  const personaLocale = payroll?.locale ?? userLocale;
 
   return (
     <div className="flex flex-col gap-8" data-testid="demo-page">
@@ -72,11 +72,11 @@ export default function DemoPage() {
       </section>
 
       <PayrollTable payroll={payroll ?? null} />
-      <ReviewList shifts={needsReview ?? undefined} />
-      <AuditTable logs={audit ?? undefined} />
-      <MessagesSection inbox={inbox ?? undefined} />
+      <ReviewList shifts={needsReview ?? undefined} personaLocale={personaLocale} />
+      <AuditTable logs={audit ?? undefined} personaLocale={personaLocale} />
+      <MessagesSection inbox={inbox ?? undefined} personaLocale={personaLocale} />
       <RosterList users={roster ?? undefined} />
-      <CheckInPanel sites={sites} />
+      <CheckInPanel sites={sites} personaLocale={personaLocale} />
       <ExportPanel />
     </div>
   );
@@ -100,7 +100,7 @@ function KpiCard({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; days: { day: string; minutes: number; pay: number }[]; totals: { minutes: number; pay: number } } | null }) {
+function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; locale: string; days: { day: string; minutes: number; pay: number }[]; totals: { minutes: number; pay: number } } | null }) {
   if (!payroll) return <section><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">My week (payroll)</h2><p className="text-xs text-neutral-500">Loading…</p></section>;
   return (
     <section data-testid="demo-payroll">
@@ -122,23 +122,23 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
               <tr key={d.day} className="border-t border-neutral-800" data-testid="payroll-day-row">
                 <td className="px-3 py-2">{d.day}</td>
                 <td className="px-3 py-2 text-right">{d.minutes}</td>
-                <td className="px-3 py-2 text-right">{formatZar(d.pay)}</td>
+                <td className="px-3 py-2 text-right">{formatCurrency(d.pay, payroll.currency, payroll.locale)}</td>
               </tr>
             ))}
             <tr className="border-t border-neutral-700 bg-neutral-900 font-semibold" data-testid="payroll-total-row">
               <td className="px-3 py-2">Total</td>
               <td className="px-3 py-2 text-right">{payroll.totals.minutes}</td>
-              <td className="px-3 py-2 text-right">{formatZar(payroll.totals.pay)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(payroll.totals.pay, payroll.currency, payroll.locale)}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-xs text-neutral-500">Rate {formatZar(payroll.rate)}/h · currency {payroll.currency}</p>
+      <p className="mt-1 text-xs text-neutral-500">Rate {formatCurrency(payroll.rate, payroll.currency, payroll.locale)}/h · currency {payroll.currency}</p>
     </section>
   );
 }
 
-function ReviewList({ shifts }: { shifts: { _id: string; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined }) {
+function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined; personaLocale: string }) {
   const resolve = useMutation(api.demo.demoResolveShift);
   const recompute = useMutation(api.demo.demoRecomputeEmployeeShifts);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -152,11 +152,11 @@ function ReviewList({ shifts }: { shifts: { _id: string; startedAt: number; revi
           {shifts!.map((s) => (
             <li
               key={s._id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-700/30 bg-amber-900/20 px-3 py-2 text-xs"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-700/30 bg-amber-900/20 px-3 py-2 text-sm"
               data-testid="needs-review-row"
             >
               <div>
-                <p className="text-neutral-200">{formatMsDateTime(s.startedAt)}</p>
+                <p className="text-neutral-200">{formatMsDateTime(s.startedAt, personaLocale)}</p>
                 <p className="text-neutral-500">{s.reviewReason ?? "flagged"} · {s.totalMinutes ?? 0} min</p>
               </div>
               <div className="flex gap-2">
@@ -191,7 +191,7 @@ function ReviewList({ shifts }: { shifts: { _id: string; startedAt: number; revi
   );
 }
 
-function AuditTable({ logs }: { logs: { _id: string; status: string; at: number; accuracyMeters: number; clockSkewMs: number; isWithinGeofence: boolean; impossibleTravelFlag: boolean; siteName: string }[] | undefined }) {
+function AuditTable({ logs, personaLocale }: { logs: { _id: string; status: string; at: number; accuracyMeters: number; clockSkewMs: number; isWithinGeofence: boolean; impossibleTravelFlag: boolean; siteName: string }[] | undefined; personaLocale: string }) {
   return (
     <section data-testid="demo-audit-log">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Audit log</h2>
@@ -212,7 +212,7 @@ function AuditTable({ logs }: { logs: { _id: string; status: string; at: number;
             )}
             {(logs ?? []).map((l) => (
               <tr key={l._id} className="border-t border-neutral-800" data-testid="audit-log-row">
-                <td className="px-3 py-2 text-neutral-300">{formatMsTime(l.at)}</td>
+                <td className="px-3 py-2 text-neutral-300">{formatMsTime(l.at, personaLocale)}</td>
                 <td className="px-3 py-2">{l.status}</td>
                 <td className="px-3 py-2 text-right">{l.accuracyMeters}</td>
                 <td className="px-3 py-2 text-right">{Math.round(l.clockSkewMs / 1000)}</td>
@@ -245,7 +245,7 @@ function RosterList({ users }: { users: { _id: string; name?: string; email?: st
   );
 }
 
-function MessagesSection({ inbox }: { inbox: { _id: string; content: string; isRead: boolean; at: number }[] | undefined }) {
+function MessagesSection({ inbox, personaLocale }: { inbox: { _id: string; content: string; isRead: boolean; at: number }[] | undefined; personaLocale: string }) {
   const markRead = useMutation(api.demo.demoMarkQueueItemRead);
   return (
     <section data-testid="demo-messages">
@@ -262,7 +262,7 @@ function MessagesSection({ inbox }: { inbox: { _id: string; content: string; isR
             >
               <p className="text-neutral-100">{m.content}</p>
               <div className="mt-1 flex items-center justify-between text-neutral-500">
-                <span>{formatMsDateTime(m.at)}</span>
+                <span>{formatMsDateTime(m.at, personaLocale)}</span>
                 {m.isRead ? (
                   <span className="text-neutral-600">read</span>
                 ) : (
@@ -283,7 +283,7 @@ function MessagesSection({ inbox }: { inbox: { _id: string; content: string; isR
   );
 }
 
-function CheckInPanel({ sites }: { sites: { _id: string; name: string; latitude: number; longitude: number; geofenceRadiusMeters: number }[] | undefined }) {
+function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: string; latitude: number; longitude: number; geofenceRadiusMeters: number }[] | undefined; personaLocale: string }) {
   const checkIn = useAction(api.demo.checkInAsPersona);
   const recent = useQuery(api.demo.boundPersonaLogs);
   const [status, setStatus] = useState<Status>("arrived");
@@ -402,7 +402,7 @@ function CheckInPanel({ sites }: { sites: { _id: string; name: string; latitude:
               {recent!.slice(0, 5).map((l) => (
                 <li key={l._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-2 py-1">
                   <span>{l.status}</span>
-                  <span className="text-neutral-500">{formatMsTime(l.clientReportedTime)}</span>
+                  <span className="text-neutral-500">{formatMsTime(l.clientReportedTime, personaLocale)}</span>
                 </li>
               ))}
             </ul>

@@ -12,7 +12,8 @@ import { EnableNotifications } from "./notifications";
 import { ChangePassword, ForcedPasswordChange } from "./change-password";
 import { errMsg } from "@/lib/errors";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { formatTime, browserLocale } from "@/lib/format";
+import { formatTime } from "@/lib/format";
+import { useUserLocale } from "@/lib/use-user-locale";
 
 const STATUSES = [
   "arrived",
@@ -190,6 +191,7 @@ function EmployeePanel() {
   const issueToken = useMutation(api.users.issueMyDeviceToken);
   const sites = useQuery(api.sites.listMine);
   const recentLogs = useQuery(api.logs.listMine);
+  const userLocale = useUserLocale();
 
   const deviceToken = useRef<string | null>(null);
   const tokenReady = useRef<Promise<string> | null>(null);
@@ -437,7 +439,7 @@ function EmployeePanel() {
               >
                 <span>{log.status}</span>
                 <span className="text-neutral-500">
-                  {formatTime(log._creationTime, browserLocale())}
+                  {formatTime(log._creationTime, userLocale)}
                   {!log.isWithinGeofence && " · outside geofence"}
                   {log.impossibleTravelFlag && " · travel flag"}
                 </span>

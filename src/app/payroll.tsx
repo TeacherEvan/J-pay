@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
+import { useUserLocale } from "../lib/use-user-locale";
 
 type PayrollResult = {
   rate: number;
@@ -166,7 +167,7 @@ export function ReviewPanel() {
   const review = useQuery(api.moderator.auditNeedsReview);
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
-  const locale = browserLocale();
+  const locale = useUserLocale();
   return (
     <section className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">

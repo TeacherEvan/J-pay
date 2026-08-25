@@ -12,7 +12,8 @@ import { SiteMapPicker } from "../site-map-picker";
 import { errMsg } from "@/lib/errors";
 import { KpiBanner } from "./kpi-banner";
 import { GeofenceModal, type GeofenceFix } from "./geofence-modal";
-import { formatDateTime, browserLocale } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useUserLocale } from "@/lib/use-user-locale";
 
 export default function ModeratorPage() {
   const me = useQuery(api.users_queries.me);
@@ -21,6 +22,7 @@ export default function ModeratorPage() {
   const audit = useQuery(api.moderator.auditRecentLogs, { limit: 50 });
   const [geofenceFix, setGeofenceFix] = useState<GeofenceFix | null>(null);
   const review = useQuery(api.moderator.auditNeedsReview);
+  const userLocale = useUserLocale();
 
   if (me === undefined) {
     return <main className="grid min-h-dvh place-items-center text-sm text-neutral-400">Loading…</main>;
@@ -145,7 +147,7 @@ export default function ModeratorPage() {
             <tbody>
               {(audit ?? []).map((l) => (
                 <tr key={l._id} className="border-t border-neutral-900">
-                  <td className="p-2">{formatDateTime(l.at, browserLocale())}</td>
+                  <td className="p-2">{formatDateTime(l.at, userLocale)}</td>
                   <td className="p-2">{l.employeeName}</td>
                   <td className="p-2 text-neutral-400">{l.siteName}</td>
                   <td className="p-2">{l.status}</td>

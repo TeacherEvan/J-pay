@@ -4,6 +4,8 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { formatTime, formatDateTime } from "@/lib/format";
+import { useUserLocale } from "@/lib/use-user-locale";
 
 export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   const inbox = useQuery(api.messages.myInbox);
@@ -21,6 +23,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   const [broadcastText, setBroadcastText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const seenUnread = useRef(false);
+  const userLocale = useUserLocale();
 
   useEffect(() => {
     if (role === "employee" && inbox && inbox.some((m) => !m.isRead) && !seenUnread.current) {
@@ -57,7 +60,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
         {msg && <p role="status" aria-live="polite" className="text-xs text-neutral-400">{msg}</p>}
         {(inbox ?? []).map((m) => (
           <p key={m._id} className={`rounded-md bg-neutral-900 px-3 py-1.5 text-xs ${m.isRead ? "text-neutral-500" : "text-emerald-300"}`}>
-            <span className="mr-2 opacity-60">{new Date(m._creationTime).toLocaleTimeString()}</span>
+            <span className="mr-2 opacity-60">{formatTime(m._creationTime, userLocale)}</span>
             {m.content}
           </p>
         ))}
@@ -94,7 +97,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
         <div key={m._id} className={`rounded-md bg-neutral-900 p-3 text-xs ${m.isRead ? "" : "border-l-2 border-emerald-500"}`}>
           <p>
             <span className="font-semibold">{m.senderName}</span>
-            <span className="ml-2 text-neutral-500">{new Date(m.at).toLocaleString()}</span>
+            <span className="ml-2 text-neutral-500">{formatDateTime(m.at, userLocale)}</span>
           </p>
           <p className="mt-1 text-neutral-300">{m.content}</p>
           <div className="mt-2 flex gap-2">
