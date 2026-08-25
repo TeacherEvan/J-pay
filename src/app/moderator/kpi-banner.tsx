@@ -20,7 +20,11 @@ export function KpiBanner() {
   return (
     <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {cards.map((c) => (
-        <div key={c.label} className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3">
+        <div
+          key={c.label}
+          aria-label={`${c.label}: ${c.value}`}
+          className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3"
+        >
           <div className={`text-2xl font-semibold ${c.tone}`}>{c.value}</div>
           <div className="mt-1 text-xs uppercase tracking-wide text-neutral-500">{c.label}</div>
         </div>

@@ -29,6 +29,7 @@ type Status = (typeof STATUSES)[number];
 
 const TOKEN_KEY = "jpay.deviceToken";
 const CONSENT_KEY = "jpay.consent";
+const IOS_DISMISS_KEY = "jpay.iosInstallDismissed";
 
 function getPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
@@ -57,11 +58,13 @@ export default function Home() {
     }
   }, [isLoading, isAuthenticated, me, signOut]);
   const [consented, setConsented] = useState(true);
+  const [iosDismissed, setIosDismissed] = useState(false);
   const installEvent = useRef<{ prompt: () => Promise<void> } | null>(null);
   const [showInstall, setShowInstall] = useState(false);
 
   useEffect(() => {
     setConsented(localStorage.getItem(CONSENT_KEY) === "1");
+    setIosDismissed(localStorage.getItem(IOS_DISMISS_KEY) === "1");
     const handler = (e: Event) => {
       e.preventDefault();
       installEvent.current = e as unknown as { prompt: () => Promise<void> };
@@ -105,6 +108,7 @@ export default function Home() {
               <button
                 data-testid="pwa-install-cta"
                 onClick={() => void installEvent.current?.prompt()}
+                aria-label="Install J-Pay as a Progressive Web App"
                 className="rounded-full border border-emerald-500 px-3 py-2.5 text-sm text-emerald-300"
               >
                 Install app
@@ -123,10 +127,23 @@ export default function Home() {
             </button>
           </div>
         </header>
-        {isIos() && (
-          <p className="rounded-md bg-neutral-900 p-3 text-xs text-neutral-400">
-            iPhone: add J-Pay to your Home Screen via Share → “Add to Home Screen”.
-          </p>
+        {isIos() && !iosDismissed && (
+          <div className="flex items-start justify-between gap-2 rounded-md bg-neutral-900 p-3 text-sm text-neutral-400">
+            <p>
+              iPhone: add J-Pay to your Home Screen via Share → “Add to Home Screen”.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIosDismissed(true);
+                localStorage.setItem(IOS_DISMISS_KEY, "1");
+              }}
+              aria-label="Dismiss iPhone install hint"
+              className="shrink-0 rounded px-2 py-2.5 text-neutral-500 hover:text-neutral-200"
+            >
+              ✕
+            </button>
+          </div>
         )}
         {!mustChangePassword && (me.role === "employee" ? (
           <>

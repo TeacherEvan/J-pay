@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #34d399;
+  }
+}
