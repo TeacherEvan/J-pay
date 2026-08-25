@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "e2e": "node scripts/e2e-full.mjs",
     "e2e:rich": "node scripts/e2e-demo-rich.mjs",
+    "e2e:all": "node scripts/e2e-all.mjs",
     "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs scripts/test-change-password-errors.mjs scripts/test-err-msg.mjs scripts/test-demo-access.mjs scripts/test-demo-rich.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
