@@ -24,10 +24,13 @@ export const jpayConfig = {
     dailyOvertimeThresholdHours: 8,
     currency: "ZAR",
     currencySymbol: "R",
-    strategy: "bcea" as "flat" | "bcea" | "dailyOvertime",
+    strategy: "bcea" as "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk",
     defaultRate: 0,
+    supportedJurisdictions: ["ZA", "US", "UK"] as const,
+    jurisdiction: "ZA" as "ZA" | "US" | "UK",
   },
   defaultTimezone: "Africa/Johannesburg",
+  defaultLocale: "en-ZA",
 } as const;
 
 export type JPayConfig = typeof jpayConfig;

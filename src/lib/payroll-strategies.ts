@@ -1,6 +1,6 @@
 import { jpayConfig } from "../config/jpay.config";
 
-export type PayStrategyName = "flat" | "bcea" | "dailyOvertime";
+export type PayStrategyName = "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk";
 
 export interface PayInputDay {
   day: string;
@@ -40,6 +40,20 @@ export function mondayOfWeek(day: string): string {
   const shift = (d.getUTCDay() + 6) % 7;
   d.setUTCDate(d.getUTCDate() - shift);
   return d.toISOString().slice(0, 10);
+}
+
+export function weeklyCapMinutes(strategy: PayStrategyName): number | null {
+  switch (strategy) {
+    case "bcea":
+      return 45 * 60;
+    case "flsa":
+      return 40 * 60;
+    case "wtr_uk":
+      return 48 * 60;
+    case "flat":
+    case "dailyOvertime":
+      return null;
+  }
 }
 
 function linePay(o: number, ot: number, sun: number, rate: number): number {
@@ -117,6 +131,69 @@ function computeBcea(days: PayInputDay[], rate: number): PayResult {
   return finalize("bcea", lines);
 }
 
+function computeFlsa(days: PayInputDay[], rate: number): PayResult {
+  const weeklyCapMin = 40 * 60;
+
+  const weeks = new Map<string, PayInputDay[]>();
+  for (const d of [...days].sort((a, b) => a.day.localeCompare(b.day))) {
+    const wk = mondayOfWeek(d.day);
+    if (!weeks.has(wk)) weeks.set(wk, []);
+    weeks.get(wk)!.push(d);
+  }
+
+  const lines: PayLine[] = [];
+  for (const [, weekDays] of weeks) {
+    let capLeft = weeklyCapMin;
+    for (const { day, minutes } of weekDays) {
+      const ordinary = Math.min(minutes, Math.max(0, capLeft));
+      capLeft -= ordinary;
+      const ot = minutes - ordinary;
+      lines.push({
+        day,
+        ordinaryMinutes: ordinary,
+        overtimeMinutes: ot,
+        sundayMinutes: 0,
+        pay: linePay(ordinary, ot, 0, rate),
+      });
+    }
+  }
+  lines.sort((a, b) => a.day.localeCompare(b.day));
+  return finalize("flsa", lines);
+}
+
+function computeWtrUk(days: PayInputDay[], rate: number): PayResult {
+  // UK has no statutory OT premium. overtimeMinutes is tracked for
+  // regulatory reporting only (Working Time Regulations 1998 48h weekly
+  // cap); pay is straight time.
+  const weeklyCapMin = 48 * 60;
+
+  const weeks = new Map<string, PayInputDay[]>();
+  for (const d of [...days].sort((a, b) => a.day.localeCompare(b.day))) {
+    const wk = mondayOfWeek(d.day);
+    if (!weeks.has(wk)) weeks.set(wk, []);
+    weeks.get(wk)!.push(d);
+  }
+
+  const lines: PayLine[] = [];
+  for (const [, weekDays] of weeks) {
+    let capLeft = weeklyCapMin;
+    for (const { day, minutes } of weekDays) {
+      const ordinary = Math.min(minutes, Math.max(0, capLeft));
+      capLeft -= ordinary;
+      const ot = minutes - ordinary;
+      lines.push({
+        day,
+        ordinaryMinutes: ordinary,
+        overtimeMinutes: ot,
+        sundayMinutes: 0,
+        pay: (minutes / 60) * rate,
+      });
+    }
+  }
+  lines.sort((a, b) => a.day.localeCompare(b.day));
+  return finalize("wtr_uk", lines);
+}
+
 function finalize(strategy: PayStrategyName, lines: PayLine[]): PayResult {
   const t = lines.reduce(
     (a, l) => ({
@@ -159,5 +236,7 @@ export function computePay(
   }
   if (strategy === "bcea") return computeBcea(days, rate);
   if (strategy === "dailyOvertime") return computeDailyOvertime(days, rate);
+  if (strategy === "flsa") return computeFlsa(days, rate);
+  if (strategy === "wtr_uk") return computeWtrUk(days, rate);
   return computeFlat(days, rate);
 }

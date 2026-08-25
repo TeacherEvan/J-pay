@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { computePay, isSunday, mondayOfWeek } from "../src/lib/payroll-strategies.ts";
+import {
+  computePay,
+  isSunday,
+  mondayOfWeek,
+  weeklyCapMinutes,
+} from "../src/lib/payroll-strategies.ts";
 
 const R = 100; // R100/h
 
@@ -96,5 +101,93 @@ assert.equal(mondayOfWeek("2026-08-09"), "2026-08-03");
 // guards
 assert.throws(() => computePay([{ day: "2026-08-03", minutes: 60 }], -1));
 assert.equal(computePay([], R).totals.payableMinutes, 0);
+
+// weeklyCapMinutes helper
+assert.equal(weeklyCapMinutes("bcea"), 45 * 60);
+assert.equal(weeklyCapMinutes("flsa"), 40 * 60);
+assert.equal(weeklyCapMinutes("wtr_uk"), 48 * 60);
+assert.equal(weeklyCapMinutes("flat"), null);
+assert.equal(weeklyCapMinutes("dailyOvertime"), null);
+
+// FLSA ordinary: 35h week -> all 1x
+{
+  const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07"].map(
+    (day) => ({ day, minutes: 420 })
+  );
+  const r = computePay(days, R, "flsa");
+  assert.equal(r.strategy, "flsa");
+  assert.equal(r.totals.ordinaryMinutes, 2100);
+  assert.equal(r.totals.overtimeMinutes, 0);
+  assert.equal(r.totals.sundayMinutes, 0);
+  assert.equal(r.totals.pay, (2100 / 60) * R);
+}
+
+// FLSA OT: 50h week -> 40 @1x + 10 @1.5x
+{
+  const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07"].map(
+    (day) => ({ day, minutes: 600 })
+  );
+  const r = computePay(days, R, "flsa");
+  assert.equal(r.totals.ordinaryMinutes, 2400);
+  assert.equal(r.totals.overtimeMinutes, 600);
+  assert.equal(r.totals.sundayMinutes, 0);
+  assert.equal(r.totals.pay, (2400 / 60) * R + (600 / 60) * R * 1.5);
+}
+
+// FLSA Sunday: 8h Sunday counts ordinary, no premium
+{
+  const r = computePay([{ day: "2026-08-09", minutes: 480 }], R, "flsa");
+  assert.equal(r.totals.sundayMinutes, 0);
+  assert.equal(r.totals.ordinaryMinutes, 480);
+  assert.equal(r.totals.pay, (480 / 60) * R);
+}
+
+// FLSA edge: 0 hours
+{
+  const r = computePay([{ day: "2026-08-03", minutes: 0 }], R, "flsa");
+  assert.equal(r.totals.pay, 0);
+  assert.equal(r.totals.ordinaryMinutes, 0);
+  assert.equal(r.totals.overtimeMinutes, 0);
+}
+
+// WTR ordinary: 40h week -> all 1x
+{
+  const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07"].map(
+    (day) => ({ day, minutes: 480 })
+  );
+  const r = computePay(days, R, "wtr_uk");
+  assert.equal(r.strategy, "wtr_uk");
+  assert.equal(r.totals.ordinaryMinutes, 2400);
+  assert.equal(r.totals.overtimeMinutes, 0);
+  assert.equal(r.totals.pay, (2400 / 60) * R);
+}
+
+// WTR over: 60h week -> 48 tracked, but pay = straight time
+{
+  const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07"].map(
+    (day) => ({ day, minutes: 720 })
+  );
+  const r = computePay(days, R, "wtr_uk");
+  assert.equal(r.totals.ordinaryMinutes, 2880);
+  assert.equal(r.totals.overtimeMinutes, 720);
+  assert.notEqual(r.totals.overtimeMinutes, 0, "overtimeMinutes should be tracked for reporting");
+  // UK has no statutory OT premium — pay is straight time (60h * R)
+  assert.equal(r.totals.pay, (3600 / 60) * R);
+}
+
+// WTR Sunday: 8h Sunday -> no Sunday premium, pay = straight time
+{
+  const r = computePay([{ day: "2026-08-09", minutes: 480 }], R, "wtr_uk");
+  assert.equal(r.totals.sundayMinutes, 0);
+  assert.equal(r.totals.pay, (480 / 60) * R);
+}
+
+// WTR edge: 0 hours
+{
+  const r = computePay([{ day: "2026-08-03", minutes: 0 }], R, "wtr_uk");
+  assert.equal(r.totals.pay, 0);
+  assert.equal(r.totals.ordinaryMinutes, 0);
+  assert.equal(r.totals.overtimeMinutes, 0);
+}
 
 console.log("payroll-strategies: all assertions passed");

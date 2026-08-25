@@ -4,17 +4,28 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
 
 type PayrollResult = {
   rate: number;
   currency: string;
+  strategy: string;
+  locale?: string;
   timezone: string;
   days: { day: string; minutes: number; pay: number }[];
   totals: { payableMinutes: number; pay: number; shiftCount: number; flaggedCount: number };
   flagged: { startedAt: number; reason?: string; minutes?: number }[];
 };
 
-export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number }[] }) {
+type SupportedStrategy = {
+  code: string;
+  strategy: string;
+  currency: string;
+  currencySymbol: string;
+  displayName: string;
+};
+
+export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number }[]; role?: "moderator" | "employee" }) {
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
@@ -23,7 +34,13 @@ export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; nam
     api.payroll.calcForEmployee,
     userId ? ({ userId, fromMs, toMs: Date.now() + 3600_000 } as never) : "skip"
   ) as PayrollResult | undefined;
+  const supported = useQuery(api.payroll.listSupportedStrategies, {} as never) as
+    | SupportedStrategy[]
+    | undefined;
+  const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
+  const isModerator = role === "moderator";
+  const locale = browserLocale();
 
   function download(filename: string, csv: string) {
     const blob = new Blob([csv], { type: "text/csv" });
@@ -66,6 +83,23 @@ export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; nam
             {d}d
           </button>
         ))}
+        {isModerator && userId && (
+          <select
+            value={result?.strategy ?? ""}
+            onChange={(e) => void setPayStrategy({ userId: userId as Id<"users">, strategy: e.target.value as "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk" })}
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2"
+            aria-label="Pay strategy"
+          >
+            <option value="" disabled>
+              Strategy…
+            </option>
+            {(supported ?? []).map((s) => (
+              <option key={s.code} value={s.strategy}>
+                {s.displayName} ({s.currencySymbol} {s.currency})
+              </option>
+            ))}
+          </select>
+        )}
         {userId && (
           <button
             onClick={async () => {
@@ -85,7 +119,7 @@ export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; nam
       {result && (
         <div className="mt-4">
           <p className="mb-2 text-xs text-neutral-500">
-            Rate {result.currency} {result.rate}/h · tz {result.timezone} ·{" "}
+            Rate {formatCurrency(result.rate, result.currency, result.locale ?? locale)}/h · strategy {result.strategy} · tz {result.timezone} ·{" "}
             <span className={result.totals.flaggedCount ? "text-amber-400" : ""}>
               {result.totals.flaggedCount} flagged shift(s) excluded
             </span>
@@ -103,13 +137,13 @@ export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; nam
                 <tr key={d.day} className="border-t border-neutral-900">
                   <td className="p-2">{d.day}</td>
                   <td className="p-2">{d.minutes}</td>
-                  <td className="p-2">{d.pay.toFixed(2)}</td>
+                  <td className="p-2">{formatCurrency(d.pay, result.currency, result.locale ?? locale)}</td>
                 </tr>
               ))}
               <tr className="border-t border-neutral-700 font-semibold">
                 <td className="p-2">Total ({result.totals.shiftCount} shifts)</td>
                 <td className="p-2">{result.totals.payableMinutes}</td>
-                <td className="p-2">{result.totals.pay.toFixed(2)}</td>
+                <td className="p-2">{formatCurrency(result.totals.pay, result.currency, result.locale ?? locale)}</td>
               </tr>
             </tbody>
           </table>
@@ -117,7 +151,7 @@ export function PayrollPanel({ employees }: { employees: { _id: Id<"users">; nam
             <ul className="mt-2 flex flex-col gap-1 text-[11px] text-amber-300/80">
               {result.flagged.map((f) => (
                 <li key={f.startedAt}>
-                  {new Date(f.startedAt).toLocaleString()} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)
+                  {formatDateTime(f.startedAt, result.locale ?? locale)} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)
                 </li>
               ))}
             </ul>
@@ -132,6 +166,7 @@ export function ReviewPanel() {
   const review = useQuery(api.moderator.auditNeedsReview);
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
+  const locale = browserLocale();
   return (
     <section className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
@@ -141,7 +176,7 @@ export function ReviewPanel() {
       {(review ?? []).map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
         <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-900 py-2 text-xs first:border-0">
           <span>
-            {new Date(s.startedAt).toLocaleString()}
+            {formatDateTime(s.startedAt, locale)}
             <span className="ml-2 rounded bg-red-500/20 px-1.5 py-0.5 text-red-300">{s.reviewReason}</span>
           </span>
           <span className="flex gap-2">

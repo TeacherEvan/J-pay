@@ -12,6 +12,7 @@ import { EnableNotifications } from "./notifications";
 import { ChangePassword, ForcedPasswordChange } from "./change-password";
 import { errMsg } from "@/lib/errors";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { formatTime, browserLocale } from "@/lib/format";
 
 const STATUSES = [
   "arrived",
@@ -391,7 +392,7 @@ function EmployeePanel() {
               <li key={log._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-xs">
                 <span>{log.status}</span>
                 <span className="text-neutral-500">
-                  {new Date(log._creationTime).toLocaleTimeString()}
+                  {formatTime(log._creationTime, browserLocale())}
                   {!log.isWithinGeofence && " · outside geofence"}
                   {log.impossibleTravelFlag && " · travel flag"}
                 </span>

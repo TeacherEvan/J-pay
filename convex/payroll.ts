@@ -1,11 +1,12 @@
-import { action, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireActiveUser } from "./access";
+import { requireActiveUser, requireModerator } from "./access";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 import { localDayKey } from "../src/lib/shift-engine";
 import { computePay, type PayStrategyName } from "../src/lib/payroll-strategies";
+import { listSupportedJurisdictions } from "../src/lib/payroll-jurisdictions";
 import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
 import { jpayConfig } from "../src/config/jpay.config";
@@ -19,6 +20,10 @@ export const calcForEmployee = query({
     const user = await ctx.db.get(args.userId);
     if (!user) throw new ConvexError("USER_NOT_FOUND");
     const rate = user.hourlyRateOverride ?? Number(process.env.PAYROLL_DEFAULT_RATE ?? 0);
+    const effectiveStrategy: PayStrategyName =
+      user.payStrategy ??
+      (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ??
+      jpayConfig.payrollRules.strategy;
 
     const shifts = await ctx.db
       .query("shifts")
@@ -56,7 +61,7 @@ export const calcForEmployee = query({
     const result = computePay(
       [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, minutes]) => ({ day, minutes })),
       rate,
-      (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ?? undefined
+      effectiveStrategy
     );
     for (const l of result.lines) payableMinutes += l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes;
 
@@ -64,6 +69,7 @@ export const calcForEmployee = query({
       rate,
       currency: process.env.PAYROLL_CURRENCY ?? jpayConfig.payrollRules.currency,
       strategy: result.strategy,
+      locale: user.locale ?? "en-ZA",
       timezone,
       days: result.lines.map((l) => ({ day: l.day, minutes: l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes, pay: l.pay })),
       totals: {
@@ -77,6 +83,34 @@ export const calcForEmployee = query({
       },
       flagged,
     };
+  },
+});
+
+export const setPayStrategy = mutation({
+  args: {
+    userId: v.id("users"),
+    strategy: v.union(
+      v.literal("flat"),
+      v.literal("bcea"),
+      v.literal("dailyOvertime"),
+      v.literal("flsa"),
+      v.literal("wtr_uk")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new ConvexError("USER_NOT_FOUND");
+    await ctx.db.patch(args.userId, { payStrategy: args.strategy });
+    return { ok: true as const };
+  },
+});
+
+export const listSupportedStrategies = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireActiveUser(ctx);
+    return listSupportedJurisdictions();
   },
 });
 

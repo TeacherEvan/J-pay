@@ -12,6 +12,7 @@ import { SiteMapPicker } from "../site-map-picker";
 import { errMsg } from "@/lib/errors";
 import { KpiBanner } from "./kpi-banner";
 import { GeofenceModal, type GeofenceFix } from "./geofence-modal";
+import { formatDateTime, browserLocale } from "@/lib/format";
 
 export default function ModeratorPage() {
   const me = useQuery(api.users_queries.me);
@@ -59,7 +60,7 @@ export default function ModeratorPage() {
         sites={sites ?? []}
       />
 
-      <PayrollPanel employees={(employees ?? []) as never} />
+      <PayrollPanel employees={(employees ?? []) as never} role="moderator" />
       <ReviewPanel />
       <MessagesPanel role="moderator" />
 
@@ -136,7 +137,7 @@ export default function ModeratorPage() {
             <tbody>
               {(audit ?? []).map((l) => (
                 <tr key={l._id} className="border-t border-neutral-900">
-                  <td className="p-2">{new Date(l.at).toLocaleString()}</td>
+                  <td className="p-2">{formatDateTime(l.at, browserLocale())}</td>
                   <td className="p-2">{l.employeeName}</td>
                   <td className="p-2 text-neutral-400">{l.siteName}</td>
                   <td className="p-2">{l.status}</td>

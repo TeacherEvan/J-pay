@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { formatTime, formatDateTime, browserLocale } from "@/lib/format";
 
 export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   const inbox = useQuery(api.messages.myInbox);
@@ -34,7 +35,9 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
       <section className="flex flex-col gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Messages</h2>
         <div className="flex gap-2">
+          <label className="sr-only" htmlFor="msg-employee">Message your moderator</label>
           <input
+            id="msg-employee"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Message your moderator…"
@@ -52,10 +55,10 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
             Send
           </button>
         </div>
-        {msg && <p className="text-xs text-neutral-400">{msg}</p>}
+        {msg && <p role="status" aria-live="polite" className="text-xs text-neutral-400">{msg}</p>}
         {(inbox ?? []).map((m) => (
           <p key={m._id} className={`rounded-md bg-neutral-900 px-3 py-1.5 text-xs ${m.isRead ? "text-neutral-500" : "text-emerald-300"}`}>
-            <span className="mr-2 opacity-60">{new Date(m._creationTime).toLocaleTimeString()}</span>
+            <span className="mr-2 opacity-60">{formatTime(m._creationTime, browserLocale())}</span>
             {m.content}
           </p>
         ))}
@@ -67,7 +70,9 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
     <section className="flex flex-col gap-3">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Messages</h2>
       <div className="flex gap-2">
+        <label className="sr-only" htmlFor="msg-broadcast">Broadcast to all employees</label>
         <input
+          id="msg-broadcast"
           value={broadcastText}
           onChange={(e) => setBroadcastText(e.target.value)}
           placeholder="Broadcast to all employees…"
@@ -90,11 +95,13 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
         <div key={m._id} className={`rounded-md bg-neutral-900 p-3 text-xs ${m.isRead ? "" : "border-l-2 border-emerald-500"}`}>
           <p>
             <span className="font-semibold">{m.senderName}</span>
-            <span className="ml-2 text-neutral-500">{new Date(m.at).toLocaleString()}</span>
+            <span className="ml-2 text-neutral-500">{formatDateTime(m.at, browserLocale())}</span>
           </p>
           <p className="mt-1 text-neutral-300">{m.content}</p>
           <div className="mt-2 flex gap-2">
+            <label className="sr-only" htmlFor={`msg-reply-${m._id}`}>Reply to {m.senderName}</label>
             <input
+              id={`msg-reply-${m._id}`}
               value={replyText[m._id] ?? ""}
               onChange={(e) => setReplyText({ ...replyText, [m._id]: e.target.value })}
               placeholder="Reply directly…"
@@ -107,6 +114,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
                 await replyToEmployee({ recipientId: m.senderId as Id<"users">, content });
                 await markQueueItemRead({ messageId: m._id as Id<"messages"> });
                 setReplyText({ ...replyText, [m._id]: "" });
+                setMsg("Reply sent.");
               }}
               className="rounded bg-neutral-200 px-2 py-1 font-semibold text-neutral-900"
             >
@@ -123,7 +131,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
           </div>
         </div>
       ))}
-      {msg && <p className="text-xs text-neutral-400">{msg}</p>}
+      {msg && <p role="status" aria-live="polite" className="text-xs text-neutral-400">{msg}</p>}
     </section>
   );
 }

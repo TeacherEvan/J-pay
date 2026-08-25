@@ -18,6 +18,16 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
     hourlyRateOverride: v.optional(v.number()),
     pushSubscriptionTokens: v.optional(v.array(v.string())),
+    payStrategy: v.optional(
+      v.union(
+        v.literal("flat"),
+        v.literal("bcea"),
+        v.literal("dailyOvertime"),
+        v.literal("flsa"),
+        v.literal("wtr_uk")
+      )
+    ),
+    locale: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
@@ -68,6 +78,7 @@ export default defineSchema({
     idempotencyKey: v.string(),
     isModeratorOverride: v.optional(v.boolean()),
     impossibleTravelFlag: v.optional(v.boolean()),
+    createdByDemoReviewerId: v.optional(v.id("users")),
   })
     .index("by_user_time", ["userId"])
     .index("by_status", ["status"])
@@ -115,4 +126,14 @@ export default defineSchema({
     resolvedAt: v.number(),
     byModeratorId: v.id("users"),
   }).index("by_user_key", ["userId", "shiftKey"]),
+
+  demoSessions: defineTable({
+    reviewerId: v.id("users"),
+    personaEmail: v.string(),
+    mode: v.union(v.literal("employee"), v.literal("moderator"), v.literal("full")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_persona", ["personaEmail"]),
 });
