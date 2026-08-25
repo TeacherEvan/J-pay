@@ -17,6 +17,14 @@ export const status = query({
 
 const REVIEWER_MAX_AGE_DAYS = 7;
 
+export const DEMO_PERSONAS = [
+  { name: "Thabo Mokoena", email: "thabo.demo@jpay.local", rate: 180 },
+  { name: "Sipho Ndlovu", email: "sipho.demo@jpay.local", rate: 220 },
+  { name: "Lerato Khumalo", email: "lerato.demo@jpay.local", rate: 195 },
+  { name: "David Miller", email: "david.demo@jpay.local", rate: 240 },
+  { name: "Pieter van der Merwe", email: "pieter.demo@jpay.local", rate: 165 },
+] as const;
+
 type SeedRow = {
   siteName: string;
   email: string;
@@ -68,13 +76,7 @@ function buildRows(): SeedRow[] {
     } as SeedRow);
   };
 
-  const personas = [
-    { name: "Thabo Mokoena", email: "thabo.demo@jpay.local" },
-    { name: "Sipho Ndlovu", email: "sipho.demo@jpay.local" },
-    { name: "Lerato Khumalo", email: "lerato.demo@jpay.local" },
-    { name: "David Miller", email: "david.demo@jpay.local" },
-    { name: "Pieter van der Merwe", email: "pieter.demo@jpay.local" },
-  ];
+  const personas = DEMO_PERSONAS;
 
   for (let d = 13; d >= 1; d--) {
     const dow = new Date(dayStart(d, 6)).getUTCDay();
@@ -155,12 +157,14 @@ export const seedDemoData = action({
     }
     const rows = buildRows();
     const emails = [...new Set(rows.map((r) => r.email))];
+    const ratesByEmail = Object.fromEntries(DEMO_PERSONAS.map((p) => [p.email, p.rate]));
     const result: { userIds: string[]; summary: { sites: number; employees: number; logsInserted: number; logsSkippedDuplicates: number } } =
       await ctx.runMutation(internal.demo_seed.seedAll, {
       createdBy: callerId,
       sites: DEMO_SITES.map((s) => ({ ...s })),
       rows,
       emails,
+      ratesByEmail,
     });
     for (const userId of result.userIds) {
       await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, {

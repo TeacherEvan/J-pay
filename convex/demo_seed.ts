@@ -44,6 +44,7 @@ export const seedAll = internalMutation({
       })
     ),
     emails: v.array(v.string()),
+    ratesByEmail: v.record(v.string(), v.number()),
   },
   handler: async (ctx, args) => {
     const siteIdByName = new Map<string, Id<"sites">>();
@@ -68,7 +69,11 @@ export const seedAll = internalMutation({
         .query("users")
         .withIndex("email", (q) => q.eq("email", email))
         .first();
+      const rate = args.ratesByEmail[email];
       if (existing && existing.isActive && existing.archivedAt === undefined) {
+        if (existing.hourlyRateOverride !== rate) {
+          await ctx.db.patch(existing._id, { hourlyRateOverride: rate });
+        }
         userIdByEmail.set(email, existing._id);
         continue;
       }
@@ -79,6 +84,7 @@ export const seedAll = internalMutation({
         isActive: true,
         passwordChangedAt: Date.now(),
         emailVerificationTime: Date.now(),
+        hourlyRateOverride: rate,
       });
       userIdByEmail.set(email, id);
     }
