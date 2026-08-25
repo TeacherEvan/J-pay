@@ -35,5 +35,6 @@
   },
   "overrides": {
     "@auth/core": "^0.41.3"
-  }
+  },
+  "type": "module"
 }
