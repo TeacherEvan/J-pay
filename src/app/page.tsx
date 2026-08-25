@@ -102,6 +102,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             {showInstall && (
               <button
+                data-testid="pwa-install-cta"
                 onClick={() => void installEvent.current?.prompt()}
                 className="rounded-full border border-emerald-500 px-2 py-0.5 text-xs text-emerald-300"
               >
@@ -113,6 +114,7 @@ export default function Home() {
               {me.role}
             </span>
             <button
+              data-testid="auth-signout"
               onClick={() => void signOut().then(() => window.location.reload())}
               className="text-xs text-neutral-500 underline hover:text-neutral-300"
             >
@@ -164,6 +166,7 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
         </p>
         <button
           ref={acceptRef}
+          data-testid="consent-acknowledge"
           onClick={onAccept}
           className="w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950"
         >
@@ -399,6 +402,7 @@ function EmployeePanel() {
         </label>
       )}
       <button
+        data-testid="checkin-submit"
         onClick={checkIn}
         disabled={busy}
         className="h-16 rounded-xl bg-emerald-500 text-lg font-bold text-emerald-950 transition hover:bg-emerald-400 disabled:opacity-50"
@@ -410,7 +414,12 @@ function EmployeePanel() {
       {count > 0 && (
         <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <span>{count} check-in{count === 1 ? "" : "s"} queued offline</span>
-          <button onClick={() => void flush()} disabled={syncing} className="underline disabled:opacity-50">
+          <button
+            data-testid="outbox-sync"
+            onClick={() => void flush()}
+            disabled={syncing}
+            className="underline disabled:opacity-50"
+          >
             {syncing ? "Syncing…" : "Sync now"}
           </button>
         </div>
@@ -420,7 +429,12 @@ function EmployeePanel() {
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent</h2>
           <ul className="flex flex-col gap-1">
             {recentLogs!.slice(0, 10).map((log: { _id: string; status: string; isWithinGeofence: boolean; impossibleTravelFlag?: boolean; _creationTime: number }) => (
-              <li key={log._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-xs">
+              <li
+                key={log._id}
+                data-testid="checkin-verdict"
+                data-verdict={log.isWithinGeofence ? (log.impossibleTravelFlag ? "travel" : "inside") : "outside"}
+                className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-xs"
+              >
                 <span>{log.status}</span>
                 <span className="text-neutral-500">
                   {formatTime(log._creationTime, browserLocale())}

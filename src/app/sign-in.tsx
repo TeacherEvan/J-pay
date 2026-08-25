@@ -36,7 +36,11 @@ export function SignIn() {
       )}
       <input name="flow" type="hidden" value={step} />
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <button type="submit" className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400">
+      <button
+        type="submit"
+        data-testid={`auth-submit-${step}`}
+        className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
+      >
         {step === "signIn" ? "Sign in" : "Activate account"}
       </button>
       <button
@@ -55,6 +59,7 @@ export function SignIn() {
           </div>
           <button
             type="button"
+            data-testid="demo-preview-cta"
             disabled={demoBusy}
             onClick={() => {
               setError(null);

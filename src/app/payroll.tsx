@@ -181,12 +181,14 @@ export function ReviewPanel() {
           </span>
           <span className="flex gap-2">
             <button
+              data-testid="review-recompute"
               onClick={() => void recompute({ userId: s.userId })}
               className="rounded border border-neutral-700 px-2 py-1"
             >
               Recompute
             </button>
             <button
+              data-testid="review-resolve"
               onClick={() => void resolveShift({ shiftId: s._id })}
               className="rounded bg-emerald-500 px-2 py-1 font-semibold text-emerald-950"
             >
