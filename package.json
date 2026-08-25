@@ -9,7 +9,7 @@
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
     "e2e": "node scripts/e2e-full.mjs",
-    "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs scripts/test-change-password-errors.mjs && node --experimental-strip-types scripts/test-csv.mjs"
+    "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs scripts/test-change-password-errors.mjs scripts/test-err-msg.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",
