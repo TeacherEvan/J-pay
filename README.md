@@ -5,7 +5,7 @@ timestamps; moderators audit locations live, provision employee accounts with on
 ID codes, manage site geofences, and derive shifts for payroll. Built on Next.js 15 +
 Convex + Convex Auth (password provider — no third-party auth vendor) + Serwist.
 
-The TRD (`j-pay.md`, **v1.2.1**) is the contract; its §6 schema is the source of truth.
+The TRD (`j-pay.md`, **v1.3.0**) is the contract; its §6 schema is the source of truth.
 
 ## Quick start (local)
 

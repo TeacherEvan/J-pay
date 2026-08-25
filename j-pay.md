@@ -2,7 +2,7 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** This workspace (`J-pay`) — one fork per client per ADR-002
-**Version:** 1.2.1 (post-audit sync: ERD↔schema, review residue)
+**Version:** 1.3.0 (Next 16.3.2 + Serwist 10-preview upgrade — D2 closed)
 **Status:** Implemented — working preview (see docs/notes/)
 
 ### Revision Log (v1.1 → v1.2)
@@ -45,6 +45,7 @@
 | R35 | §6/§5.2/§9 | Investor/fork hardening: `shifts.timezone`+`sealed`, `by_started`/`by_active` indexes; bounded re-derivation (sealed rows immutable, writes windowed); per-site tz day bucketing; pluggable payroll strategies (`src/lib/payroll-strategies.ts`: flat/BCEA/dailyOT, BCEA default 1.5× >45h/wk + 2× Sunday — ⚠ UNVERIFIED citation pending); `src/config/jpay.config.ts` pure-constant contract (engine/logs/crons wired); KPI banner (`convex/kpi.ts`), geofence modal (Leaflet reuse), `/~offline` fallback precached; `DEMO_MODE=1`-gated idempotent demo seeder through real pipeline (`convex/demo*.ts`) |
 | R36 | §5.1/§7 | Demo preview is opt-in at login, not ambient: when `DEMO_MODE=1`, an Anonymous Convex Auth provider is registered and the sign-in screen renders "Enter demo preview" (gated server-side via public `demo.status` query). Anonymous sessions become throwaway `isAnonymous: true` employees auto-assigned to every active site (the 3 demo sites are self-created if none exist); forced password change skipped via `passwordChangedAt`. Daily cron purges reviewers older than 7 days with all dependent rows (logs/shifts/userSites/pushSubscriptions/messages/reviewResolutions). Sign out button added to app header (was absent entirely). Password sign-in path unchanged |
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
+| R37 | §2/§3/§11 | **Next 16.3.2 upgrade (closes D2).** `next` bumped 15.3 → 16.3.2 clearing the postcss 4 + sharp 4 high-severity advisories that were transitively bundled. `@serwist/next` bumped 9.5.12 → 10.0.0-preview.14 (Next 16 compat; export paths unchanged so `src/app/sw.ts` did not need a code change). `glob` pinned to `^11.1.0` via `overrides` to clear the Serwist-10 transitive GHSA-5j98-mcp5-4vw2 (CLI command injection in a build-time-only tool — not exploitable from this codebase, tracked as Open Question #10). Production build stays on **webpack** (`next build --webpack`) because Serwist 10-preview does not yet support Turbopack SW generation (https://github.com/serwist/serwist/issues/54); Turbopack adoption deferred to Open Question #11. New canary workflow at `.github/workflows/canary.yml` deploys to a Vercel preview on PRs labeled `next16-canary`. Rollback runbook at `docs/ops/next-16-rollback.md`. See `docs/plans/2026-08-25-next-16-upgrade.md` for the full plan + audit before/after snapshots. |
 
 ---
 
@@ -525,6 +526,8 @@ stateDiagram-v2
 7. WebAuthn platform authenticator rollout timing (v1.1 §5.3 Phase 2): which devices in the field support it?
 9. `feeling sick` transition semantics (v1.2.1 implementation note): the grammar (§6.1, §10.5) defines no transitions for this status; current engine treats it as a soft terminal that closes the shift without review. Confirm intended behavior with stakeholders — terminal vs. pausable state.
 8. Payroll multiplier modeling: **RESOLVED-DEFAULT (R35)** — pluggable strategy module (`src/lib/payroll-strategies.ts`), BCEA default (1.5× beyond 45h/week; 2.0× Sundays, Sundays excluded from weekly OT accumulation), switchable via `PAYROLL_STRATEGY` env or `jpayConfig.payrollRules.strategy`. Multiplier figures ⚠ UNVERIFIED against BCEA source text — verify before first client fork.
+10. **glob@11.0.3 transitive via @serwist/build** (build-time CLI only — not in the runtime tree). Pinned to `^11.1.0` via `overrides` in R37. Re-check on every `npm install` of new Serwist versions; if a future Serwist drops `glob` from its dep tree the override is no-op and can be removed.
+11. **Turbopack adoption for production builds** (deferred from R37). Serwist 10 stable + Turbopack support will let us drop the `next build --webpack` flag and the `outputFileTracingRoot` workaround. Track https://github.com/serwist/serwist/issues/54. Until then, `next dev` runs Turbopack (with a Serwist warning) and `next build` runs webpack (clean). If a stable Serwist 10 ships with Turbopack support, plan a D3 upgrade.
 
 ---
 
