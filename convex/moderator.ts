@@ -91,6 +91,7 @@ export const listEmployeesWithAssignments = query({
         isActive: e.isActive,
         deviceId: e.deviceId,
         hourlyRateOverride: e.hourlyRateOverride,
+        locale: e.locale,
         assignedSiteIds: assignments,
       });
     }

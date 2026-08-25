@@ -1,4 +1,4 @@
-import { action, internalAction, internalMutation, mutation } from "./_generated/server";
+import { action, internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import {
@@ -8,10 +8,21 @@ import {
   retrieveAccount,
 } from "@convex-dev/auth/server";
 import { issueDeviceToken } from "./deviceTokens";
-import { currentUserId, requireModerator } from "./access";
+import { currentUserId, requireActiveUser, requireModerator } from "./access";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { mapRetrieveResult } from "./changePassword";
+
+const LOCALE_VALUES = [
+  "en-ZA",
+  "en-US",
+  "en-GB",
+  "en-AU",
+  "es-ES",
+  "fr-FR",
+] as const;
+const localeValidator = v.union(...LOCALE_VALUES.map((l) => v.literal(l)));
+export type LocaleCode = (typeof LOCALE_VALUES)[number];
 
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -240,6 +251,35 @@ export const resetDeviceToken = mutation({
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     await ctx.db.patch(args.userId, { deviceId: undefined });
+  },
+});
+
+export const getMyLocale = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await currentUserId(ctx);
+    const user = await ctx.db.get(userId);
+    return user?.locale ?? null;
+  },
+});
+
+export const setMyLocale = mutation({
+  args: { locale: localeValidator },
+  handler: async (ctx, args) => {
+    const { userId } = await requireActiveUser(ctx);
+    await ctx.db.patch(userId, { locale: args.locale });
+    return { ok: true as const };
+  },
+});
+
+export const setUserLocale = mutation({
+  args: { userId: v.id("users"), locale: localeValidator },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new ConvexError("USER_NOT_FOUND");
+    await ctx.db.patch(args.userId, { locale: args.locale });
+    return { ok: true as const };
   },
 });
 

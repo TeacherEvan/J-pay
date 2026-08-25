@@ -76,6 +76,7 @@ export default function ModeratorPage() {
                 <th className="p-2">Email</th>
                 <th className="p-2">Sites</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">Locale</th>
                 <th className="p-2">Rate/h</th>
                 <th className="p-2"></th>
               </tr>
@@ -93,6 +94,9 @@ export default function ModeratorPage() {
                   </td>
                   <td className={`p-2 ${e.archivedAt ? "text-red-400" : "text-emerald-400"}`}>
                     {e.archivedAt ? "deactivated" : "active"}
+                  </td>
+                  <td className="p-2">
+                    <LocaleCell userId={e._id} initial={e.locale ?? "en-ZA"} />
                   </td>
                   <td className="p-2">
                     <RateCell userId={e._id} initial={e.hourlyRateOverride} />
@@ -244,9 +248,9 @@ function ProvisionPanel() {
         >
           Create account + ID code ({role})
         </button>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
         {code && (
-          <div className="rounded-md border border-emerald-700 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+          <div className="rounded-md border border-emerald-700 bg-emerald-500/10 p-3 text-sm text-emerald-200">
             <p className="mb-1">Give these to the employee NOW — shown once:</p>
             <p>Email: <strong>{code.email}</strong></p>
             <p>ID code: <strong className="tracking-widest">{code.idCode}</strong></p>
@@ -330,7 +334,7 @@ function SitePanel() {
         >
           Create site
         </button>
-        {msg && <p className="col-span-2 text-xs text-neutral-400">{msg}</p>}
+        {msg && <p className="col-span-2 text-sm text-neutral-400">{msg}</p>}
       </div>
     </div>
   );
@@ -400,7 +404,7 @@ function AssignPanel({
         >
           Remove
         </button>
-        {msg && <span className="text-xs text-neutral-400">{msg}</span>}
+        {msg && <span className="text-sm text-neutral-400">{msg}</span>}
       </div>
     </section>
   );
@@ -425,6 +429,29 @@ function DeactivateButton({ userId }: { userId: string }) {
     <button onClick={() => setConfirming(true)} className="text-neutral-500 underline hover:text-red-400">
       deactivate
     </button>
+  );
+}
+
+function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: string }) {
+  const setUserLocale = useMutation(api.users.setUserLocale);
+  const LOCALES = ["en-ZA", "en-US", "en-GB", "en-AU", "es-ES", "fr-FR"] as const;
+  return (
+    <select
+      defaultValue={initial}
+      onChange={(e) =>
+        void setUserLocale({ userId, locale: e.target.value as (typeof LOCALES)[number] }).catch(
+          () => {}
+        )
+      }
+      aria-label={`Locale for ${userId}`}
+      className="rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-xs"
+    >
+      {LOCALES.map((l) => (
+        <option key={l} value={l}>
+          {l}
+        </option>
+      ))}
+    </select>
   );
 }
 
