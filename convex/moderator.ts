@@ -176,6 +176,7 @@ export const setHourlyOverride = mutation({
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     if (args.rate !== undefined && (args.rate < 0 || args.rate > 100000)) {
+      console.warn("[moderator:setHourlyOverride] RATE_OUT_OF_RANGE blocked:", args.rate, "(user:", args.userId, ")");
       throw new ConvexError("RATE_OUT_OF_RANGE");
     }
     await ctx.db.patch(args.userId, { hourlyRateOverride: args.rate });

@@ -480,6 +480,7 @@ function RateCell({ userId, initial }: { userId: Id<"users">; initial?: number }
           setSaved(false);
         }}
         inputMode="decimal"
+        min={0}
         placeholder="default"
         className="w-16 rounded border border-neutral-800 bg-neutral-950 px-2 py-2.5 text-right text-sm"
       />
