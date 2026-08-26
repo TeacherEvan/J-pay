@@ -46,6 +46,16 @@ export default defineSchema({
     updatedBy: v.optional(v.id("users")),
   }),
 
+  punches: defineTable({
+    userId: v.id("users"),
+    siteId: v.id("sites"),
+    type: v.union(v.literal("in"), v.literal("out")),
+    lat: v.number(),
+    lng: v.number(),
+    geoPassed: v.boolean(),
+    ts: v.number(),
+  }),
+
   userSites: defineTable({
     userId: v.id("users"),
     siteId: v.id("sites"),
