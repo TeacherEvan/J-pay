@@ -246,6 +246,14 @@ export const purgeExpiredCoords = internalMutation({
         await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
       }
     }
+    // H7 (2026-08-26): write an audit row so purge runs are observable.
+    if (expired.length > 0) {
+      await ctx.db.insert("purgeAudit", {
+        purgedAt: Date.now(),
+        purgedCount: expired.length,
+        kind: "coordinates",
+      });
+    }
     return expired.length;
   },
 });

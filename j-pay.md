@@ -46,6 +46,7 @@
 | R36 | §5.1/§7 | Demo preview is opt-in at login, not ambient: when `DEMO_MODE=1`, an Anonymous Convex Auth provider is registered and the sign-in screen renders "Enter demo preview" (gated server-side via public `demo.status` query). Anonymous sessions become throwaway `isAnonymous: true` employees auto-assigned to every active site (the 3 demo sites are self-created if none exist); forced password change skipped via `passwordChangedAt`. Daily cron purges reviewers older than 7 days with all dependent rows (logs/shifts/userSites/pushSubscriptions/messages/reviewResolutions). Sign out button added to app header (was absent entirely). Password sign-in path unchanged |
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 | R37 | §2/§3/§11 | **Next 16.3.2 upgrade (closes D2).** `next` bumped 15.3 → 16.3.2 clearing the postcss 4 + sharp 4 high-severity advisories that were transitively bundled. `@serwist/next` bumped 9.5.12 → 10.0.0-preview.14 (Next 16 compat; export paths unchanged so `src/app/sw.ts` did not need a code change). `glob` pinned to `^11.1.0` via `overrides` to clear the Serwist-10 transitive GHSA-5j98-mcp5-4vw2 (CLI command injection in a build-time-only tool — not exploitable from this codebase, tracked as Open Question #10). Production build stays on **webpack** (`next build --webpack`) because Serwist 10-preview does not yet support Turbopack SW generation (https://github.com/serwist/serwist/issues/54); Turbopack adoption deferred to Open Question #11. New canary workflow at `.github/workflows/canary.yml` deploys to a Vercel preview on PRs labeled `next16-canary`. Rollback runbook at `docs/ops/next-16-rollback.md`. See `docs/plans/2026-08-25-next-16-upgrade.md` for the full plan + audit before/after snapshots. |
+| R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). Demo fix B2: `ensurePersonaSiteAssignments` called on bind so Thabo has site rows; `boundPersonaSites` query replaces hardcoded `sites.listMine` in demo CheckInPanel. Broadcast filtered to exclude demo users. TRD §6 + §10.2 + §11 updated. |
 
 ---
 
@@ -147,6 +148,7 @@ export default defineSchema({
     passwordChangedAt: v.optional(v.number()), // undefined = still using provisioned ID code
     deviceId: v.optional(v.string()),          // signed device token id
     archivedAt: v.optional(v.number()),        // soft delete (payroll compliance)
+    isMasterTemp: v.optional(v.boolean()),     // transient moderator via master-password login
     hourlyRateOverride: v.optional(v.number()),
     pushSubscriptionTokens: v.optional(v.array(v.string())),
   })
@@ -233,13 +235,16 @@ export default defineSchema({
     retentionDays: v.optional(v.number()),
   })
     .index("by_recipient_read", ["recipientId", "isRead"])
-    .index("by_modqueue_unread", ["modQueue", "isRead"]),
+    .index("by_modqueue_unread", ["modQueue", "isRead"])
+    .index("by_sender", ["senderId"]),           // master-temp archive message lookup
 
   pushSubscriptions: defineTable({             // one row per subscription → rotation/dedup
     userId: v.id("users"),
     endpoint: v.string(),
     keysP256dh: v.string(),
     keysAuth: v.string(),
+    lastErrorAt: v.optional(v.number()),       // last transient push failure (H4)
+    consecutiveErrors: v.optional(v.number()), // auto-pruned at ≥5 (H4)
   })
     .index("by_user", ["userId"]),
 
@@ -250,6 +255,13 @@ export default defineSchema({
     byModeratorId: v.id("users"),
   })
     .index("by_user_key", ["userId", "shiftKey"]),
+
+  purgeAudit: defineTable({                   // observable purge run log (H7)
+    purgedAt: v.number(),
+    purgedCount: v.number(),
+    kind: v.union(v.literal("coordinates"), v.literal("messages"), v.literal("masterTemps")),
+  })
+    .index("by_purged_at", ["purgedAt"]),
 });
 ```
 
@@ -368,6 +380,7 @@ erDiagram
         boolean isActive
         string deviceId
         number archivedAt "SOFT DELETE"
+        boolean isMasterTemp "OPTIONAL transient moderator"
         number passwordChangedAt "OPTIONAL force-set at provisioning"
 
         number hourlyRateOverride "OPTIONAL"
@@ -429,12 +442,19 @@ erDiagram
         string endpoint
         string keysP256dh
         string keysAuth
+        number lastErrorAt "OPTIONAL last transient failure"
+        number consecutiveErrors "OPTIONAL auto-pruned at >=5"
     }
     reviewResolutions {
         id userId
         string shiftKey
         number resolvedAt
         id byModeratorId
+    }
+    purgeAudit {
+        number purgedAt
+        number purgedCount
+        string kind "coordinates|messages|masterTemps"
     }
 ```
 
@@ -528,6 +548,7 @@ stateDiagram-v2
 8. Payroll multiplier modeling: **RESOLVED-DEFAULT (R35)** — pluggable strategy module (`src/lib/payroll-strategies.ts`), BCEA default (1.5× beyond 45h/week; 2.0× Sundays, Sundays excluded from weekly OT accumulation), switchable via `PAYROLL_STRATEGY` env or `jpayConfig.payrollRules.strategy`. Multiplier figures ⚠ UNVERIFIED against BCEA source text — verify before first client fork.
 10. **glob@11.0.3 transitive via @serwist/build** (build-time CLI only — not in the runtime tree). Pinned to `^11.1.0` via `overrides` in R37. Re-check on every `npm install` of new Serwist versions; if a future Serwist drops `glob` from its dep tree the override is no-op and can be removed.
 11. **Turbopack adoption for production builds** (deferred from R37). Serwist 10 stable + Turbopack support will let us drop the `next build --webpack` flag and the `outputFileTracingRoot` workaround. Track https://github.com/serwist/serwist/issues/54. Until then, `next dev` runs Turbopack (with a Serwist warning) and `next build` runs webpack (clean). If a stable Serwist 10 ships with Turbopack support, plan a D3 upgrade.
+12. **Master-password security posture** (R38). The `MASTER_PASSWORD` env var is a single shared secret that opens temporary moderator sessions for any email. Currently stored only in Convex env — rotates per-deployment. Consider adding: per-user rate limiting on master login, audit logging of master sessions, optional IP allowlist, or a short-lived token exchange instead of a static password. For production deployments, the master password MUST be rotated per-client and shared only with authorized moderators.
 
 ---
 

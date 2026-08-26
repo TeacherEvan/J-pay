@@ -1,45 +1,18 @@
 "use client";
 
-import { useConvexAuth, useMutation, useQuery, useAction } from "convex/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { OutboxEntry } from "@/lib/outbox";
-import { useOutbox } from "./use-outbox";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
 import { ChangePassword, ForcedPasswordChange } from "./change-password";
-import { errMsg } from "@/lib/errors";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { formatTime } from "@/lib/format";
-import { useUserLocale } from "@/lib/use-user-locale";
+import { useConvex } from "convex/react";
+import { CheckInCard } from "./check-in-card";
 
-const STATUSES = [
-  "arrived",
-  "checkpoint",
-  "lunch",
-  "quick side mission",
-  "feeling sick",
-  "day finish",
-  "job finish",
-] as const;
-
-type Status = (typeof STATUSES)[number];
-
-const TOKEN_KEY = "jpay.deviceToken";
 const CONSENT_KEY = "jpay.consent";
 const IOS_DISMISS_KEY = "jpay.iosInstallDismissed";
-
-function getPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 8000,
-      maximumAge: 0,
-    });
-  });
-}
 
 function isIos(): boolean {
   return (
@@ -52,6 +25,7 @@ export default function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users_queries.me);
   const { signOut } = useAuthActions();
+  const convex = useConvex();
   useEffect(() => {
     if (!isLoading && isAuthenticated && me === null) {
       void signOut().then(() => window.location.reload());
@@ -120,8 +94,14 @@ export default function Home() {
             </span>
             <button
               data-testid="auth-signout"
-              onClick={() => void signOut().then(() => window.location.reload())}
-              className="rounded text-xs text-neutral-500 px-2 py-2.5 underline hover:text-neutral-300"
+              onClick={async () => {
+                try {
+                  await convex.mutation(api.users.archiveMyMasterSession, {});
+                } catch { /* ignore — best-effort archive */ }
+                await signOut();
+                window.location.reload();
+              }}
+              className="min-h-[44px] rounded text-xs text-neutral-500 px-2 py-2.5 underline hover:text-neutral-300"
             >
               Sign out
             </button>
@@ -147,12 +127,12 @@ export default function Home() {
         )}
         {!mustChangePassword && (me.role === "employee" ? (
           <>
-            <EmployeePanel />
+            <CheckInCard variant="live" />
             <MessagesPanel role="employee" />
             <ChangePassword />
           </>
         ) : (
-          <ModeratorLink />
+          <ModeratorHome />
         ))}
         <footer id="privacy" className="mt-auto pt-8 text-sm leading-relaxed text-neutral-400">
           Location is recorded only when you press CHECK IN — never continuous tracking. Raw
@@ -182,11 +162,17 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
           payroll accurately. Retention follows your local labor statute; raw coordinates are
           zeroed after the dispute window. Your data is never sold or used for advertising.
         </p>
+        {/* H9 (2026-08-26): surface the privacy notice inline so users can
+            review data handling before consenting. */}
+        <p className="mb-3 text-xs leading-relaxed text-neutral-500">
+          See full details in our{" "}
+          <a href="/privacy" className="underline hover:text-neutral-300">Privacy Policy</a>.
+        </p>
         <button
           ref={acceptRef}
           data-testid="consent-acknowledge"
           onClick={onAccept}
-          className="w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950"
+          className="w-full min-h-[44px] rounded-md bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-emerald-950"
         >
           I understand
         </button>
@@ -195,276 +181,30 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
   );
 }
 
-function ModeratorLink() {
+function ModeratorHome() {
   return (
-    <a href="/moderator" className="text-emerald-400 underline">
-      Open moderator console →
-    </a>
-  );
-}
-
-function EmployeePanel() {
-  const createLog = useMutation(api.logs.createLog);
-  const issueToken = useMutation(api.users.issueMyDeviceToken);
-  const sites = useQuery(api.sites.listMine);
-  const recentLogs = useQuery(api.logs.listMine);
-  const userLocale = useUserLocale();
-
-  const deviceToken = useRef<string | null>(null);
-  const tokenReady = useRef<Promise<string> | null>(null);
-
-  const getToken = useCallback(async (): Promise<string> => {
-    if (deviceToken.current) return deviceToken.current;
-    if (tokenReady.current) return tokenReady.current;
-    tokenReady.current = (async () => {
-      const stored = localStorage.getItem(TOKEN_KEY);
-      if (stored) {
-        deviceToken.current = stored;
-        return stored;
-      }
-      const t = await issueToken();
-      deviceToken.current = t;
-      localStorage.setItem(TOKEN_KEY, t);
-      return t;
-    })();
-    return tokenReady.current;
-  }, [issueToken]);
-
-  const flushOne = useCallback(
-    async (entry: OutboxEntry) => {
-      await createLog({
-        siteId: entry.siteId as Id<"sites">,
-        clientReportedTime: entry.clientReportedTime,
-        status: entry.status as Status,
-        latitude: entry.latitude,
-        longitude: entry.longitude,
-        accuracyMeters: entry.accuracyMeters,
-        sideMissionDurationMinutes: entry.sideMissionDurationMinutes as
-          | 15
-          | 30
-          | 45
-          | 60
-          | 120
-          | undefined,
-        deviceToken: entry.deviceToken,
-        idempotencyKey: entry.idempotencyKey,
-        deviceMetadata: entry.deviceMetadata,
-      });
-    },
-    [createLog]
-  );
-
-  const { count, enqueue, flush, syncing, lastError } = useOutbox(flushOne);
-
-  const [status, setStatus] = useState<Status>("arrived");
-  const [siteId, setSiteId] = useState<Id<"sites"> | "">("");
-  const [sideMinutes, setSideMinutes] = useState<number>(15);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const pillRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  async function checkIn() {
-    setMessage(null);
-    let token: string;
-    try {
-      token = await getToken();
-    } catch (e) {
-      const m = e instanceof Error ? e.message : "";
-        setMessage(m.includes("DEVICE_ALREADY_ACTIVE")
-          ? "Device already activated — ask your moderator to reset it."
-          : "Device activation failed — reload the page.");
-      return;
-    }
-    try {
-      setBusy(true);
-      const pos = await getPosition();
-      const accuracy = Math.round(pos.coords.accuracy);
-      if (accuracy > 50) {
-        setMessage(`Weak GPS signal (±${accuracy}m). Move to open sky and retry.`);
-        return;
-      }
-      const chosen: Id<"sites"> | "" = siteId || sites?.[0]?._id || "";
-      if (!chosen) {
-        setMessage(
-          sites === undefined
-            ? "Loading your sites…"
-            : "No site assigned — ask your moderator."
-        );
-        return;
-      }
-      const entry: OutboxEntry = {
-        siteId: chosen,
-        clientReportedTime: Date.now(),
-        status,
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracyMeters: accuracy,
-        sideMissionDurationMinutes:
-          status === "quick side mission" ? (sideMinutes as 15 | 30 | 45 | 60 | 120) : undefined,
-        deviceToken: token,
-        idempotencyKey: crypto.randomUUID(),
-        deviceMetadata: navigator.userAgent.slice(0, 200),
-        queuedAt: Date.now(),
-      };
-      if (!navigator.onLine) {
-        await enqueue(entry);
-        setMessage(`Offline — check-in queued (${count + 1} pending).`);
-        return;
-      }
-      try {
-        const result = await createLog({
-          siteId: entry.siteId as Id<"sites">,
-          clientReportedTime: entry.clientReportedTime,
-          status,
-          latitude: entry.latitude,
-          longitude: entry.longitude,
-          accuracyMeters: entry.accuracyMeters,
-          sideMissionDurationMinutes: entry.sideMissionDurationMinutes,
-          deviceToken: token,
-          idempotencyKey: entry.idempotencyKey,
-          deviceMetadata: entry.deviceMetadata,
-        });
-        setMessage(result.duplicate ? "Duplicate ignored." : `Logged ${status}.`);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (/fetch|network|TypeError|Failed/i.test(msg)) {
-          await enqueue(entry);
-          setMessage(`Connection lost — queued (${count + 1} pending).`);
-        } else if (/DEVICE_TOKEN_INVALID/.test(msg)) {
-          localStorage.removeItem(TOKEN_KEY);
-          deviceToken.current = null;
-          tokenReady.current = null;
-          setMessage("Device was reset by moderator — tap CHECK IN again.");
-        } else {
-          setMessage(errMsg(e));
-        }
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setMessage(/denied|permission/i.test(msg) ? "Location permission denied." : msg);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      {sites && sites.length === 0 && (
-        <p className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-300">
-          No site assigned yet. Your moderator must assign you before you can check in.
-        </p>
-      )}
-      <label className="flex flex-col gap-1 text-sm">
-        Site
-        <select
-          value={siteId}
-          onChange={(e) => setSiteId(e.target.value as Id<"sites">)}
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
+    <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
+        Moderator
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--fog)]">
+        You&apos;re running the floor. Check-ins happen on worker accounts — head to the console
+        to provision, assign, and run payroll.
+      </p>
+      <div className="mt-4 flex flex-col gap-1">
+        <a
+          href="/moderator"
+          className="flex min-h-[44px] items-center rounded-lg bg-[var(--mint)] px-4 py-2.5 text-sm font-semibold text-emerald-950"
         >
-          {(sites ?? []).length === 0 && <option value="">No sites assigned</option>}
-          {(sites ?? []).map((s: { _id: Id<"sites">; name: string }) => (
-            <option key={s._id} value={s._id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div
-        role="radiogroup"
-        aria-label="Check-in status"
-        className="flex flex-wrap gap-2"
-        onKeyDown={(e) => {
-          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
-          e.preventDefault();
-          const i = STATUSES.indexOf(status);
-          let next = i;
-          if (e.key === "ArrowLeft") next = (i - 1 + STATUSES.length) % STATUSES.length;
-          else if (e.key === "ArrowRight") next = (i + 1) % STATUSES.length;
-          else if (e.key === "Home") next = 0;
-          else if (e.key === "End") next = STATUSES.length - 1;
-          setStatus(STATUSES[next]);
-          pillRefs.current[next]?.focus();
-        }}
-      >
-        {STATUSES.map((s, i) => (
-          <button
-            key={s}
-            ref={(el) => { pillRefs.current[i] = el; }}
-            role="radio"
-            aria-checked={status === s}
-            tabIndex={status === s ? 0 : -1}
-            onClick={() => setStatus(s)}
-            className={`rounded-full border px-4 py-2 text-sm ${
-              status === s
-                ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                : "border-neutral-800 bg-neutral-900 text-neutral-400"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+          Open moderator console →
+        </a>
+        <a
+          href="/dashboard"
+          className="flex min-h-[44px] items-center rounded-lg border border-[var(--line)] px-4 py-2.5 text-sm text-[var(--paper)]"
+        >
+          Logging dashboard →
+        </a>
       </div>
-      {status === "quick side mission" && (
-        <label className="flex items-center gap-2 text-sm">
-          Duration
-          <select
-            value={sideMinutes}
-            onChange={(e) => setSideMinutes(Number(e.target.value))}
-            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
-          >
-            {[15, 30, 45, 60, 120].map((m) => (
-              <option key={m} value={m}>
-                {m} min
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <button
-        data-testid="checkin-submit"
-        onClick={checkIn}
-        disabled={busy}
-        className="h-16 rounded-xl bg-emerald-500 text-lg font-bold text-emerald-950 transition hover:bg-emerald-400 disabled:opacity-50"
-      >
-        {busy ? "Logging…" : "CHECK IN"}
-      </button>
-      {message && <p className="text-center text-sm text-neutral-300">{message}</p>}
-      {lastError && <p className="text-center text-sm text-red-400">{lastError}</p>}
-      {count > 0 && (
-        <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-          <span>{count} check-in{count === 1 ? "" : "s"} queued offline</span>
-          <button
-            data-testid="outbox-sync"
-            onClick={() => void flush()}
-            disabled={syncing}
-            className="underline disabled:opacity-50"
-          >
-            {syncing ? "Syncing…" : "Sync now"}
-          </button>
-        </div>
-      )}
-      {(recentLogs ?? []).length > 0 && (
-        <section className="mt-4">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent</h2>
-          <ul className="flex flex-col gap-1">
-            {recentLogs!.slice(0, 10).map((log: { _id: string; status: string; isWithinGeofence: boolean; impossibleTravelFlag?: boolean; _creationTime: number }) => (
-              <li
-                key={log._id}
-                data-testid="checkin-verdict"
-                data-verdict={log.isWithinGeofence ? (log.impossibleTravelFlag ? "travel" : "inside") : "outside"}
-                className="flex items-center justify-between rounded-md bg-neutral-900 px-3 py-1.5 text-sm"
-              >
-                <span>{log.status}</span>
-                <span className="text-neutral-500">
-                  {formatTime(log._creationTime, userLocale)}
-                  {!log.isWithinGeofence && " · outside geofence"}
-                  {log.impossibleTravelFlag && " · travel flag"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
+    </section>
   );
 }

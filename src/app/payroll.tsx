@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
@@ -30,16 +30,33 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
-  const fromMs = Date.now() - range * 24 * 3600 * 1000;
+  // Stable query args: Date.now() inside the args literal produced a new
+  // value every render, which changes the JSON.stringify cache key Convex
+  // useQuery uses, which re-issues the query, which re-renders — an
+  // infinite loop ("Maximum update depth exceeded" on /moderator).
+  // Snapshot the window once per (range) change instead.
+  const fromMs = useMemo(
+    () => Date.now() - range * 24 * 3600 * 1000,
+    [range],
+  );
+  const toMs = useMemo(() => Date.now() + 3600_000, [range]);
+  const payrollArgs = useMemo(
+    () => (userId ? { userId, fromMs, toMs } : "skip"),
+    [userId, fromMs, toMs],
+  );
   const result = useQuery(
     api.payroll.calcForEmployee,
-    userId ? ({ userId, fromMs, toMs: Date.now() + 3600_000 } as never) : "skip"
+    payrollArgs as never,
   ) as PayrollResult | undefined;
   const me = useQuery(api.users_queries.me);
   const myLocale = me?.locale;
+  const jurisdictionArgs = useMemo(
+    () => ({ locale: myLocale }),
+    [myLocale],
+  );
   const supported = useQuery(
     api.payroll.listJurisdictionsForLocale,
-    myLocale ? ({ locale: myLocale } as never) : ({ locale: undefined } as never)
+    jurisdictionArgs as never,
   ) as SupportedStrategy[] | undefined;
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
@@ -110,7 +127,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
               const out = await exportLogsCsv({
                 userId: userId as Id<"users">,
                 fromMs,
-                toMs: Date.now() + 3600_000,
+                toMs,
               });
               download(out.filename, out.csv);
             }}

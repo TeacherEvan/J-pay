@@ -11,6 +11,7 @@ export default defineSchema({
     emailVerificationTime: v.optional(v.number()),
     image: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
+    isMasterTemp: v.optional(v.boolean()),
     role: v.union(v.literal("moderator"), v.literal("employee")),
     isActive: v.boolean(),
     passwordChangedAt: v.optional(v.number()),
@@ -111,14 +112,23 @@ export default defineSchema({
     retentionDays: v.optional(v.number()),
   })
     .index("by_recipient_read", ["recipientId", "isRead"])
-    .index("by_modqueue_unread", ["modQueue", "isRead"]),
+    .index("by_modqueue_unread", ["modQueue", "isRead"])
+    .index("by_sender", ["senderId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     endpoint: v.string(),
     keysP256dh: v.string(),
     keysAuth: v.string(),
+    lastErrorAt: v.optional(v.number()),
+    consecutiveErrors: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+
+  purgeAudit: defineTable({
+    purgedAt: v.number(),
+    purgedCount: v.number(),
+    kind: v.union(v.literal("coordinates"), v.literal("messages"), v.literal("masterTemps")),
+  }).index("by_purged_at", ["purgedAt"]),
 
   reviewResolutions: defineTable({
     userId: v.id("users"),

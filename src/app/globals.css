@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+:root {
+  --ink: #0b0e14;
+  --panel: #141927;
+  --panel-2: #10151f;
+  --line: #26304a;
+  --hivis: #ffb224;
+  --mint: #34d399;
+  --fog: #8b95ac;
+  --paper: #eef2f9;
+}
+
 @layer base {
   a:focus-visible,
   button:focus-visible,
@@ -9,6 +20,34 @@
   summary:focus-visible,
   [tabindex]:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #34d399;
+    box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--mint);
+  }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+  }
+}
+
+/* Time-clock numerals: timer, money, distances */
+.tnum {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Live dot on the shift card — suppressed for reduced motion */
+@keyframes jpay-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.pulse-dot {
+  animation: jpay-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
   }
 }

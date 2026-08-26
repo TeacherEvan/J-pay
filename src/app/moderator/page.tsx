@@ -46,10 +46,15 @@ export default function ModeratorPage() {
       <KpiBanner />
       <header className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Moderator console</h1>
-        <Link href="/" className="text-xs text-neutral-400 underline">
-          employee view
-        </Link>
-        <ChangePassword />
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard" className="min-h-[44px] inline-flex items-center rounded border border-neutral-700 px-3 py-2.5 text-xs text-emerald-400 underline hover:text-emerald-300">
+            Logging dashboard →
+          </Link>
+          <Link href="/" className="min-h-[44px] inline-flex items-center text-xs text-neutral-400 underline">
+            employee view
+          </Link>
+          <ChangePassword />
+        </div>
       </header>
 
       <section className="grid gap-6 md:grid-cols-2">

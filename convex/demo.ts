@@ -209,6 +209,12 @@ export const bindReviewer = mutation({
         updatedAt: now,
       });
     }
+    // B2 (2026-08-26): ensure persona has site assignments before the
+    // CheckInPanel tries to render a site picker. Idempotent — safe to
+    // call on every bind.
+    await ctx.runMutation(internal.demo.ensurePersonaSiteAssignments, {
+      personaUserId: persona._id,
+    });
     return { userId, personaUserId: persona._id, personaName: persona.name ?? args.personaEmail };
   },
 });
@@ -225,6 +231,10 @@ export const getBinding = query({
       personaUserId: binding.personaUserId,
       personaEmail: binding.personaEmail,
       personaName: persona?.name ?? binding.personaEmail,
+      personaHasSites: (await ctx.db
+        .query("userSites")
+        .withIndex("by_user", (q) => q.eq("userId", binding.personaUserId))
+        .first()) !== null,
     };
   },
 });
@@ -628,5 +638,56 @@ export const purgeStaleReviewers = internalMutation({
       purged++;
     }
     return { purged };
+  },
+});
+
+/**
+ * B2 (2026-08-26): ensure a persona user has userSites rows for every
+ * active site. Called idempotently by bindReviewer/getBinding so demo
+ * personas always have site assignments even if the original seeder
+ * didn't backfill them.
+ */
+export const ensurePersonaSiteAssignments = internalMutation({
+  args: { personaUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    const sites = await ctx.db
+      .query("sites")
+      .filter((q) => q.eq(q.field("archivedAt"), undefined))
+      .collect();
+    const existing = await ctx.db
+      .query("userSites")
+      .withIndex("by_user", (q) => q.eq("userId", args.personaUserId))
+      .collect();
+    const assignedSiteIds = new Set(existing.map((a) => a.siteId));
+    let created = 0;
+    for (const site of sites) {
+      if (!assignedSiteIds.has(site._id)) {
+        await ctx.db.insert("userSites", { userId: args.personaUserId, siteId: site._id });
+        created++;
+      }
+    }
+    return created;
+  },
+});
+
+/**
+ * B2: return the persona's assigned active sites for the CheckInPanel.
+ * Only one site in the full-payroll demo, but this is the correct query
+ * regardless.
+ */
+export const boundPersonaSites = query({
+  args: {},
+  handler: async (ctx) => {
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const assignments = await ctx.db
+      .query("userSites")
+      .withIndex("by_user", (q) => q.eq("userId", personaUserId))
+      .collect();
+    const sites = [];
+    for (const a of assignments) {
+      const site = await ctx.db.get(a.siteId);
+      if (site && site.archivedAt === undefined) sites.push(site);
+    }
+    return sites;
   },
 });

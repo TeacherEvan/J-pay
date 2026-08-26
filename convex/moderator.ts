@@ -3,6 +3,8 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator, maybeCurrentUserId } from "./access";
 import { internal } from "./_generated/api";
+import { isDemoUser, isDemoLog } from "./demo_scope";
+import type { Id } from "./_generated/dataModel";
 
 export const auditRecentLogs = query({
   args: { limit: v.optional(v.number()) },
@@ -18,11 +20,16 @@ export const auditRecentLogs = query({
       )
       .order("desc")
       .take(args.limit ?? 100);
+    // Owner directive 2026-08-26: real moderator logins must never surface
+    // demo/seeded rows. Filter them out before the N+1 user/site lookups so
+    // the take() limit applies to real rows only.
+    const realLogs = logs.filter((l) => !isDemoLog(l));
     const lookups = await Promise.all(
-        logs.map((log) => Promise.all([ctx.db.get(log.userId), ctx.db.get(log.siteId)]))
+        realLogs.map((log) => Promise.all([ctx.db.get(log.userId), ctx.db.get(log.siteId)]))
     );
     const out = [];
-    for (const [log, [user, site]] of zip(logs, lookups)) {
+    for (const [log, [user, site]] of zip(realLogs, lookups)) {
+      if (user && isDemoUser(user)) continue;
       out.push({
         _id: log._id,
         status: log.status,
@@ -52,11 +59,18 @@ export const auditNeedsReview = query({
     if (!modId) return [];
     const mod = await ctx.db.get(modId);
     if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
-    return await ctx.db
+    const flagged = await ctx.db
       .query("shifts")
       .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
       .order("desc")
       .take(50);
+    const out = [];
+    for (const s of flagged) {
+      const u = await ctx.db.get(s.userId);
+      if (u && isDemoUser(u)) continue;
+      out.push(s);
+    }
+    return out;
   },
 });
 
@@ -76,13 +90,21 @@ export const listEmployeesWithAssignments = query({
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .collect();
     const allAssignments = await ctx.db.query("userSites").collect();
-    const byUser = new Map<string, string[]>();
+    const byUser = new Map<string, Id<"sites">[]>();
     for (const a of allAssignments) {
       (byUser.get(a.userId) ?? byUser.set(a.userId, []).get(a.userId)!).push(a.siteId);
     }
     const out = [];
     for (const e of employees) {
+      // Owner directive 2026-08-26: demo reviewers, seeded personas, and
+      // e2e-provisioned users never appear in a real moderator's roster.
+      if (isDemoUser(e)) continue;
       const assignments = byUser.get(e._id) ?? [];
+      const siteNames: string[] = [];
+      for (const siteId of assignments) {
+        const site = await ctx.db.get(siteId);
+        if (site && "name" in site) siteNames.push(site.name);
+      }
       out.push({
         _id: e._id,
         name: e.name,
@@ -93,6 +115,7 @@ export const listEmployeesWithAssignments = query({
         hourlyRateOverride: e.hourlyRateOverride,
         locale: e.locale,
         assignedSiteIds: assignments,
+        siteNames,
       });
     }
     return out;
@@ -106,7 +129,14 @@ export const listAllSites = query({
     if (!modId) return [];
     const mod = await ctx.db.get(modId);
     if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
-    return await ctx.db.query("sites").collect();
+    const sites = await ctx.db.query("sites").collect();
+    const out = [];
+    for (const s of sites) {
+      const creator = await ctx.db.get(s.createdBy);
+      if (creator && isDemoUser(creator)) continue;
+      out.push(s);
+    }
+    return out;
   },
 });
 

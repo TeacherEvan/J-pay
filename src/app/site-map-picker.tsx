@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type * as LType from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useAction } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 type Hit = { display_name: string; lat: string; lon: string };
 
@@ -25,6 +27,7 @@ export function SiteMapPicker({
   const [hits, setHits] = useState<Hit[]>([]);
   const [searching, setSearching] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geocode = useAction(api.geocode.geocode);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,10 +81,8 @@ export function SiteMapPicker({
     debounce.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`
-        );
-        setHits(await res.json());
+        const data = await geocode({ query: q });
+        setHits(data as Hit[]);
       } catch {
         setHits([]);
       } finally {

@@ -24,7 +24,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-dvh bg-neutral-950 text-neutral-100 antialiased">
+      <body className="min-h-dvh bg-[var(--ink)] text-[var(--paper)] antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

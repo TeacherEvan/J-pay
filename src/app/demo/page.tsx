@@ -1,23 +1,13 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errMsg } from "@/lib/errors";
 import { formatCurrency } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
-
-const STATUSES = [
-  "arrived",
-  "checkpoint",
-  "lunch",
-  "quick side mission",
-  "feeling sick",
-  "day finish",
-  "job finish",
-] as const;
-type Status = (typeof STATUSES)[number];
+import { CheckInCard } from "../check-in-card";
 
 function formatMinutes(m: number) {
   const h = Math.floor(m / 60);
@@ -52,7 +42,7 @@ export default function DemoPage() {
   const needsReview = useQuery(api.demo.demoNeedsReview);
   const audit = useQuery(api.demo.demoAudit, { limit: 50 });
   const roster = useQuery(api.demo.demoEmployeeRoster);
-  const sites = useQuery(api.sites.listMine);
+  const sites = useQuery(api.demo.boundPersonaSites);
   const inbox = useQuery(api.demo.demoModeratorInbox);
   const userLocale = useUserLocale();
   const personaLocale = payroll?.locale ?? userLocale;
@@ -60,6 +50,8 @@ export default function DemoPage() {
   return (
     <div className="flex flex-col gap-8" data-testid="demo-page">
       <PersonaHeader binding={binding} />
+
+      <CheckInCard variant="persona" />
 
       <section data-testid="demo-kpi-banner">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">KPIs (persona-scoped)</h2>
@@ -76,7 +68,6 @@ export default function DemoPage() {
       <AuditTable logs={audit ?? undefined} personaLocale={personaLocale} />
       <MessagesSection inbox={inbox ?? undefined} personaLocale={personaLocale} />
       <RosterList users={roster ?? undefined} />
-      <CheckInPanel sites={sites} personaLocale={personaLocale} />
       <ExportPanel />
     </div>
   );
@@ -279,136 +270,6 @@ function MessagesSection({ inbox, personaLocale }: { inbox: { _id: string; conte
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-function CheckInPanel({ sites, personaLocale }: { sites: { _id: string; name: string; latitude: number; longitude: number; geofenceRadiusMeters: number }[] | undefined; personaLocale: string }) {
-  const checkIn = useAction(api.demo.checkInAsPersona);
-  const recent = useQuery(api.demo.boundPersonaLogs);
-  const [status, setStatus] = useState<Status>("arrived");
-  const [sideMinutes, setSideMinutes] = useState<number>(30);
-  const [siteId, setSiteId] = useState<string>("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!siteId && sites && sites.length > 0) {
-      setSiteId(sites[0]!._id);
-    }
-  }, [siteId, sites]);
-
-  const personaSites = useMemo(() => {
-    return (sites ?? []).slice(0, 3);
-  }, [sites]);
-
-  async function doCheckIn() {
-    setMessage(null);
-    if (!siteId) {
-      setMessage("Pick a site first.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const chosen = personaSites.find((s) => s._id === siteId) ?? personaSites[0];
-      if (!chosen) {
-        setMessage("No sites available.");
-        return;
-      }
-      const result = await checkIn({
-        siteId: chosen._id as Id<"sites">,
-        clientReportedTime: Date.now(),
-        status,
-        latitude: chosen.latitude,
-        longitude: chosen.longitude,
-        accuracyMeters: 18,
-        sideMissionDurationMinutes: status === "quick side mission" ? (sideMinutes as 15 | 30 | 45 | 60 | 120) : undefined,
-        deviceToken: "demo-device-token",
-        idempotencyKey: crypto.randomUUID(),
-        deviceMetadata: "demo-reviewer-checkin",
-      });
-      setMessage(
-        result.duplicate
-          ? "Already logged (duplicate ignored)."
-          : `Logged as persona: ${status} at ${chosen.name}.`
-      );
-    } catch (e) {
-      setMessage(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section data-testid="demo-checkin" className="rounded-lg border border-neutral-800 p-4">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">Try a check-in as the persona</h2>
-      <div className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm text-neutral-300">
-          Site
-          <select
-            value={siteId}
-            onChange={(e) => setSiteId(e.target.value)}
-            className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-2.5 text-sm"
-          >
-            {personaSites.map((s) => (
-              <option key={s._id} value={s._id}>{s.name}</option>
-            ))}
-          </select>
-        </label>
-        <div className="flex flex-wrap gap-1">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatus(s)}
-              className={`rounded-full border px-3 py-2.5 text-sm ${
-                status === s
-                  ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                  : "border-neutral-800 bg-neutral-900 text-neutral-400"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-        {status === "quick side mission" && (
-          <label className="flex items-center gap-2 text-sm">
-            Duration
-            <select
-              value={sideMinutes}
-              onChange={(e) => setSideMinutes(Number(e.target.value))}
-              className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-2.5 text-sm"
-            >
-              {[15, 30, 45, 60, 120].map((m) => (
-                <option key={m} value={m}>{m} min</option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button
-          type="button"
-          onClick={() => void doCheckIn()}
-          disabled={busy}
-          className="h-12 rounded-md bg-emerald-500 text-sm font-bold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
-          data-testid="demo-checkin-button"
-        >
-          {busy ? "Logging…" : "CHECK IN as persona"}
-        </button>
-        {message && <p className="text-center text-sm text-neutral-300" data-testid="demo-checkin-message">{message}</p>}
-        {(recent ?? []).length > 0 && (
-          <div className="mt-2">
-            <p className="mb-1 text-sm text-neutral-500">Recent (persona)</p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {recent!.slice(0, 5).map((l) => (
-                <li key={l._id} className="flex items-center justify-between rounded-md bg-neutral-900 px-2 py-1">
-                  <span>{l.status}</span>
-                  <span className="text-neutral-500">{formatMsTime(l.clientReportedTime, personaLocale)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
     </section>
   );
 }

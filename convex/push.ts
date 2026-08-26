@@ -31,10 +31,15 @@ export const pushToUser = internalAction({
           { endpoint: sub.endpoint, keys: { p256dh: sub.keysP256dh, auth: sub.keysAuth } },
           JSON.stringify({ title: args.title, body: args.body })
         );
+        // H4 (2026-08-26): reset consecutive error counter on success.
+        await ctx.runMutation(internal.push_subs.resetSubscriptionErrors, { id: sub._id });
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
           await ctx.runMutation(internal.push_subs.removeSubscription, { id: sub._id });
+        } else {
+          // H4: transient failure — record; prunes after MAX_CONSECUTIVE_ERRORS.
+          await ctx.runMutation(internal.push_subs.recordSubscriptionError, { id: sub._id });
         }
       }
     }

@@ -50,3 +50,32 @@ export const removeSubscription = internalMutation({
     await ctx.db.delete(args.id);
   },
 });
+
+/**
+ * H4 (2026-08-26): when a send fails with a transient error (not 404/410),
+ * record the error. If 5+ consecutive errors accumulate, prune the
+ * subscription to avoid repeated futile pushes.
+ */
+const MAX_CONSECUTIVE_ERRORS = 5;
+export const recordSubscriptionError = internalMutation({
+  args: { id: v.id("pushSubscriptions") },
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.id);
+    if (!sub) return;
+    const next = (sub.consecutiveErrors ?? 0) + 1;
+    if (next >= MAX_CONSECUTIVE_ERRORS) {
+      await ctx.db.delete(args.id);
+    } else {
+      await ctx.db.patch(args.id, { consecutiveErrors: next, lastErrorAt: Date.now() });
+    }
+  },
+});
+
+export const resetSubscriptionErrors = internalMutation({
+  args: { id: v.id("pushSubscriptions") },
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.id);
+    if (!sub || !sub.consecutiveErrors) return;
+    await ctx.db.patch(args.id, { consecutiveErrors: 0, lastErrorAt: undefined });
+  },
+});

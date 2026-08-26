@@ -1,8 +1,9 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator, currentUserId } from "./access";
+import { isDemoUser } from "./demo_scope";
 
 function validContent(content: string): string {
   const text = content.trim();
@@ -80,6 +81,12 @@ export const replyToEmployee = mutation({
   handler: async (ctx, args) => {
     const moderatorId = await requireModerator(ctx);
     const text = validContent(args.content);
+    // H3 (2026-08-26): validate recipient exists, is a real employee, and is
+    // active. Prevents silent message black-holes and leaked employee IDs.
+    const recipient = await ctx.db.get(args.recipientId);
+    if (!recipient || recipient.role !== "employee" || !recipient.isActive || recipient.archivedAt !== undefined) {
+      throw new ConvexError("INVALID_RECIPIENT");
+    }
     await ctx.db.insert("messages", {
       senderId: moderatorId,
       recipientId: args.recipientId,
@@ -106,6 +113,7 @@ export const broadcast = mutation({
       .collect();
     for (const e of employees) {
       if (e.archivedAt !== undefined || !e.isActive) continue;
+      if (isDemoUser(e)) continue;
       await ctx.db.insert("messages", {
         senderId: moderatorId,
         recipientId: e._id,
@@ -114,6 +122,39 @@ export const broadcast = mutation({
         isRead: false,
       });
     }
+  },
+});
+
+/**
+ * H6 (2026-08-26): archive messages whose age exceeds their per-row
+ * retentionDays. Rows without retentionDays are untouched (default policy
+ * is an open question per TRD §11).
+ */
+const MSG_RETENTION_DEFAULT_DAYS = 90;
+export const purgeExpiredMessages = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const batchSize = 200;
+    let purged = 0;
+    let cursor: string | undefined;
+    while (true) {
+      const page = await ctx.db.query("messages").paginate({ cursor: cursor ?? null, numItems: batchSize });
+      for (const m of page.page) {
+        const retentionDays = m.retentionDays ?? MSG_RETENTION_DEFAULT_DAYS;
+        const ageMs = now - m._creationTime;
+        if (ageMs > retentionDays * 86_400_000) {
+          await ctx.db.patch(m._id, { archivedAt: now });
+          purged++;
+        }
+      }
+      if (page.isDone) break;
+      cursor = page.continueCursor;
+    }
+    if (purged > 0) {
+      await ctx.db.insert("purgeAudit", { purgedAt: now, purgedCount: purged, kind: "messages" });
+    }
+    return purged;
   },
 });
 

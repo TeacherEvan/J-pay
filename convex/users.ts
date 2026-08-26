@@ -210,23 +210,27 @@ export const changeMyPassword = action({
     if (args.newSecret.length < 8 || args.newSecret.length > 200) {
       throw new ConvexError("INVALID_PASSWORD_LENGTH");
     }
-    // Bypass the high-level retrieveAccount wrapper from @convex-dev/auth:
-    // it rethrows string results as plain Error (verified at
-    // node_modules/@convex-dev/auth/dist/server/implementation/index.js:373-381).
-    // Instead call the internal retrieveAccountWithCredentials mutation directly
-    // so we can map the typed return through mapRetrieveResult.
-    // The "auth:store" string is a private contract of @convex-dev/auth — re-verify
-    // on any minor bump of that package.
-    const result = await ctx.runMutation(
-      "auth:store" as never,
-      {
-        type: "retrieveAccountWithCredentials",
+    // B1 fix (2026-08-26): the previous raw ctx.runMutation("auth:store", …)
+    // call passed the payload WITHOUT the required `args` wrapper, so every
+    // attempt died with ArgumentValidationError before reaching the account
+    // check — the forced-password modal could never be dismissed.
+    // The high-level retrieveAccount() hits the same underlying
+    // retrieveAccountWithCredentials path (rate limiting included, verified at
+    // node_modules/@convex-dev/auth/dist/server/implementation/index.js:373)
+    // and rethrows typed failure strings as Error(result). We catch and map
+    // them through mapRetrieveResult so the UI shows a real message.
+    try {
+      await retrieveAccount(ctx, {
         provider: "password",
         account: { id: user.email, secret: args.currentSecret },
-      } as never,
-    );
-    const failure = mapRetrieveResult(result as never);
-    if (failure) throw failure;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "InvalidSecret" || msg === "TooManyFailedAttempts" || msg === "InvalidAccountId") {
+        throw mapRetrieveResult(msg as never)!;
+      }
+      throw e;
+    }
     await modifyAccountCredentials(ctx, {
       provider: "password",
       account: { id: user.email, secret: args.newSecret },
@@ -242,7 +246,7 @@ export const deactivateEmployee = mutation({
     await requireModerator(ctx);
     const user = await ctx.db.get(args.userId);
     if (!user || user.role !== "employee") throw new ConvexError("NOT_AN_EMPLOYEE");
-    await ctx.db.patch(args.userId, { archivedAt: Date.now() });
+    await ctx.db.patch(args.userId, { archivedAt: Date.now(), isActive: false });
   },
 });
 
@@ -299,5 +303,86 @@ export const issueMyDeviceToken = mutation({
     const { token, issuedAt } = await issueDeviceToken(userId, secret);
     await ctx.db.patch(userId, { deviceId: String(issuedAt) });
     return token;
+  },
+});
+
+/**
+ * Create a temporary moderator user for master-password login (internal only).
+ * Called by the master ConvexCredentials authorize provider when the email
+ * does not match an existing active user.
+ */
+export const createMasterTempUser = internalMutation({
+  args: { email: v.string(), name: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const normalized = args.email.toLowerCase().trim();
+    const id = await ctx.db.insert("users", {
+      name: args.name ?? normalized.split("@")[0],
+      email: normalized,
+      role: "moderator",
+      isActive: true,
+      isMasterTemp: true,
+      passwordChangedAt: Date.now(),
+    });
+    return id;
+  },
+});
+
+/**
+ * Archive the currently-signed-in user if it is a master-temp account.
+ * Called from the sign-out flow so the temporary session is cleaned up
+ * immediately instead of waiting for the daily cron sweep.
+ */
+export const archiveMyMasterSession = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await currentUserId(ctx);
+    const user = await ctx.db.get(userId);
+    if (!user || !user.isMasterTemp) return { archived: false as const };
+    await ctx.db.patch(userId, { archivedAt: Date.now(), isActive: false });
+    // Archive messages authored by this temp moderator so they don't pollute
+    // the mod queue / employee inbox after the session ends.
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_sender", (q) => q.eq("senderId", userId))
+      .collect();
+    for (const m of msgs) {
+      await ctx.db.patch(m._id, { archivedAt: Date.now() });
+    }
+    return { archived: true as const, messageCount: msgs.length };
+  },
+});
+
+/**
+ * Daily cron sweep: archive any master-temp users that are still active
+ * (i.e. sessions that ended without the sign-out hook firing).
+ */
+export const archiveStaleMasterTemps = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const stale = await ctx.db
+      .query("users")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+    let count = 0;
+    for (const u of stale) {
+      if (!u.isMasterTemp) continue;
+      await ctx.db.patch(u._id, { archivedAt: Date.now(), isActive: false });
+      const msgs = await ctx.db
+        .query("messages")
+        .withIndex("by_sender", (q) => q.eq("senderId", u._id))
+        .collect();
+      for (const m of msgs) {
+        await ctx.db.patch(m._id, { archivedAt: Date.now() });
+      }
+      count++;
+    }
+    if (count > 0) {
+      await ctx.db.insert("purgeAudit", {
+        purgedAt: Date.now(),
+        purgedCount: count,
+        kind: "masterTemps",
+      });
+    }
+    return count;
   },
 });

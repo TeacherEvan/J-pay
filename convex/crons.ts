@@ -15,4 +15,16 @@ crons.daily(
   internal.demo.purgeStaleReviewers
 );
 
+crons.daily(
+  "archive-stale-master-temps",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.users.archiveStaleMasterTemps
+);
+
+crons.daily(
+  "purge-expired-messages",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.messages.purgeExpiredMessages
+);
+
 export default crons;
