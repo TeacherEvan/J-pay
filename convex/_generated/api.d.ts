@@ -26,6 +26,7 @@ import type * as messages from "../messages.js";
 import type * as moderator from "../moderator.js";
 import type * as payroll from "../payroll.js";
 import type * as payroll_data from "../payroll_data.js";
+import type * as punches from "../punches.js";
 import type * as push from "../push.js";
 import type * as push_subs from "../push_subs.js";
 import type * as shifts from "../shifts.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   moderator: typeof moderator;
   payroll: typeof payroll;
   payroll_data: typeof payroll_data;
+  punches: typeof punches;
   push: typeof push;
   push_subs: typeof push_subs;
   shifts: typeof shifts;
