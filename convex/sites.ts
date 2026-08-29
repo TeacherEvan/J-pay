@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId } from "./access";
+import { requireModerator, maybeCurrentUserId, requireEmployee } from "./access";
 import type { Id } from "./_generated/dataModel";
 import { isDemoUser } from "./demo_scope";
 
@@ -35,6 +35,25 @@ export const listMine = query({
       sites.push(site);
     }
     return sites;
+  },
+});
+
+export const getSiteForPunch = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireEmployee(ctx);
+    const assignments = await ctx.db
+      .query("userSites")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const a of assignments) {
+      const site = await ctx.db.get(a.siteId);
+      if (!site || site.archivedAt !== undefined) continue;
+      const creator = await ctx.db.get(site.createdBy);
+      if (creator && isDemoUser(creator)) continue;
+      return site;
+    }
+    return null;
   },
 });
 
