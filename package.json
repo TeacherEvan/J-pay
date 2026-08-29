@@ -11,7 +11,7 @@
     "e2e": "node scripts/e2e-full.mjs",
     "e2e:rich": "node scripts/e2e-demo-rich.mjs",
     "e2e:all": "node scripts/e2e-all.mjs",
-    "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs scripts/test-change-password-errors.mjs scripts/test-err-msg.mjs scripts/test-demo-access.mjs scripts/test-demo-rich.mjs scripts/test-next-build-artifacts.mjs && node --experimental-strip-types scripts/test-csv.mjs"
+    "test": "node --experimental-strip-types --no-warnings --import ./scripts/register-ts-ext.mjs --test scripts/test-shift-engine.mjs scripts/test-device-tokens.mjs scripts/test-geo.mjs scripts/test-payroll-strategies.mjs scripts/test-change-password-errors.mjs scripts/test-err-msg.mjs scripts/test-demo-access.mjs scripts/test-demo-rich.mjs scripts/test-next-build-artifacts.mjs scripts/test-punch-mutation.mjs && node --experimental-strip-types scripts/test-csv.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",
@@ -33,7 +33,8 @@
     "@types/web-push": "^3.6.4",
     "puppeteer-core": "^25.8.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "~5.9.0"
+    "typescript": "~5.9.0",
+    "@playwright/test": "^1.52.0"
   },
   "overrides": {
     "@auth/core": "^0.41.3",
