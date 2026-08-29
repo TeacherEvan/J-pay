@@ -1,4 +1,4 @@
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 
 // ---------------------------------------------------------------------------
 // Demo/seed row detection — used to keep mock data out of real-moderator

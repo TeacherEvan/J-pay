@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator, currentUserId } from "./access";
-import { isDemoUser } from "./demo_scope";
+import { isDemoUser } from "./demo/scope";
 
 function validContent(content: string): string {
   const text = content.trim();

@@ -140,7 +140,7 @@ test("G: demoReplyToEmployee rejects isAnonymous recipient (OUT_OF_DEMO_SCOPE)",
   const { fileURLToPath } = await import("node:url");
   const { dirname, resolve } = await import("node:path");
   const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(resolve(here, "../convex/demo.ts"), "utf8");
+  const src = readFileSync(resolve(here, "../convex/demo/index.ts"), "utf8");
   const replyBlock = src.slice(
     src.indexOf("export const demoReplyToEmployee"),
     src.indexOf("export const demoMarkQueueItemRead")
@@ -157,7 +157,7 @@ test("H: demoReplyToEmployee rejects non-employee recipient (OUT_OF_DEMO_SCOPE)"
   const { fileURLToPath } = await import("node:url");
   const { dirname, resolve } = await import("node:path");
   const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(resolve(here, "../convex/demo.ts"), "utf8");
+  const src = readFileSync(resolve(here, "../convex/demo/index.ts"), "utf8");
   const replyBlock = src.slice(
     src.indexOf("export const demoReplyToEmployee"),
     src.indexOf("export const demoMarkQueueItemRead")
@@ -170,7 +170,7 @@ test("I: demoMarkQueueItemRead rejects messages not from the bound persona", asy
   const { fileURLToPath } = await import("node:url");
   const { dirname, resolve } = await import("node:path");
   const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(resolve(here, "../convex/demo.ts"), "utf8");
+  const src = readFileSync(resolve(here, "../convex/demo/index.ts"), "utf8");
   const markBlock = src.slice(
     src.indexOf("export const demoMarkQueueItemRead"),
     src.indexOf("export const demoResolveShift")

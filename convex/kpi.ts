@@ -1,7 +1,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireModerator } from "./access";
-import { isDemoUser } from "./demo_scope";
+import { isDemoUser } from "./demo/scope";
 
 export const summary = query({
   args: {},

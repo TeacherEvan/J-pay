@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator, maybeCurrentUserId, requireEmployee } from "./access";
 import type { Id } from "./_generated/dataModel";
-import { isDemoUser } from "./demo_scope";
+import { isDemoUser } from "./demo/scope";
 
 export const listMine = query({
   args: {},

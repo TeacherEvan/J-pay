@@ -32,6 +32,15 @@ public/swe-worker*.js
 user-review/
 .vercel
 
+# Playwright test artifacts
+playwright-report/
+test-results/
+
+# Backup/scratch files
+*.bak
+.deploy-note-*.md
+docs/.scratch-audit/
+
 # Surgical-pruning toolkit artifacts (dry-run output, not source)
 .prune/
 surgical-pruning-*.html

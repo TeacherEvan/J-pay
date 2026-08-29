@@ -5,7 +5,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./demo_sites";
+import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./demo/sites";
 
 const demoEnabled = process.env.DEMO_MODE === "1";
 

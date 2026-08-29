@@ -550,6 +550,12 @@ stateDiagram-v2
 11. **Turbopack adoption for production builds** (deferred from R37). Serwist 10 stable + Turbopack support will let us drop the `next build --webpack` flag and the `outputFileTracingRoot` workaround. Track https://github.com/serwist/serwist/issues/54. Until then, `next dev` runs Turbopack (with a Serwist warning) and `next build` runs webpack (clean). If a stable Serwist 10 ships with Turbopack support, plan a D3 upgrade.
 12. **Master-password security posture** (R38). The `MASTER_PASSWORD` env var is a single shared secret that opens temporary moderator sessions for any email. Currently stored only in Convex env — rotates per-deployment. Consider adding: per-user rate limiting on master login, audit logging of master sessions, optional IP allowlist, or a short-lived token exchange instead of a static password. For production deployments, the master password MUST be rotated per-client and shared only with authorized moderators.
 
+13. **Schema drift: `punches` table** (convex/schema.ts:49–58) exists in implementation but is absent from TRD §6. This table supports a separate "punch-clock" UI (`/punch` route) with simple in/out semantics (TRD §5.1 only specifies the richer CHECK-IN badge flow). The `punches` feature is a simpler alternative; decision needed on whether to keep both, merge, or remove.
+
+14. **Schema drift: `demoSessions` table** (convex/schema.ts:151–159) and `logs.createdByDemoReviewerId` (schema.ts:93) exist for demo/persona preview mode. These are NOT in TRD §6. They are guarded by `DEMO_MODE=1` env var and gated by `requireDemoReviewer` (access.ts:41–63). Decision needed: document as demo-only in TRD, or remove from production schema.
+
+15. **Schema drift: `users` table fields** — TRD §6 lists mandatory `name: v.string()`, `email: v.string()` but actual schema (via `...authTables` spread from `@convex-dev/auth`) makes them optional and adds `emailVerificationTime`, `image`, `isAnonymous`, plus app-specific `payStrategy`, `locale`. The `authTables` spread is required by Convex Auth; this is a framework constraint. TRD should be updated to reflect the actual generated schema.
+
 ---
 
 *End of document.*

@@ -1,19 +1,25 @@
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { api, internal } from "./_generated/api";
-import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./demo_sites";
-import { requireDemoReviewer } from "./access";
-import { localDayKey } from "../src/lib/shift-engine";
-import { computePay, type PayStrategyName } from "../src/lib/payroll-strategies";
-import { toCsv } from "../src/lib/csv";
-import { jpayConfig } from "../src/config/jpay.config";
+import { api, internal } from "../_generated/api";
+import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./sites";
+import { requireDemoReviewer } from "../access";
+import { localDayKey } from "../../src/lib/shift-engine";
+import { computePay, type PayStrategyName } from "../../src/lib/payroll-strategies";
+import { toCsv } from "../../src/lib/csv";
+import { jpayConfig } from "../../src/config/jpay.config";
 
 export const status = query({
   args: {},
   handler: async () => ({ enabled: process.env.DEMO_MODE === "1" }),
 });
+
+function requireDemoMode() {
+  if (process.env.DEMO_MODE !== "1") {
+    throw new ConvexError("DEMO_DISABLED");
+  }
+}
 
 const REVIEWER_MAX_AGE_DAYS = 7;
 
@@ -148,7 +154,7 @@ function buildRows(): SeedRow[] {
 export const seedDemoData = action({
   args: {},
   handler: async (ctx) => {
-    if (process.env.DEMO_MODE !== "1") throw new ConvexError("DEMO_DISABLED");
+    requireDemoMode();
     const callerId = await getAuthUserId(ctx);
     if (!callerId) throw new ConvexError("UNAUTHENTICATED");
     const caller = await ctx.runQuery(internal.users_queries.getById, { id: callerId });
@@ -168,7 +174,7 @@ export const seedDemoData = action({
     });
     for (const userId of result.userIds) {
       await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, {
-        userId: userId as import("./_generated/dataModel").Id<"users">,
+        userId: userId as import("../_generated/dataModel").Id<"users">,
       });
     }
     return result.summary;
@@ -420,9 +426,9 @@ export const checkInAsPersona = action({
     deviceMetadata: v.string(),
   },
   handler: async (ctx, args) => {
-    const binding: { userId: import("./_generated/dataModel").Id<"users">; personaUserId: import("./_generated/dataModel").Id<"users"> } =
+    const binding: { userId: import("../_generated/dataModel").Id<"users">; personaUserId: import("../_generated/dataModel").Id<"users"> } =
       await ctx.runQuery(internal.demo._resolveDemoReviewer, {});
-    const result: { logId: import("./_generated/dataModel").Id<"logs">; duplicate: boolean } =
+    const result: { logId: import("../_generated/dataModel").Id<"logs">; duplicate: boolean } =
       await ctx.runMutation(internal.logs.createLogAs, {
         reviewerId: binding.userId,
         personaUserId: binding.personaUserId,
@@ -462,7 +468,7 @@ export const switchPersona = mutation({
 export const demoExportLogsCsv = action({
   args: { fromMs: v.number(), toMs: v.number() },
   handler: async (ctx, args) => {
-    const binding: { userId: import("./_generated/dataModel").Id<"users">; personaUserId: import("./_generated/dataModel").Id<"users"> } =
+    const binding: { userId: import("../_generated/dataModel").Id<"users">; personaUserId: import("../_generated/dataModel").Id<"users"> } =
       await ctx.runQuery(internal.demo._resolveDemoReviewer, {});
     const { rows }: { rows: { clientTime: number; serverTime: number; status: string; lat: number; lng: number; accuracyMeters: number; geofence: boolean; travelFlag: boolean; skewSeconds: number }[]; truncated: boolean } =
       await ctx.runQuery(internal.payroll_data.logsForExport, {
@@ -588,6 +594,7 @@ export const demoRecomputeEmployeeShifts = mutation({
 export const purgeStaleReviewers = internalMutation({
   args: {},
   handler: async (ctx) => {
+    requireDemoMode();
     const cutoff = Date.now() - REVIEWER_MAX_AGE_DAYS * 24 * 3600 * 1000;
     const stale = await ctx.db
       .query("users")
@@ -650,6 +657,7 @@ export const purgeStaleReviewers = internalMutation({
 export const ensurePersonaSiteAssignments = internalMutation({
   args: { personaUserId: v.id("users") },
   handler: async (ctx, args) => {
+    requireDemoMode();
     const sites = await ctx.db
       .query("sites")
       .filter((q) => q.eq(q.field("archivedAt"), undefined))

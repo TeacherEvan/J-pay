@@ -1,7 +1,7 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { DEMO_SITE_TIMEZONE } from "./demo_sites";
+import type { Id } from "../_generated/dataModel";
+import { DEMO_SITE_TIMEZONE } from "./sites";
 
 type SeedRow = {
   siteName: string;

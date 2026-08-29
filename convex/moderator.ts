@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator, maybeCurrentUserId } from "./access";
 import { internal } from "./_generated/api";
-import { isDemoUser, isDemoLog } from "./demo_scope";
+import { isDemoUser, isDemoLog } from "./demo/scope";
 import type { Id } from "./_generated/dataModel";
 
 export const auditRecentLogs = query({
