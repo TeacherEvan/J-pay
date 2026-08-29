@@ -4,6 +4,10 @@ const TYPED_MESSAGES: Record<string, string> = {
   INVALID_CURRENT_PASSWORD: "Current password / ID code is incorrect.",
   TOO_MANY_ATTEMPTS: "Too many attempts. Try again in a minute.",
   ACCOUNT_NOT_FOUND: "Account not found. Ask your moderator to re-provision you.",
+  SITE_NOT_ASSIGNED: "You are not assigned to this site. Contact your moderator.",
+  SITE_NOT_FOUND: "Site not found or archived.",
+  GEOFENCE_FAILED: "You are outside the allowed geofence radius for this site.",
+  GEOFENCE_RADIUS_OUT_OF_RANGE: "Invalid geofence radius configuration.",
 };
 
 export function errMsg(e: unknown): string {
