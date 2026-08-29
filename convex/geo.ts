@@ -13,3 +13,13 @@ export function haversineMeters(
     Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
+
+export function isInRadius(
+  pointLat: number,
+  pointLng: number,
+  centerLat: number,
+  centerLng: number,
+  radiusMeters: number
+): boolean {
+  return haversineMeters(pointLat, pointLng, centerLat, centerLng) <= radiusMeters;
+}
