@@ -54,7 +54,8 @@ export default defineSchema({
     lng: v.number(),
     geoPassed: v.boolean(),
     ts: v.number(),
-  }),
+  })
+    .index("by_user_site_time", ["userId", "siteId"]),
 
   userSites: defineTable({
     userId: v.id("users"),

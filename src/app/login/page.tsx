@@ -3,12 +3,14 @@
 export const dynamic = "force-dynamic";
 import { useState, FormEvent } from "react";
 import { useConvexAuth } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { api } from "../../../convex/_generated/api";
 import { useQuery } from "convex/react";
 import { errMsg } from "@/lib/errors";
 
 export default function LoginPage() {
   const auth = useConvexAuth() ?? { isLoading: true, isAuthenticated: false };
+  const { signIn } = useAuthActions();
   const employees = useQuery(api.users_queries.listEmployees) ?? [];
   const [selectedEmail, setSelectedEmail] = useState("");
   const [signInId, setSignInId] = useState("");
@@ -45,7 +47,7 @@ export default function LoginPage() {
     }
     setIsSubmitting(true);
     try {
-      await auth.signIn("password", {
+      await signIn("password", {
         email: selectedEmail,
         secret: signInId.trim(),
       });
@@ -78,9 +80,9 @@ export default function LoginPage() {
               className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
             >
               <option value="">— Select —</option>
-              {employees.map((emp: { _id: string; name: string; email: string }) => (
-                <option key={emp._id} value={emp.email}>
-                  {emp.name} ({emp.email})
+              {employees.map((emp: { _id: string; name?: string; email?: string }) => (
+                <option key={emp._id} value={emp.email ?? ""}>
+                  {emp.name ?? "Unknown"} ({emp.email ?? "no email"})
                 </option>
               ))}
             </select>

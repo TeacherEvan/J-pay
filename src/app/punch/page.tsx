@@ -4,8 +4,9 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { useConvexAuth } from "convex/react";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "../../../convex/_generated/api";
 import { errMsg } from "@/lib/errors";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 type PunchResult = {
   punchId: string;
@@ -15,7 +16,7 @@ type PunchResult = {
 } | null;
 
 type Site = {
-  _id: string;
+  _id: Id<"sites">;
   name: string;
   latitude: number;
   longitude: number;
@@ -116,7 +117,7 @@ export default function PunchPage() {
         setLastPunch(result);
       } else {
         setStatus("error");
-        setMessage(`✗ Outside geofence (${Math.round(result.distance || 0)}m > ${site.geofenceRadiusMeters}m radius)`);
+        setMessage(`✗ Outside geofence (radius: ${site.geofenceRadiusMeters}m)`);
       }
     } catch (e) {
       setStatus("error");

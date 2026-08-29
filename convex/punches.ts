@@ -32,19 +32,17 @@ export const recordPunch = mutation({
     const distance = haversineMeters(args.lat, args.lng, site.latitude, site.longitude);
     const geoPassed = distance <= site.geofenceRadiusMeters;
     if (!geoPassed) {
-      throw new ConvexError("GEOFENCE_FAILED", {
-        distance: Math.round(distance),
-        radius: site.geofenceRadiusMeters,
-      });
+      throw new ConvexError("GEOFENCE_FAILED");
     }
 
     // 5. Handle in/out pairing for duration
     let durationSec: number | undefined;
     if (args.type === "out") {
       // Find latest unpaired "in" punch for this user+site
+      // Note: using filter instead of index since punches index not yet in generated types
       const punches = await ctx.db
         .query("punches")
-        .withIndex("by_user_site_time", (q) => q.eq("userId", userId).eq("siteId", args.siteId))
+        .filter((q) => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("siteId"), args.siteId)))
         .order("desc")
         .collect();
       
@@ -100,9 +98,10 @@ export const getPunchHistory = query({
       .first();
     if (!assignment) throw new ConvexError("SITE_NOT_ASSIGNED");
 
+    // Note: using filter instead of index since punches index not yet in generated types
     return await ctx.db
       .query("punches")
-      .withIndex("by_user_site_time", (q) => q.eq("userId", userId).eq("siteId", args.siteId))
+      .filter((q) => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("siteId"), args.siteId)))
       .order("desc")
       .take(50);
   },
