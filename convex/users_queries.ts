@@ -13,6 +13,17 @@ export const me = query({
   },
 });
 
+export const listEmployees = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "employee"))
+      .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
+      .collect();
+  },
+});
+
 export const getById = internalQuery({
   args: { id: v.id("users") },
   handler: async (ctx, args) => {
