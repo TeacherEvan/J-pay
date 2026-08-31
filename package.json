@@ -19,7 +19,7 @@
     "@serwist/next": "^10.0.0-preview.14",
     "convex": "^1.45.0",
     "leaflet": "^1.9.4",
-    "next": "^16.3.2",
+    "next": "^16.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "web-push": "^3.6.7"

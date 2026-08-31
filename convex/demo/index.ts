@@ -5,6 +5,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { api, internal } from "../_generated/api";
 import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "./sites";
 import { requireDemoReviewer } from "../access";
+import { isDemoUser } from "./scope";
 import { localDayKey } from "../../src/lib/shift-engine";
 import { computePay, type PayStrategyName } from "../../src/lib/payroll-strategies";
 import { toCsv } from "../../src/lib/csv";
@@ -191,12 +192,14 @@ export const _resolveDemoReviewer = internalQuery({
 export const bindReviewer = mutation({
   args: { personaEmail: v.string() },
   handler: async (ctx, args) => {
-    const { userId, personaUserId } = await requireDemoReviewer(ctx);
+    const { userId } = await requireDemoReviewer(ctx);
     const persona = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", args.personaEmail))
       .first();
-    if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+    // SECURITY (2026-09-01): reject binds to non-demo personas. The old check
+    // only excluded anonymous users, which let any real employee be bound.
+    if (!persona || persona.role !== "employee" || !isDemoUser(persona) || persona.archivedAt !== undefined || !persona.isActive) {
       throw new ConvexError("PERSONA_NOT_FOUND");
     }
     const session = await ctx.db
@@ -394,11 +397,14 @@ export const demoEmployeeRoster = query({
   args: {},
   handler: async (ctx) => {
     await requireDemoReviewer(ctx);
+    // SECURITY (2026-09-01): only return demo personas. Previously this
+    // returned every non-anonymous employee, giving demo visitors a
+    // directory of real employees to target with the bind exploit.
     const employees = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .take(50);
-    return employees.filter((u) => u.isAnonymous !== true);
+    return employees.filter((u) => isDemoUser(u) && u.isAnonymous !== true);
   },
 });
 
@@ -446,7 +452,9 @@ export const switchPersona = mutation({
       .query("users")
       .withIndex("email", (q) => q.eq("email", args.personaEmail))
       .first();
-    if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+    // SECURITY (2026-09-01): mirror the bindReviewer check — refuse to switch
+    // the bound persona to a non-demo (real) employee.
+    if (!persona || persona.role !== "employee" || !isDemoUser(persona) || persona.archivedAt !== undefined || !persona.isActive) {
       throw new ConvexError("PERSONA_NOT_FOUND");
     }
     const session = await ctx.db
@@ -566,9 +574,14 @@ export const demoMarkQueueItemRead = mutation({
 export const demoResolveShift = mutation({
   args: { shiftId: v.id("shifts") },
   handler: async (ctx, args) => {
-    const { userId: reviewerId } = await requireDemoReviewer(ctx);
+    const { userId: reviewerId, personaUserId } = await requireDemoReviewer(ctx);
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
+    // SECURITY (2026-09-01): refuse to resolve a shift that does not belong to
+    // the bound demo persona. Previously any shift id could be sealed.
+    if (shift.userId !== personaUserId) {
+      throw new ConvexError("FORBIDDEN_DEMO_BOUNDARY");
+    }
     await ctx.db.patch(args.shiftId, {
       needsReview: false,
       reviewReason: `resolved:${shift.reviewReason ?? "flagged"}`,
@@ -586,7 +599,12 @@ export const demoResolveShift = mutation({
 export const demoRecomputeEmployeeShifts = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireDemoReviewer(ctx);
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    // SECURITY (2026-09-01): refuse to recompute arbitrary employees; only
+    // the bound persona is eligible.
+    if (args.userId !== personaUserId) {
+      throw new ConvexError("FORBIDDEN_DEMO_BOUNDARY");
+    }
     await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId: args.userId });
   },
 });

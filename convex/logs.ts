@@ -5,6 +5,7 @@ import { requireEmployee, maybeCurrentUserId } from "./access";
 import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
+import { isDemoUser } from "./demo/scope";
 
 import { jpayConfig } from "../src/config/jpay.config";
 
@@ -160,6 +161,12 @@ export const createLogAs = internalMutation({
     const persona = await ctx.db.get(args.personaUserId);
     if (!persona || persona.archivedAt !== undefined || !persona.isActive) {
       throw new ConvexError("PERSONA_NOT_FOUND");
+    }
+    // SECURITY (2026-09-01): defence-in-depth — refuse to write a moderator-
+    // overridden log against a non-demo (real) user. The reviewer may already
+    // be required to be anonymous, but the persona target must also be demo.
+    if (!isDemoUser(persona)) {
+      throw new ConvexError("FORBIDDEN_DEMO_BOUNDARY");
     }
     const reviewer = await ctx.db.get(args.reviewerId);
     if (!reviewer || reviewer.isAnonymous !== true) {

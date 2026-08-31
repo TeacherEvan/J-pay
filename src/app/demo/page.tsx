@@ -129,7 +129,7 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
   );
 }
 
-function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined; personaLocale: string }) {
+function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: string; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined; personaLocale: string }) {
   const resolve = useMutation(api.demo.demoResolveShift);
   const recompute = useMutation(api.demo.demoRecomputeEmployeeShifts);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -155,7 +155,12 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; startedA
                   type="button"
                   onClick={() => {
                     setBusyId(s._id);
-                    recompute({ userId: s._id as unknown as Id<"users"> }).catch(() => {}).finally(() => setBusyId(null));
+                    // SECURITY (2026-09-01): pass the shift's userId, not its _id.
+                    // The previous code cast a shift id as a user id, which the
+                    // backend would happily accept and call deriveForUser against
+                    // an empty history. The .catch(() => {}) hid the resulting
+                    // type error.
+                    if (s.userId) recompute({ userId: s.userId }).finally(() => setBusyId(null));
                   }}
                   disabled={busyId === s._id}
                   className="rounded-md border border-neutral-700 px-3 py-2.5 text-sm text-neutral-300 hover:bg-neutral-800"

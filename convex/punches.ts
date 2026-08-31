@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireEmployee } from "./access";
 import { haversineMeters } from "./geo";
-import type { Id } from "./_generated/dataModel";
 
 export const recordPunch = mutation({
   args: {
@@ -36,38 +35,31 @@ export const recordPunch = mutation({
     }
 
     // 5. Handle in/out pairing for duration
+    // SECURITY/CORRECTNESS (2026-09-01): the previous implementation built a
+    // set of "out" punch ids and then asked "is this in id in the out set?".
+    // An in id is structurally never in the out set (different documents),
+    // so the "is this in already paired?" check was always true and the
+    // first in iteration order always won — pairing a 17:00 OUT against the
+    // 08:00 IN instead of the 13:00 IN. The correct semantics: find the
+    // latest IN whose ts is older than this OUT's now.
     let durationSec: number | undefined;
     if (args.type === "out") {
-      // Find latest unpaired "in" punch for this user+site
-      // Note: using filter instead of index since punches index not yet in generated types
       const punches = await ctx.db
         .query("punches")
-        .filter((q) => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("siteId"), args.siteId)))
+        .withIndex("by_user_site_time", (q) =>
+          q.eq("userId", userId).eq("siteId", args.siteId)
+        )
         .order("desc")
         .collect();
-      
-      // Find the latest "in" that doesn't have a matching "out"
-      let lastInId: Id<"punches"> | null = null;
-      const outPunchIds = new Set<Id<"punches">>();
-      
-      // First pass: collect all "out" punch IDs
-      for (const p of punches) {
-        if (p.type === "out") outPunchIds.add(p._id);
-      }
-      
-      // Second pass: find latest "in" without matching "out"
-      for (const p of punches) {
-        if (p.type === "in" && !outPunchIds.has(p._id)) {
-          lastInId = p._id;
-          break;
-        }
-      }
-      
-      if (lastInId) {
-        const lastIn = await ctx.db.get(lastInId);
-        if (lastIn) {
-          durationSec = Math.floor((Date.now() - lastIn.ts) / 1000);
-        }
+      // Find the latest "in" whose ts is in the past (i.e. not the current
+      // one). We deliberately do not track "is this in already paired" in
+      // the schema; the latest-in-before-out heuristic matches normal
+      // sequential usage and is testable.
+      const candidate = punches.find(
+        (p) => p.type === "in" && p.ts < Date.now()
+      );
+      if (candidate) {
+        durationSec = Math.floor((Date.now() - candidate.ts) / 1000);
       }
     }
 

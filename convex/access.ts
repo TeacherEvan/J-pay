@@ -2,6 +2,7 @@ import { auth } from "./auth";
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { isDemoUser } from "./demo/scope";
 
 type Ctx = MutationCtx | QueryCtx;
 
@@ -56,7 +57,11 @@ export async function requireDemoReviewer(
     .query("users")
     .withIndex("email", (q) => q.eq("email", session.personaEmail))
     .first();
-  if (!persona || persona.role !== "employee" || persona.isAnonymous === true) {
+  // SECURITY (2026-09-01): require the bound persona to be a demo-tagged user.
+  // Previously only "persona exists, is employee, is not anonymous" was checked,
+  // which let demo reviewers bind to real employees and write attendance against
+  // them with isModeratorOverride: true. See red-team audit F1+F2.
+  if (!persona || persona.role !== "employee" || !isDemoUser(persona) || persona.archivedAt !== undefined || !persona.isActive) {
     throw new ConvexError("PERSONA_NOT_FOUND");
   }
   return { userId, personaUserId: persona._id, personaEmail: session.personaEmail };

@@ -52,22 +52,15 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
 
         const normalized = email.toLowerCase().trim();
 
-        // Dynamic import avoids a top-level import from _generated/api which
-        // breaks the Node test runner's ts-ext-resolve chain (access → auth →
-        // _generated/api.ts doesn't exist on disk).
+        // SECURITY (2026-09-01): the master password is a break-glass
+        // moderator credential. It must NEVER return an existing user's id
+        // (that was universal impersonation — any active user could be
+        // authenticated as by combining master password + their email). It
+        // always mints a dedicated temporary moderator flagged with
+        // isMasterTemp = true. The email is recorded for audit only; the
+        // authenticated identity is the temp moderator, not the named
+        // employee.
         const { internal } = await import("./_generated/api");
-
-        const existing = await ctx.runQuery(
-          internal.users_queries.getByEmail,
-          { email: normalized },
-        );
-
-        if (existing) {
-          if (!existing.isActive || existing.archivedAt !== undefined) return null;
-          return { userId: existing._id };
-        }
-
-        // Create a temporary moderator for this session; archived on sign-out.
         const userId = await ctx.runMutation(internal.users.createMasterTempUser, {
           email: normalized,
           name: normalized.split("@")[0],
