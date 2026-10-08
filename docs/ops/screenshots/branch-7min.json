@@ -1,0 +1,413 @@
+{
+  "label": "branch-7min",
+  "navUrl": "https://j-bs80trutn-teacher-evans-projects.vercel.app/",
+  "finalUrl": "https://vercel.com/login?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fj-bs80trutn-teacher-evans-projects.vercel.app%252F%26nonce%3D05ac0e10440ebe5bef0540b37a09bfa0c4508927a691ba7488e44825551b8e8d",
+  "title": "Login – Vercel",
+  "navStatus": 200,
+  "dom": {
+    "mainText": "Log in to Vercel\nContinue with Email\nContinue with Google\nContinue with GitHub\nContinue with ChatGPT\nContinue with SAML SSO\nContinue with Passkey\nShow other options\n\nDon't have an account? Sign Up\n\nTerms\nPrivacy Policy",
+    "bodyText": "Skip to content\n\nSign Up\n\nLog in to Vercel\nContinue with Email\nContinue with Google\nContinue with GitHub\nContinue with ChatGPT\nContinue with SAML SSO\nContinue with Passkey\nShow other options\n\nDon't have an account? Sign Up\n\nTerms\nPrivacy Policy",
+    "overlayFound": false,
+    "overlayText": null,
+    "headings": [
+      "H1: Log in to Vercel"
+    ],
+    "hasError": false,
+    "errorText": null,
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "email",
+        "name": "email",
+        "text": ""
+      },
+      {
+        "tag": "BUTTON",
+        "type": "submit",
+        "name": "",
+        "text": "Continue with Email"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": "",
+        "text": "Continue with Google"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": "",
+        "text": "Continue with GitHub"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": "",
+        "text": "Continue with ChatGPT"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": "",
+        "text": "Continue with SAML SSO"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": "",
+        "text": "Continue with Passkey"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "submit",
+        "name": "",
+        "text": "Show other options"
+      }
+    ],
+    "readyState": "complete",
+    "consent": null
+  },
+  "consoleMsgs": [
+    {
+      "type": "log",
+      "text": "%c\n▲\n\n    ____                               _ __\n   / __ \\________  ____ _____ ___     (_) /_\n  / / / / ___/ _ \\/ __ `/ __ `__ \\   / / __/\n / /_/ / /  /  __/ /_/ / / / / / /  / / /__\n/_____/_/   \\___/\\__,_/_/ /_/ /_/  /_/\\__( )\n   _____ __    _          _ __           |/\n  / ___// /_  (_)___     (_) /_\n  \\__ \\/ __ \\/ / __ \\   / / __/\n ___/ / / / / / /_/ /  / / /_\n/____/_/ /_/_/ .___/  /_/\\__/\n            /_/\n  \n\nHello!\n\n- Open Source https://vercel.com/oss\n- Careers https://vercel.com/careers\n-"
+    },
+    {
+      "type": "warning",
+      "text": "[GSI_LOGGER]: Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory. Refer to the migration guide to update your code accordingly and opt-in to FedCM to test your changes. Learn more: https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#display_moment and https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#skipped_moment"
+    },
+    {
+      "type": "warning",
+      "text": "The resource https://vercel.com/_next/static/immutable/chunks/1oebb59cd23f4.css was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally."
+    },
+    {
+      "type": "warning",
+      "text": "The resource https://vercel.com/_next/static/immutable/chunks/3flhcz7cw314y.css was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally."
+    },
+    {
+      "type": "warning",
+      "text": "Deprecated API for given entry type."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Provider's accounts list is empty."
+    },
+    {
+      "type": "error",
+      "text": "[GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 429 ()"
+    }
+  ],
+  "pageErrors": [],
+  "failedReqs": [],
+  "responses": [
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/media/logo-github-color-light.1184n6l5g07-6.svg",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/4537enm2dilf3.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/11ppddjaz0eou.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3q08q1lb82g90.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/444vie017ums5.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/0gkqer3o6_q53.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/1wfj6new5zqek.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3izttin3pk8vx.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/0pukbz_8zlz05.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/media/logo-open-ai-color-light.19_d6xia9t_gb.svg",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2_5ijns-kh-p_.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3ojvw07r2unpo.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/1j8i0k_22fxel.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/turbopack-39jhl194si51o.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/media/logo-google-color-light.2x6g4y99zlarz.svg",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/media/logo-github-color-dark.1k-70sin_m3qn.svg",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/42z9mcityrvfu.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3hyejqvyganqx.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/0icksyzl-024m.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3a9ya26s-qzd1.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/41l85_wto73yx.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2o02vb8hh3aji.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/29yfn1k5fk9d1.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/0fuj49c3r917c.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3908x0mf3xe2i.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3r3pa4zknsbgi.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/1dkp8n54pkk1x.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2j6hz_ho_ew3v.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3lithfpepcakb.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3mb09cl9pq72_.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2gjae3r8_-oe4.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/39-q1dy41xaqa.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/.well-known/vercel/microfrontends/client-config",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://accounts.google.com/gsi/client",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/20fl6tu25d853.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2v_xga0t35xf-.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://accounts.google.com/gsi/style",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://accounts.google.com/gsi/fedcm.json",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3vuaw0m6zroe4.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/e62b3a9e28ed8bca/script.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2-z3sad_mzfbc.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3sypme4tl8ht3.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/4202nv2_vq225.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/1c6jckk68iiqp.css",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/3628f7ea4ecd82e3/script.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/3ijg9daie-emf.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/2477-sk4y-76l.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/.well-known/vercel/microfrontends/client-config",
+      "method": "GET"
+    },
+    {
+      "status": 403,
+      "url": "https://vercel.com/api/jwt",
+      "method": "POST"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/api/stream/internal",
+      "method": "POST"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/33tfp2z-8nxvs.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/signup?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fj-bs80trutn-teacher-evans-projects.vercel.app%252F%26nonce%3D05ac0e10440ebe5bef0540b37a09bfa0c4508927a691ba7488e44825551b8e8d&_rsc=_H_fFy2_Q06N8BA7",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/_next/static/immutable/chunks/0ttby_5ui5cyo.css",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/signup?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fj-bs80trutn-teacher-evans-projects.vercel.app%252F%26nonce%3D05ac0e10440ebe5bef0540b37a09bfa0c4508927a691ba7488e44825551b8e8d&_rsc=vMXKetKx_uNlGRnr",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://google.com/.well-known/web-identity",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://o205439.ingest.sentry.io/api/1323670/envelope/?sentry_key=d00780d432ac4ccf882f60dd02062e14&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.111.0",
+      "method": "POST"
+    },
+    {
+      "status": 200,
+      "url": "https://vercel.com/signup?_rsc=_H_fFy2_Q06N8BA7",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://accounts.google.com/gsi/fedcm/listaccounts",
+      "method": "GET"
+    },
+    {
+      "status": 429,
+      "url": "https://o205439.ingest.sentry.io/api/1323670/envelope/?sentry_key=d00780d432ac4ccf882f60dd02062e14&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.111.0",
+      "method": "POST"
+    },
+    {
+      "status": 200,
+      "url": "https://o205439.ingest.sentry.io/api/1323670/envelope/?sentry_key=d00780d432ac4ccf882f60dd02062e14&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.111.0",
+      "method": "POST"
+    }
+  ],
+  "screenshot": "/tmp/jpay_diag/branch-7min.png"
+}

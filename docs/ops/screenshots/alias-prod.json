@@ -1,0 +1,85 @@
+{
+  "label": "alias-prod",
+  "navUrl": "https://j-pay.vercel.app/",
+  "finalUrl": "https://j-pay.vercel.app/",
+  "title": "J-Pay",
+  "navStatus": 200,
+  "dom": {
+    "mainText": "NEXT_PUBLIC_CONVEX_URL is not set. Run `npx convex dev` to configure your deployment.",
+    "bodyText": "NEXT_PUBLIC_CONVEX_URL is not set. Run `npx convex dev` to configure your deployment.",
+    "overlayFound": false,
+    "overlayText": null,
+    "headings": [],
+    "hasError": false,
+    "errorText": null,
+    "inputs": [],
+    "readyState": "complete",
+    "consent": null
+  },
+  "consoleMsgs": [],
+  "pageErrors": [],
+  "failedReqs": [],
+  "responses": [
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/716-3e673030908c550b.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/webpack-2f66fa6c1b354ba8.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/649-4d795c6dab2b0ac9.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/584-1757c4b8e37e1167.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/css/ff48665a80c6c47e.css",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/685-8485204561591856.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/app/layout-ca513cd990d077f9.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/app/page-17c2115c2107288d.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/975-72fad6db108a5fd6.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/main-app-57f3490ca2d812af.js",
+      "method": "GET"
+    },
+    {
+      "status": 200,
+      "url": "https://j-pay.vercel.app/_next/static/chunks/4bd1b696-58970b7b91aecaf4.js",
+      "method": "GET"
+    }
+  ],
+  "screenshot": "/tmp/jpay_diag/alias-prod.png"
+}
