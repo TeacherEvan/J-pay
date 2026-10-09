@@ -166,7 +166,7 @@ export const seedDemoData = action({
     const emails = [...new Set(rows.map((r) => r.email))];
     const ratesByEmail = Object.fromEntries(DEMO_PERSONAS.map((p) => [p.email, p.rate]));
     const result: { userIds: string[]; summary: { sites: number; employees: number; logsInserted: number; logsSkippedDuplicates: number } } =
-      await ctx.runMutation(internal.demo_seed.seedAll, {
+      await ctx.runMutation(internal.demo.seedAll, {
       createdBy: callerId,
       sites: DEMO_SITES.map((s) => ({ ...s })),
       rows,
