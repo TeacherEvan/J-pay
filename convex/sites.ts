@@ -15,6 +15,7 @@ export const listMine = query({
       const sites = await ctx.db.query("sites").collect();
       const out = [];
       for (const s of sites) {
+        if (s.archivedAt !== undefined) continue;
         const creator = await ctx.db.get(s.createdBy);
         if (creator && isDemoUser(creator)) continue;
         out.push(s);

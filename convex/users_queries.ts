@@ -34,10 +34,14 @@ export const getById = internalQuery({
 export const getByEmail = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const matches = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", args.email))
-      .first();
+      .collect();
+    // Master-temp moderators reuse the operator's email for audit. They must
+    // never shadow the real account: `.first()` here could return the temp
+    // row and make password resets / provisioning target the wrong identity.
+    return matches.find((u) => u.isMasterTemp !== true) ?? null;
   },
 });
 

@@ -4,6 +4,7 @@ import {
   deriveSegments,
   localDayKey,
   MAX_SHIFT_MS,
+  serverClockSkewMs,
 } from "../src/lib/shift-engine.ts";
 
 const MIN = 60_000;
@@ -11,7 +12,7 @@ const T0 = Date.UTC(2026, 7, 3, 6); // 08:00 SAST
 
 function log(status, offsetMin, extra = {}) {
   return {
-    _creationTime: T0 + (extra.serverOffsetMin ?? offsetMin + 500) * MIN,
+    _creationTime: T0 + (extra.serverOffsetMin ?? offsetMin) * MIN,
     idempotencyKey: `k-${status}-${offsetMin}-${Math.random().toString(36).slice(2)}`,
     clientReportedTime: T0 + offsetMin * MIN,
     clockSkewMs: 0,
@@ -167,6 +168,40 @@ test("skew-tie keeps insertion order; zero-length shift stays clean", () => {
   assert.equal(segs.length, 1);
   assert.equal(segs[0].totalMinutes, 0);
   assert.equal(segs[0].needsReview, false);
+});
+
+test("offline replay: late-synced log keeps client time and flags review", () => {
+  const MIN_ = MIN;
+  const arrived = log("arrived", 0);
+  arrived._creationTime = T0 + 240 * MIN_; // synced 4h after the fact
+  const finish = log("day finish", 480);
+  finish._creationTime = T0 + 500 * MIN_;
+  const segs = deriveSegments([arrived, finish]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].startedAt, T0, "client timestamp must win over sync time");
+  assert.equal(segs[0].totalMinutes, 480, "an offline shift must not lose hours");
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "offline_replay");
+});
+
+test("geofence: an outside-fence log flags the whole shift for review", () => {
+  const arrived = log("arrived", 0);
+  arrived.isWithinGeofence = false;
+  const segs = deriveSegments([arrived, log("day finish", 300)]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "geofence_violation");
+  assert.equal(segs[0].totalMinutes, 300);
+});
+
+test("serverClockSkewMs: measured at enqueue, not at replay", () => {
+  const sent = Date.UTC(2026, 7, 3, 6, 0, 0);
+  const queued = sent + 1_000;
+  const replayed = sent + 4 * 3600 * 1000;
+  assert.equal(serverClockSkewMs(sent, queued, replayed), 1_000);
+  assert.equal(serverClockSkewMs(sent, undefined, replayed), 4 * 3600 * 1000);
+  // A queuedAt in the future must not be trusted as an anchor.
+  assert.equal(serverClockSkewMs(sent, replayed + 3600_000, replayed), replayed - sent);
 });
 
 test("localDayKey: timezone shifts the calendar day near midnight", () => {

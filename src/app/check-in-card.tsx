@@ -621,6 +621,7 @@ function LiveSubmit({
         deviceToken: entry.deviceToken,
         idempotencyKey: entry.idempotencyKey,
         deviceMetadata: entry.deviceMetadata,
+        queuedAt: entry.queuedAt,
       });
     },
     [createLog]
@@ -690,6 +691,7 @@ function LiveSubmit({
           deviceToken: token,
           idempotencyKey: entry.idempotencyKey,
           deviceMetadata: entry.deviceMetadata,
+          queuedAt: entry.queuedAt,
         });
         setMessage(
           result.duplicate

@@ -2,7 +2,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, currentUserId } from "./access";
+import { requireModerator, requireActiveUser } from "./access";
 import { isDemoUser } from "./demo/scope";
 
 function validContent(content: string): string {
@@ -14,7 +14,7 @@ function validContent(content: string): string {
 export const sendToModerators = mutation({
   args: { content: v.string() },
   handler: async (ctx, args) => {
-    const userId = await currentUserId(ctx);
+    const { userId } = await requireActiveUser(ctx);
     const text = validContent(args.content);
     await ctx.db.insert("messages", {
       senderId: userId,
@@ -67,7 +67,7 @@ export const markQueueItemRead = mutation({
 export const myInbox = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await currentUserId(ctx);
+    const { userId } = await requireActiveUser(ctx);
     return await ctx.db
       .query("messages")
       .withIndex("by_recipient_read", (q) => q.eq("recipientId", userId))
@@ -161,7 +161,7 @@ export const purgeExpiredMessages = internalMutation({
 export const markThreadRead = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await currentUserId(ctx);
+    const { userId } = await requireActiveUser(ctx);
     const unread = await ctx.db
       .query("messages")
       .withIndex("by_recipient_read", (q) => q.eq("recipientId", userId).eq("isRead", false))

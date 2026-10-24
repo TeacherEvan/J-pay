@@ -99,7 +99,15 @@ export const bootstrapFirstModerator = internalAction({
 export const provisionModerator = action({
   args: { name: v.string(), email: v.string(), key: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // SECURITY: the bootstrap key is a first-run credential, not a permanent
+    // moderator mint. Once any moderator exists the key path is closed and a
+    // signed-in moderator is required, so a leaked env var cannot keep
+    // escalating new accounts forever.
+    const existingModerators = await ctx.runQuery(internal.users_queries.listByRole, {
+      role: "moderator",
+    });
     const viaBreakGlass =
+      existingModerators.length === 0 &&
       args.key !== undefined &&
       process.env.BOOTSTRAP_KEY !== undefined &&
       args.key === process.env.BOOTSTRAP_KEY;
@@ -295,6 +303,9 @@ export const issueMyDeviceToken = mutation({
     if (!user || user.archivedAt !== undefined || !user.isActive) {
       throw new ConvexError("INACTIVE_ACCOUNT");
     }
+    // Device tokens exist to bind an employee's check-in device; a moderator
+    // has no check-in flow and must not mint one.
+    if (user.role !== "employee") throw new ConvexError("FORBIDDEN");
     if (user.deviceId !== undefined) {
       throw new ConvexError("DEVICE_ALREADY_ACTIVE");
     }
@@ -363,9 +374,12 @@ export const archiveStaleMasterTemps = internalMutation({
       .query("users")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
+    // Only sweep sessions that have had time to finish. Without the age gate
+    // this cron killed any master session still in use at 04:00 UTC.
+    const cutoff = Date.now() - 12 * 3600 * 1000;
     let count = 0;
     for (const u of stale) {
-      if (!u.isMasterTemp) continue;
+      if (!u.isMasterTemp || u._creationTime > cutoff) continue;
       await ctx.db.patch(u._id, { archivedAt: Date.now(), isActive: false });
       const msgs = await ctx.db
         .query("messages")

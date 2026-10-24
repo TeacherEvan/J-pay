@@ -143,10 +143,9 @@ export const listAllSites = query({
 export const resolveShift = mutation({
   args: { shiftId: v.id("shifts") },
   handler: async (ctx, args) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+    // Must THROW for a non-moderator: returning [] made the UI show a silent
+    // success and left the flagged shift unresolved.
+    const modId = await requireModerator(ctx);
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
     await ctx.db.patch(args.shiftId, {
@@ -158,8 +157,9 @@ export const resolveShift = mutation({
       userId: shift.userId,
       shiftKey: String(shift.startedAt),
       resolvedAt: Date.now(),
-      byModeratorId: await requireModerator(ctx),
+      byModeratorId: modId,
     });
+    return { ok: true as const };
   },
 });
 

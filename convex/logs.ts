@@ -6,6 +6,7 @@ import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
 import { isDemoUser } from "./demo/scope";
+import { serverClockSkewMs } from "../src/lib/shift-engine";
 
 import { jpayConfig } from "../src/config/jpay.config";
 
@@ -35,6 +36,12 @@ export const createLog = mutation({
     deviceToken: v.string(),
     idempotencyKey: v.string(),
     deviceMetadata: v.string(),
+    /**
+     * Client timestamp of when the entry was queued (offline) or pressed
+     * (live). Clock skew is measured here, not at sync time, so an offline
+     * shift keeps its real hours instead of collapsing to the replay instant.
+     */
+    queuedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireEmployee(ctx);
@@ -71,7 +78,7 @@ export const createLog = mutation({
       haversineMeters(args.latitude, args.longitude, site.latitude, site.longitude) <=
       site.geofenceRadiusMeters;
 
-    const clockSkewMs = Date.now() - args.clientReportedTime;
+    const clockSkewMs = serverClockSkewMs(args.clientReportedTime, args.queuedAt, Date.now());
 
     let impossibleTravelFlag: boolean | undefined = undefined;
     const previous = await ctx.db
@@ -194,7 +201,7 @@ export const createLogAs = internalMutation({
       haversineMeters(args.latitude, args.longitude, site.latitude, site.longitude) <=
       site.geofenceRadiusMeters;
 
-    const clockSkewMs = Date.now() - args.clientReportedTime;
+    const clockSkewMs = serverClockSkewMs(args.clientReportedTime, undefined, Date.now());
 
     let impossibleTravelFlag: boolean | undefined = undefined;
     const previous = await ctx.db
@@ -244,23 +251,37 @@ export const purgeExpiredCoords = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
-    const expired = await ctx.db
-      .query("logs")
-      .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
-      .take(500);
-    for (const log of expired) {
-      if (log.latitude !== 0 || log.longitude !== 0) {
-        await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
+    // The old run stopped at the first 500 rows, so a backlog older than the
+    // retention window could never be cleared. Page through the range with a
+    // hard per-run ceiling to stay inside the mutation budget.
+    const MAX_PER_RUN = 5000;
+    const PAGE = 200;
+    let cursor: string | null = null;
+    let scanned = 0;
+    let purged = 0;
+    while (scanned < MAX_PER_RUN) {
+      const page = await ctx.db
+        .query("logs")
+        .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
+        .paginate({ cursor, numItems: PAGE });
+      for (const log of page.page) {
+        scanned++;
+        if (log.latitude !== 0 || log.longitude !== 0) {
+          await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
+          purged++;
+        }
       }
+      if (page.isDone) break;
+      cursor = page.continueCursor;
     }
     // H7 (2026-08-26): write an audit row so purge runs are observable.
-    if (expired.length > 0) {
+    if (purged > 0) {
       await ctx.db.insert("purgeAudit", {
         purgedAt: Date.now(),
-        purgedCount: expired.length,
+        purgedCount: purged,
         kind: "coordinates",
       });
     }
-    return expired.length;
+    return purged;
   },
 });

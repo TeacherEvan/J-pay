@@ -8,6 +8,8 @@ export type EngineLog = {
   status: string;
   sideMissionDurationMinutes?: number;
   siteTimezone?: string;
+  /** Server-computed haversine verdict (§7). Outside-fence work needs review. */
+  isWithinGeofence?: boolean;
 };
 
 export type Segment = {
@@ -24,9 +26,37 @@ export const MAX_SHIFT_MS = L.maxShiftHours * 3600 * 1000;
 export const DEFAULT_LUNCH_MINUTES = L.defaultLunchMinutes;
 export const PICKER_MAX_MINUTES = L.maxSideMissionMinutes;
 
+/**
+ * A log written more than this long after the client timestamp it carries is
+ * an offline replay (queued on the device, synced later). Replays keep the
+ * worker's real clock time but must be moderator-verified before they pay.
+ */
+export const REPLAY_REVIEW_MS = 5 * 60 * 1000;
+
 function skewCorrectedTime(log: EngineLog): number {
   const skew = log.clockSkewMs ?? 0;
   return Math.abs(skew) <= L.skewToleranceMs ? log.clientReportedTime : log._creationTime;
+}
+
+/**
+ * Clock skew must be measured when the entry is queued, not when it is
+ * synced: an offline shift synced four hours later is not a four-hour clock
+ * error, and measuring it at sync time makes the engine discard the worker's
+ * real timestamps (§8.5). `queuedAt` is client-supplied, so a future value is
+ * ignored and the server clock is used instead.
+ */
+export function serverClockSkewMs(
+  clientReportedTime: number,
+  queuedAt: number | undefined,
+  now: number
+): number {
+  const anchor =
+    queuedAt !== undefined && Number.isFinite(queuedAt) && queuedAt <= now ? queuedAt : now;
+  return anchor - clientReportedTime;
+}
+
+export function isOfflineReplay(log: EngineLog): boolean {
+  return log._creationTime - skewCorrectedTime(log) > REPLAY_REVIEW_MS;
 }
 
 export function deriveSegments(allLogs: EngineLog[]): Segment[] {
@@ -46,12 +76,24 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
   let sideEntryAt: number | null = null;
   let sideDeclared = 0;
   let deductionMinutes = 0;
+  // Evidence flags that make a segment unpayable until a moderator resolves it.
+  const segFlags = new Set<string>();
+  const flagsOf = (log: EngineLog): string[] => {
+    const out: string[] = [];
+    if (log.isWithinGeofence === false) out.push("geofence_violation");
+    if (isOfflineReplay(log)) out.push("offline_replay");
+    return out;
+  };
 
   const closeCurrent = (endedAt: number, review: boolean, reason?: string) => {
     if (!current) return;
     if (endedAt < current.startedAt && !review) {
       review = true;
       reason = "reversed_times";
+    }
+    if (segFlags.size > 0 && !review) {
+      review = true;
+      reason = [...segFlags][0];
     }
     current.endedAt = endedAt;
     current.totalMinutes = Math.max(
@@ -67,11 +109,14 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
     sideEntryAt = null;
     sideDeclared = 0;
     deductionMinutes = 0;
+    segFlags.clear();
   };
 
   for (const log of ordered) {
     const t = skewCorrectedTime(log);
     const status = log.status;
+    const pendingFlags = flagsOf(log);
+    if (current) for (const f of pendingFlags) segFlags.add(f);
 
     if (
       current &&
@@ -88,6 +133,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
           closeCurrent(t, true, `illegal_transition:${phase}->arrived`);
         }
         current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+        for (const f of pendingFlags) segFlags.add(f);
         phase = "active";
         break;
       case "checkpoint":
@@ -106,6 +152,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (phase === "sideMission") {
           closeCurrent(t, true, "illegal_transition:side_mission->lunch");
           current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+          for (const f of pendingFlags) segFlags.add(f);
           phase = "lunch";
           lunchOpenedAt = t;
         } else if (phase === "active") {
@@ -114,6 +161,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         } else {
           closeCurrent(t, true, `illegal_transition:${phase}->lunch`);
           current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+          for (const f of pendingFlags) segFlags.add(f);
           phase = "lunch";
           lunchOpenedAt = t;
         }
@@ -122,7 +170,10 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (current && phase === "sideMission") {
           closeCurrent(t, true, "illegal_transition:side_mission->side_mission");
         }
-        if (!current) current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+        if (!current) {
+          current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+        }
+        for (const f of pendingFlags) segFlags.add(f);
         phase = "sideMission";
         sideEntryAt = t;
         sideDeclared = log.sideMissionDurationMinutes ?? 0;
@@ -200,6 +251,10 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
     }
     seg.endedAt = end;
     seg.totalMinutes = Math.max(0, Math.round((end - seg.startedAt) / 60000) - deductionMinutes);
+    if (segFlags.size > 0 && !seg.needsReview) {
+      seg.needsReview = true;
+      seg.reviewReason = [...segFlags][0];
+    }
     if (seg.startedAt + MAX_SHIFT_MS < now && !seg.needsReview) {
       seg.needsReview = true;
       seg.reviewReason = seg.reviewReason ?? "auto_closed_no_terminal";

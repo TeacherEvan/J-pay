@@ -129,7 +129,7 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
   );
 }
 
-function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: string; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined; personaLocale: string }) {
+function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: Id<"users">; startedAt: number; reviewReason?: string; totalMinutes?: number }[] | undefined; personaLocale: string }) {
   const resolve = useMutation(api.demo.demoResolveShift);
   const recompute = useMutation(api.demo.demoRecomputeEmployeeShifts);
   const [busyId, setBusyId] = useState<string | null>(null);
