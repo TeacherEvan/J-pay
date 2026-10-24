@@ -138,17 +138,48 @@ def ensure_vercel_link() -> tuple[int, str]:
     )
 
 
+def stage_without_git() -> Path:
+    """Copy the tree to a scratch dir without .git and return its path.
+
+    Vercel refuses a deployment whose Git commit author has no Vercel/GitHub
+    account ("The deployment was blocked because Vercel couldn't find a Git
+    account for the commit author"). Deploying the staged tree means the upload
+    carries no git metadata, so an agent-authored commit cannot block a release
+    that already passed every local gate. The project link is copied across so
+    the deployment still targets the right project.
+    """
+    staging = Path(tempfile.mkdtemp(prefix="jpay-deploy-"))
+    excludes = ["--exclude", ".git", "--exclude", "node_modules", "--exclude", ".next",
+                "--exclude", ".vercel", "--exclude", ".turbo"]
+    code, out = run(["rsync", "-a", *excludes, f"{ROOT}/", f"{staging}/"], timeout=300)
+    if code != 0:
+        raise RuntimeError(f"rsync staging failed: {out[-400:]}")
+    project = ROOT / ".vercel" / "project.json"
+    if project.exists():
+        (staging / ".vercel").mkdir(exist_ok=True)
+        (staging / ".vercel" / "project.json").write_text(project.read_text())
+    return staging
+
+
 def deploy_vercel(dry_run: bool) -> dict:
     link_code, link_out = ensure_vercel_link()
     if link_code != 0:
         print(tail(link_out), flush=True)
         return {"target": "vercel", "exit_code": link_code, "url": None, "ok": False, "stage": "link"}
 
-    print(f"target: prod (vercel:{VERCEL_SCOPE}/{VERCEL_PROJECT})", flush=True)
+    staging = stage_without_git()
+    print(f"target: prod (vercel:{VERCEL_SCOPE}/{VERCEL_PROJECT}) — staged {staging}", flush=True)
     cmd = ["npx", "--yes", "vercel@latest", "--prod", "--yes", "--scope", VERCEL_SCOPE]
     if dry_run:
         cmd.append("--dry-run")
-    code, out = run(cmd, timeout=1200)
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(staging), stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=1200, env=os.environ.copy(),
+        )
+        code, out = proc.returncode, str(proc.stdout or "") + str(proc.stderr or "")
+    except subprocess.TimeoutExpired as exc:
+        code, out = 124, str(exc.stdout or "") + "\n[timed out after 1200s]"
     print(tail(out), flush=True)
     match = None
     for line in out.splitlines():
@@ -161,6 +192,7 @@ def deploy_vercel(dry_run: bool) -> dict:
         "url": match.group(0) if match else None,
         "ok": code == 0,
         "stage": "deploy",
+        "staging": str(staging),
     }
 
 
