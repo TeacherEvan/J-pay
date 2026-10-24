@@ -191,7 +191,9 @@ Both halves are deployed. `scripts/deploy_prod.py` runs the sequence with no std
 | Vercel from a **git** push | ❌ **BLOCKED** — *“Vercel couldn’t find a Git account for the commit author”* (`fenrie@local`). Three attempts, all blocked. |
 | Vercel from the **staged tree** (no `.git` metadata) | ✅ **READY**, target `production`, aliased `https://j-pay.vercel.app` + `https://j-pay-teacher-evans-projects.vercel.app` |
 | Runtime wiring | ✅ `app/layout-*.js` contains `different-crow-187.convex.cloud`; the page renders the app shell, not the “NEXT_PUBLIC_CONVEX_URL is not set” guard |
-| Deployment protection | ⚠️ `vercel_authentication` is **on** — anonymous visitors get an SSO redirect; a pilot needs protection off or a domain rule |
+| **Live browser verification** (`scripts/verify_live.mjs`, headless Chromium) | ✅ Title `J-Pay`; full sign-in screen (email + ID code, `Sign in`, `First time? Activate with your ID code`); zero console errors and zero failed requests on load |
+| **Backend round trip** | ✅ A bogus sign-in reached the deployment and was rejected **server-side**: `auth:signIn` → `Uncaught Error: InvalidAccountId` (Password.ts:157), with a Convex request id in the client console. The frontend is genuinely talking to `different-crow-187` |
+| Deployment protection | ⚠️ `vercel_authentication` is on for **deployment URLs** (302 → SSO), but **not** for the `https://j-pay.vercel.app` alias, which returns **200 publicly** (`deploymentType: all_except_custom_domains`). A pilot needs this decided deliberately |
 | Convex plan | ⚠️ CLI reports the team is **above the Free plan limits** — confirm the plan before a pilot |
 
 **Why git deploys fail but the CLI works.** Vercel authorises a git deployment against the commit author’s Vercel/GitHub account. Agent-authored commits (`Fenrie <fenrie@local>`) have no such account, so every push is blocked regardless of build health. `deploy_prod.py` therefore stages the tree without `.git` and deploys the upload — the artefact is the same, the release is not gated on an identity the agent cannot own.
