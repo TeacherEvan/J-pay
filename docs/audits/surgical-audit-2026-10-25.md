@@ -178,4 +178,25 @@ J-Pay is a well-separated Next.js + Convex PWA: authz helpers are centralised in
 
 ---
 
+## 6. Delivery state — measured, not assumed
+
+The two commits are pushed to `origin/main` (`gh api …/commits/main` → `ada25a4`). That is where the good news ends:
+
+| Check | Result |
+| :--- | :--- |
+| `git push origin main` | ✅ `e97765e..ada25a4` |
+| GitHub Actions run for `ada25a4` | ❌ `startup_failure` at **0s** — the TeacherEvan account remains locked on a billing issue, so **CI never ran** |
+| Vercel production deployment for `ada25a4` | ❌ **“Deployment was blocked”** (`j-r0z6b0ogx…`, `vercel[bot]`) |
+| Previous deployment (`e97765e`, 2026-10-09) | ❌ **“Deployment has failed”** — no successful production build exists in the record |
+| Deployment URLs | Both 302 → `vercel.com/sso-api` (SSO-protected; not a public production host) |
+| `CONVEX_DEPLOY_KEY` on this desk | absent (only `.env.example`) |
+
+**Deploy order is load-bearing.** `queuedAt` is a new *argument* on `logs:createLog`; Convex validates arguments strictly, so a new frontend against an old backend rejects every check-in. The release sequence must be:
+
+1. `npx convex deploy` (backend first — accepts both old and new clients),
+2. then the Vercel build (frontend sends `queuedAt`),
+3. then one check-in per role, read back in the moderator audit log.
+
+Do **not** ship the frontend alone. Both steps need credentials this desk does not hold (Convex deploy key; a Vercel deployment authorised for the committing identity — `vercel[bot]` blocked a commit authored by `Fenrie <fenrie@local>`).
+
 *Audit and remediation performed against commit `e97765e`. Every numeric claim above is backed by a command run in this session; the gate table is reproducible with the four commands in §4.*
