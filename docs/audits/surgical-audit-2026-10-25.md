@@ -200,14 +200,15 @@ Both halves are deployed. `scripts/deploy_prod.py` runs the sequence with no std
 
 **Order is still load-bearing.** `queuedAt` is a new *argument* on `logs:createLog`; Convex validates arguments strictly. Backend first (done), frontend second (done). Never the reverse.
 
-**The one remaining human gate:** the deployment has no moderator account, so nobody can sign in yet. Bootstrap it once with the key held at `~/.hermes/keys/jpay-bootstrap-key` (0600), then delete `BOOTSTRAP_KEY` from the deployment:
+**Human gate — cleared 2026-10-25 15:00 +07.** The owner bootstrapped the first moderator (`ewiebotha@gmail.com`, role `moderator`, `isActive: true`, `passwordChangedAt` set). The shared bootstrap secret was then removed from the deployment and its absence verified:
 
-```bash
-npx convex run --deployment different-crow-187 users:bootstrapFirstModerator \
-  '{"key":"<from the key file>","email":"<owner email>"}'
-npx convex env remove --deployment different-crow-187 BOOTSTRAP_KEY
+```text
+convex env list --names-only → DEVICE_TOKEN_SECRET, JWKS, JWT_PRIVATE_KEY, SITE_URL
+convex env get BOOTSTRAP_KEY → ✖ Environment variable "BOOTSTRAP_KEY" not found
 ```
 
-Do not put the key in a commit, a work log or this report.
+`provisionModerator`'s key path is already closed in code once a moderator exists (`94a582b`), so the removed env var is defence in depth rather than the only lock. The local 0600 key file is kept for a genuine recovery; re-setting it on the deployment is a deliberate act, not a standing path.
+
+Remaining functional proof (needs the owner's own credential, not an agent-generated one): sign in at `/` with the moderator email + ID code, open `/moderator`, provision one employee, assign a site, and walk one check-in → shift → payroll line.
 
 *Audit and remediation performed against commit `e97765e`. Every numeric claim above is backed by a command run in this session; the gate table is reproducible with the four commands in §4.*
