@@ -34,10 +34,11 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
           await outboxRemove(key);
         } catch (e) {
           const msg = String(e);
-          if (/WEAK_GPS|DEVICE_TOKEN|SITE_NOT|INACTIVE|FORBIDDEN/.test(msg)) {
+          if (/WEAK_GPS|SITE_NOT|INACTIVE|FORBIDDEN/.test(msg)) {
             await outboxRemove(key);
             setLastError(`Dropped queued entry: ${msg}`);
           } else {
+            setLastError(`Sync paused: ${msg}`);
             break;
           }
         }
@@ -47,7 +48,7 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
       setSyncing(false);
       refresh();
     }
-  }, [flushOne, syncing, refresh]);
+  }, [flushOne, refresh]);
 
   const enqueue = useCallback(
     async (entry: OutboxEntry) => {
