@@ -13,6 +13,7 @@ import { jpayConfig } from "../src/config/jpay.config";
 const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
 const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
 const RETENTION_DAYS = jpayConfig.geoRules.retentionDays;
+const SKEW_TOLERANCE_MS = jpayConfig.laborRules.skewToleranceMs;
 
 export const createLog = mutation({
   args: {
@@ -87,10 +88,11 @@ export const createLog = mutation({
       .order("desc")
       .take(5);
     const prevFix = previous
-      .filter((l) => Math.abs(l.clockSkewMs ?? 0) <= 30000)
       .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
     if (prevFix) {
-      const hours = (args.clientReportedTime - prevFix.clientReportedTime) / 3600000;
+      const aTime = Math.abs(clockSkewMs) <= SKEW_TOLERANCE_MS ? args.clientReportedTime : Date.now();
+      const bTime = Math.abs(prevFix.clockSkewMs ?? 0) <= SKEW_TOLERANCE_MS ? prevFix.clientReportedTime : prevFix._creationTime;
+      const hours = (aTime - bTime) / 3600000;
       if (hours > 0) {
         const km =
           haversineMeters(prevFix.latitude, prevFix.longitude, args.latitude, args.longitude) / 1000;
@@ -210,10 +212,11 @@ export const createLogAs = internalMutation({
       .order("desc")
       .take(5);
     const prevFix = previous
-      .filter((l) => Math.abs(l.clockSkewMs ?? 0) <= 30000)
       .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
     if (prevFix) {
-      const hours = (args.clientReportedTime - prevFix.clientReportedTime) / 3600000;
+      const aTime = Math.abs(clockSkewMs) <= SKEW_TOLERANCE_MS ? args.clientReportedTime : Date.now();
+      const bTime = Math.abs(prevFix.clockSkewMs ?? 0) <= SKEW_TOLERANCE_MS ? prevFix.clientReportedTime : prevFix._creationTime;
+      const hours = (aTime - bTime) / 3600000;
       if (hours > 0) {
         const km =
           haversineMeters(prevFix.latitude, prevFix.longitude, args.latitude, args.longitude) / 1000;
@@ -251,37 +254,28 @@ export const purgeExpiredCoords = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
-    // The old run stopped at the first 500 rows, so a backlog older than the
-    // retention window could never be cleared. Page through the range with a
-    // hard per-run ceiling to stay inside the mutation budget.
-    const MAX_PER_RUN = 5000;
-    const PAGE = 200;
-    let cursor: string | null = null;
-    let scanned = 0;
-    let purged = 0;
-    while (scanned < MAX_PER_RUN) {
-      const page = await ctx.db
-        .query("logs")
-        .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
-        .paginate({ cursor, numItems: PAGE });
-      for (const log of page.page) {
-        scanned++;
-        if (log.latitude !== 0 || log.longitude !== 0) {
-          await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
-          purged++;
-        }
-      }
-      if (page.isDone) break;
-      cursor = page.continueCursor;
+    const batch = await ctx.db
+      .query("logs")
+      .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
+      .filter((q) => q.or(q.neq(q.field("latitude"), 0), q.neq(q.field("longitude"), 0)))
+      .take(200);
+
+    for (const log of batch) {
+      await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
     }
-    // H7 (2026-08-26): write an audit row so purge runs are observable.
-    if (purged > 0) {
+
+    if (batch.length > 0) {
       await ctx.db.insert("purgeAudit", {
         purgedAt: Date.now(),
-        purgedCount: purged,
+        purgedCount: batch.length,
         kind: "coordinates",
       });
     }
-    return purged;
+
+    if (batch.length === 200) {
+      await ctx.scheduler.runAfter(0, internal.logs.purgeExpiredCoords, {});
+    }
+
+    return batch.length;
   },
 });

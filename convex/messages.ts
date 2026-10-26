@@ -32,14 +32,16 @@ export const moderatorInbox = query({
     const unread = await ctx.db
       .query("messages")
       .withIndex("by_modqueue_unread", (q) => q.eq("modQueue", true).eq("isRead", false))
+      .filter((q) => q.eq(q.field("archivedAt"), undefined))
       .take(100);
     const read = await ctx.db
       .query("messages")
       .withIndex("by_modqueue_unread", (q) => q.eq("modQueue", true).eq("isRead", true))
+      .filter((q) => q.eq(q.field("archivedAt"), undefined))
       .take(50);
     const merged = [...unread, ...read].sort((a, b) => b._creationTime - a._creationTime);
     const senders = new Map<string, string>();
-    for (const m of merged.slice(0, 30)) {
+    for (const m of merged) {
       if (!senders.has(m.senderId)) {
         const sender = await ctx.db.get(m.senderId);
         senders.set(m.senderId, sender?.name ?? sender?.email ?? "unknown");
@@ -68,11 +70,12 @@ export const myInbox = query({
   args: {},
   handler: async (ctx) => {
     const { userId } = await requireActiveUser(ctx);
-    return await ctx.db
+    const rows = await ctx.db
       .query("messages")
       .withIndex("by_recipient_read", (q) => q.eq("recipientId", userId))
       .order("desc")
       .take(50);
+    return rows.filter((m) => m.archivedAt === undefined);
   },
 });
 
@@ -136,25 +139,38 @@ export const purgeExpiredMessages = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     const batchSize = 200;
-    let purged = 0;
-    let cursor: string | undefined;
-    while (true) {
-      const page = await ctx.db.query("messages").paginate({ cursor: cursor ?? null, numItems: batchSize });
-      for (const m of page.page) {
-        const retentionDays = m.retentionDays ?? MSG_RETENTION_DEFAULT_DAYS;
-        const ageMs = now - m._creationTime;
-        if (ageMs > retentionDays * 86_400_000) {
-          await ctx.db.patch(m._id, { archivedAt: now });
-          purged++;
-        }
+    const cutoff = now - MSG_RETENTION_DEFAULT_DAYS * 86_400_000;
+    const batch = await ctx.db
+      .query("messages")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("archivedAt"), undefined),
+          q.lt(q.field("_creationTime"), cutoff)
+        )
+      )
+      .take(batchSize);
+
+    for (const m of batch) {
+      const retentionDays = m.retentionDays ?? MSG_RETENTION_DEFAULT_DAYS;
+      const ageMs = now - m._creationTime;
+      if (ageMs > retentionDays * 86_400_000) {
+        await ctx.db.patch(m._id, { archivedAt: now });
       }
-      if (page.isDone) break;
-      cursor = page.continueCursor;
     }
-    if (purged > 0) {
-      await ctx.db.insert("purgeAudit", { purgedAt: now, purgedCount: purged, kind: "messages" });
+
+    if (batch.length > 0) {
+      await ctx.db.insert("purgeAudit", {
+        purgedAt: now,
+        purgedCount: batch.length,
+        kind: "messages",
+      });
     }
-    return purged;
+
+    if (batch.length === batchSize) {
+      await ctx.scheduler.runAfter(0, internal.messages.purgeExpiredMessages, {});
+    }
+
+    return batch.length;
   },
 });
 

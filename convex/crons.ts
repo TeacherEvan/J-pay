@@ -3,27 +3,27 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-crons.daily(
+crons.cron(
   "purge-expired-coordinates",
-  { hourUTC: 2, minuteUTC: 0 },
+  "0 2 * * *",
   internal.logs.purgeExpiredCoords
 );
 
-crons.daily(
+crons.cron(
   "purge-stale-demo-reviewers",
-  { hourUTC: 3, minuteUTC: 0 },
+  "0 3 * * *",
   internal.demo.purgeStaleReviewers
 );
 
-crons.daily(
+crons.cron(
   "archive-stale-master-temps",
-  { hourUTC: 4, minuteUTC: 0 },
+  "0 4 * * *",
   internal.users.archiveStaleMasterTemps
 );
 
-crons.daily(
+crons.cron(
   "purge-expired-messages",
-  { hourUTC: 5, minuteUTC: 0 },
+  "0 5 * * *",
   internal.messages.purgeExpiredMessages
 );
 
