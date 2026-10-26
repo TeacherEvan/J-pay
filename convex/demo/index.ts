@@ -103,7 +103,7 @@ function buildRows(): SeedRow[] {
     {
       const e = personas[1];
       push({ siteName: "JNB Central Depot", email: e.email, employeeName: e.name, status: "arrived", clientReportedTime: dayStart(d, 7) });
-      push({ siteName: "JNB Central Depot", email: e.email, employeeName: e.name, status: "quick side mission", clientReportedTime: dayStart(d, 7) + 3 * 3600e3, sideMissionDurationMinutes: 35 });
+      push({ siteName: "JNB Central Depot", email: e.email, employeeName: e.name, status: "quick side mission", clientReportedTime: dayStart(d, 7) + 3 * 3600e3, sideMissionDurationMinutes: 45 });
       push({ siteName: "JNB Central Depot", email: e.email, employeeName: e.name, status: "checkpoint", clientReportedTime: dayStart(d, 7) + 3 * 3600e3 + 32 * 60e3 });
       push({ siteName: "JNB Central Depot", email: e.email, employeeName: e.name, status: "job finish", clientReportedTime: dayStart(d, 7) + 9.5 * 3600e3 });
     }
@@ -345,12 +345,13 @@ export const demoAudit = query({
 export const demoNeedsReview = query({
   args: {},
   handler: async (ctx) => {
-    await requireDemoReviewer(ctx);
-    return await ctx.db
+    const { personaUserId } = await requireDemoReviewer(ctx);
+    const rows = await ctx.db
       .query("shifts")
-      .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
+      .withIndex("by_user_start", (q) => q.eq("userId", personaUserId))
       .order("desc")
-      .take(50);
+      .take(100);
+    return rows.filter((s) => s.needsReview).slice(0, 50);
   },
 });
 
@@ -538,9 +539,12 @@ export const demoModeratorInbox = query({
 export const demoReplyToEmployee = mutation({
   args: { recipientId: v.id("users"), content: v.string() },
   handler: async (ctx, args) => {
-    const { userId: reviewerId } = await requireDemoReviewer(ctx);
+    const { userId: reviewerId, personaUserId } = await requireDemoReviewer(ctx);
     const text = args.content.trim();
     if (!text || text.length > 2000) throw new ConvexError("INVALID_CONTENT");
+    if (args.recipientId !== personaUserId) {
+      throw new ConvexError("OUT_OF_DEMO_SCOPE");
+    }
     const recipient = await ctx.db.get(args.recipientId);
     if (!recipient) throw new ConvexError("USER_NOT_FOUND");
     if (recipient.role !== "employee" || recipient.isAnonymous === true) {
@@ -641,14 +645,21 @@ export const purgeStaleReviewers = internalMutation({
         .withIndex("by_user", (q) => q.eq("userId", user._id))
         .collect();
       for (const p of pushes) await ctx.db.delete(p._id);
-      const messages = await ctx.db
+      const sent = await ctx.db
         .query("messages")
-        .filter(
-          (q) =>
-            q.or(q.eq(q.field("senderId"), user._id), q.eq(q.field("recipientId"), user._id))
-        )
+        .withIndex("by_sender", (q) => q.eq("senderId", user._id))
         .collect();
-      for (const m of messages) await ctx.db.delete(m._id);
+      for (const m of sent) await ctx.db.delete(m._id);
+      const receivedUnread = await ctx.db
+        .query("messages")
+        .withIndex("by_recipient_read", (q) => q.eq("recipientId", user._id).eq("isRead", false))
+        .collect();
+      for (const m of receivedUnread) await ctx.db.delete(m._id);
+      const receivedRead = await ctx.db
+        .query("messages")
+        .withIndex("by_recipient_read", (q) => q.eq("recipientId", user._id).eq("isRead", true))
+        .collect();
+      for (const m of receivedRead) await ctx.db.delete(m._id);
       const resolutions = await ctx.db
         .query("reviewResolutions")
         .withIndex("by_user_key", (q) => q.eq("userId", user._id))
@@ -676,10 +687,12 @@ export const ensurePersonaSiteAssignments = internalMutation({
   args: { personaUserId: v.id("users") },
   handler: async (ctx, args) => {
     requireDemoMode();
-    const sites = await ctx.db
+    const demoNames = new Set<string>(DEMO_SITES.map((d) => d.name));
+    const allSites = await ctx.db
       .query("sites")
       .filter((q) => q.eq(q.field("archivedAt"), undefined))
       .collect();
+    const sites = allSites.filter((s) => demoNames.has(s.name));
     const existing = await ctx.db
       .query("userSites")
       .withIndex("by_user", (q) => q.eq("userId", args.personaUserId))

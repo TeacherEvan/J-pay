@@ -1,6 +1,7 @@
 import { internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { maybeCurrentUserId } from "./access";
+import { isDemoUser } from "./demo/scope";
 
 export const me = query({
   args: {},
@@ -16,11 +17,18 @@ export const me = query({
 export const listEmployees = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const rows = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
       .collect();
+    return rows
+      .filter((u) => !isDemoUser(u))
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+      }));
   },
 });
 

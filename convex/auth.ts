@@ -117,10 +117,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
       const email = args.profile.email;
       if (!email) throw new ConvexError("EMAIL_REQUIRED");
-      const existing = await db
+      const matches = await db
         .query("users")
         .withIndex("email", (q) => q.eq("email", email))
-        .first();
+        .collect();
+      const existing = matches.find((u) => u.isMasterTemp !== true);
       if (existing) {
         if (existing.archivedAt !== undefined) throw new ConvexError("ACCOUNT_ARCHIVED");
         return existing._id;

@@ -2,6 +2,7 @@ import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { DEMO_SITE_TIMEZONE } from "./sites";
+import { haversineMeters } from "../geo";
 
 type SeedRow = {
   siteName: string;
@@ -102,6 +103,7 @@ export const seedAll = internalMutation({
 
     let inserted = 0;
     let skipped = 0;
+    const lastFixByUser = new Map<string, { lat: number; lng: number; time: number }>();
     for (const r of args.rows) {
       const userId = userIdByEmail.get(r.email)!;
       const siteId = siteIdByName.get(r.siteName)!;
@@ -115,6 +117,25 @@ export const seedAll = internalMutation({
         skipped++;
         continue;
       }
+
+      const siteSpec = args.sites.find((s) => s.name === r.siteName);
+      const isWithinGeofence = siteSpec
+        ? haversineMeters(r.lat, r.lng, siteSpec.latitude, siteSpec.longitude) <= siteSpec.geofenceRadiusMeters
+        : true;
+
+      let impossibleTravelFlag = false;
+      const prev = lastFixByUser.get(r.email);
+      if (prev) {
+        const hours = (r.clientReportedTime - prev.time) / 3600e3;
+        if (hours > 0) {
+          const km = haversineMeters(prev.lat, prev.lng, r.lat, r.lng) / 1000;
+          if (km / hours > 200) {
+            impossibleTravelFlag = true;
+          }
+        }
+      }
+      lastFixByUser.set(r.email, { lat: r.lat, lng: r.lng, time: r.clientReportedTime });
+
       await ctx.db.insert("logs", {
         userId,
         siteId,
@@ -125,8 +146,8 @@ export const seedAll = internalMutation({
         latitude: r.lat,
         longitude: r.lng,
         accuracyMeters: r.accuracyMeters,
-        isWithinGeofence: true,
-        impossibleTravelFlag: false,
+        isWithinGeofence,
+        impossibleTravelFlag,
         deviceMetadata: "demo-seeder",
         sideMissionDurationMinutes: [15, 30, 45, 60, 120].includes(
           r.sideMissionDurationMinutes ?? 0
