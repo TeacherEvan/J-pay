@@ -48,6 +48,40 @@ test("rule 2: duplicate idempotencyKey dropped before evaluation", () => {
   assert.equal(segs[0].totalMinutes, 60);
 });
 
+test("rule 2b: duplicate keys resolve identically regardless of input order", () => {
+  // A retry can persist two rows sharing an idempotency key. Whichever row
+  // the engine keeps must not depend on the order the caller supplies them.
+  const a = { ...log("arrived", 0), idempotencyKey: "dup-key" };
+  const b = { ...log("day finish", 60), idempotencyKey: "dup-key" };
+  const c = log("day finish", 120);
+  const forward = deriveSegments([a, b, c]);
+  const reverse = deriveSegments([b, a, c]);
+  assert.deepEqual(forward, reverse);
+});
+
+test("rule 2c: a duplicate key whose retries disagree is flagged, never silently dropped", () => {
+  // Same key, different payload = the client double-submitted with different
+  // content. Picking one silently would delete a real punch from the money
+  // path with no trace. It must reach a moderator instead.
+  const a = { ...log("arrived", 0), idempotencyKey: "conflict-key" };
+  const b = { ...log("day finish", 60), idempotencyKey: "conflict-key" };
+  const end = log("day finish", 120);
+  const segs = deriveSegments([a, b, end]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "duplicate_key_conflict");
+});
+
+test("rule 2d: identical duplicate rows stay unflagged (a true retry is not a conflict)", () => {
+  const a = log("arrived", 0);
+  const dup = { ...a };
+  const end = log("day finish", 60);
+  const segs = deriveSegments([a, dup, end]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, false);
+  assert.equal(segs[0].totalMinutes, 60);
+});
+
 test("clean day: arrived→checkpoint→lunch→checkpoint→day finish", () => {
   const segs = deriveSegments([
     log("arrived", 0),
@@ -192,6 +226,36 @@ test("geofence: an outside-fence log flags the whole shift for review", () => {
   assert.equal(segs[0].needsReview, true);
   assert.equal(segs[0].reviewReason, "geofence_violation");
   assert.equal(segs[0].totalMinutes, 300);
+});
+
+test("impossible travel: speed > 200 km/h flags the shift for review", () => {
+  const arrived = log("arrived", 0);
+  const checkpoint = log("checkpoint", 15);
+  checkpoint.impossibleTravelFlag = true;
+  const segs = deriveSegments([arrived, checkpoint, log("day finish", 300)]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "impossible_travel");
+});
+
+test("active on site: open shift within 16h has endedAt === undefined and positive totalMinutes", () => {
+  const arrived = log("arrived", 0);
+  arrived.clientReportedTime = Date.now() - 120 * MIN;
+  arrived._creationTime = arrived.clientReportedTime;
+  const segs = deriveSegments([arrived]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].endedAt, undefined, "open shift must have endedAt undefined to be counted as active on site");
+  assert.ok(segs[0].totalMinutes >= 120);
+});
+
+test("terminal without arrival: closed stub has endedAt set and totalMinutes 0", () => {
+  const finish = log("day finish", 0);
+  const segs = deriveSegments([finish]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "terminal_without_arrival");
+  assert.notEqual(segs[0].endedAt, undefined, "terminal stubs must not be indexed as active on site");
+  assert.equal(segs[0].totalMinutes, 0);
 });
 
 test("serverClockSkewMs: measured at enqueue, not at replay", () => {

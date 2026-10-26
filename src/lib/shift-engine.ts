@@ -10,6 +10,8 @@ export type EngineLog = {
   siteTimezone?: string;
   /** Server-computed haversine verdict (§7). Outside-fence work needs review. */
   isWithinGeofence?: boolean;
+  /** Server-computed >200 km/h haversine speed verdict (§7). */
+  impossibleTravelFlag?: boolean;
 };
 
 export type Segment = {
@@ -60,14 +62,36 @@ export function isOfflineReplay(log: EngineLog): boolean {
 }
 
 export function deriveSegments(allLogs: EngineLog[]): Segment[] {
-  const seenKeys = new Set<string>();
-  const ordered = allLogs
-    .filter((l) => {
-      if (seenKeys.has(l.idempotencyKey)) return false;
-      seenKeys.add(l.idempotencyKey);
-      return true;
-    })
-    .sort((a, b) => skewCorrectedTime(a) - skewCorrectedTime(b));
+  // Deduplicate deterministically. The previous version kept whichever row
+  // arrived first in the caller's array, so the same set of logs could derive
+  // different money depending on query order. Keep the earliest-persisted row
+  // per idempotency key, and record any key whose retries disagree so the
+  // resulting segment is reviewed instead of silently dropping a real punch.
+  const kept = new Map<string, EngineLog>();
+  const conflicts = new Set<string>();
+  for (const log of allLogs) {
+    const prior = kept.get(log.idempotencyKey);
+    if (!prior) {
+      kept.set(log.idempotencyKey, log);
+      continue;
+    }
+    if (prior.status !== log.status || prior.clientReportedTime !== log.clientReportedTime) {
+      conflicts.add(log.idempotencyKey);
+    }
+    const earlier =
+      log._creationTime < prior._creationTime ||
+      (log._creationTime === prior._creationTime &&
+        log.clientReportedTime < prior.clientReportedTime);
+    if (earlier) kept.set(log.idempotencyKey, log);
+  }
+
+  const ordered = [...kept.values()].sort((a, b) => {
+    const byTime = skewCorrectedTime(a) - skewCorrectedTime(b);
+    if (byTime !== 0) return byTime;
+    const byCreation = a._creationTime - b._creationTime;
+    if (byCreation !== 0) return byCreation;
+    return a.idempotencyKey < b.idempotencyKey ? -1 : a.idempotencyKey > b.idempotencyKey ? 1 : 0;
+  });
 
   const segments: Segment[] = [];
   let current: Segment | null = null;
@@ -81,7 +105,9 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
   const flagsOf = (log: EngineLog): string[] => {
     const out: string[] = [];
     if (log.isWithinGeofence === false) out.push("geofence_violation");
+    if (log.impossibleTravelFlag === true) out.push("impossible_travel");
     if (isOfflineReplay(log)) out.push("offline_replay");
+    if (conflicts.has(log.idempotencyKey)) out.push("duplicate_key_conflict");
     return out;
   };
 
@@ -192,6 +218,8 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (!current) {
           segments.push({
             startedAt: t,
+            endedAt: t,
+            totalMinutes: 0,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
             timezone: log.siteTimezone,
@@ -216,6 +244,8 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         if (!current) {
           segments.push({
             startedAt: t,
+            endedAt: t,
+            totalMinutes: 0,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
             timezone: log.siteTimezone,
@@ -235,7 +265,8 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
   if (current) {
     const now = Date.now();
     const seg = current;
-    const end = Math.min(now, seg.startedAt + MAX_SHIFT_MS);
+    const isAutoClosed = seg.startedAt + MAX_SHIFT_MS < now;
+    const end = isAutoClosed ? seg.startedAt + MAX_SHIFT_MS : now;
     if (phase === "sideMission") {
       deductionMinutes += sideDeclared;
       if (sideDeclared > L.unpairedLunchThresholdMultiplier * PICKER_MAX_MINUTES) {
@@ -249,13 +280,17 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         seg.reviewReason = "unpaired_lunch_excessive";
       }
     }
-    seg.endedAt = end;
+    if (isAutoClosed) {
+      seg.endedAt = end;
+    } else {
+      seg.endedAt = undefined;
+    }
     seg.totalMinutes = Math.max(0, Math.round((end - seg.startedAt) / 60000) - deductionMinutes);
     if (segFlags.size > 0 && !seg.needsReview) {
       seg.needsReview = true;
       seg.reviewReason = [...segFlags][0];
     }
-    if (seg.startedAt + MAX_SHIFT_MS < now && !seg.needsReview) {
+    if (isAutoClosed && !seg.needsReview) {
       seg.needsReview = true;
       seg.reviewReason = seg.reviewReason ?? "auto_closed_no_terminal";
     }

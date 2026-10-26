@@ -33,6 +33,7 @@ export const deriveForUser = internalMutation({
       sideMissionDurationMinutes: l.sideMissionDurationMinutes,
       siteTimezone: tzBySite.get(l.siteId),
       isWithinGeofence: l.isWithinGeofence,
+      impossibleTravelFlag: l.impossibleTravelFlag,
     }));
 
     const segments = deriveSegments(engineLogs);
