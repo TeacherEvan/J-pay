@@ -186,7 +186,7 @@ function computeWtrUk(days: PayInputDay[], rate: number): PayResult {
         ordinaryMinutes: ordinary,
         overtimeMinutes: ot,
         sundayMinutes: 0,
-        pay: (minutes / 60) * rate,
+        pay: roundCents((minutes / 60) * rate),
       });
     }
   }

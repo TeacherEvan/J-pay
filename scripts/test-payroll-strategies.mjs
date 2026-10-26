@@ -190,4 +190,11 @@ assert.equal(weeklyCapMinutes("dailyOvertime"), null);
   assert.equal(r.totals.overtimeMinutes, 0);
 }
 
+// WTR line rounding: 200 min at 100/h -> 333.33 (not raw float 333.33333333333337)
+{
+  const r = computePay([{ day: "2026-08-03", minutes: 200 }], R, "wtr_uk");
+  assert.equal(r.lines[0].pay, 333.33);
+  assert.equal(r.totals.pay, 333.33);
+}
+
 console.log("payroll-strategies: all assertions passed");

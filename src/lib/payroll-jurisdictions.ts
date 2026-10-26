@@ -47,11 +47,24 @@ const TABLE: Record<JurisdictionCode, JurisdictionInfo> = {
   },
 };
 
+const LOCALE_TO_CODE: Record<string, JurisdictionCode> = {
+  "EN-ZA": "ZA",
+  "EN-US": "US",
+  "EN-GB": "UK",
+  "GB": "UK",
+};
+
 export function getPayStrategy(code: string): JurisdictionInfo {
-  const up = code.toUpperCase() as JurisdictionCode;
-  const row = TABLE[up];
-  if (!row) throw new UnsupportedJurisdictionError(code);
-  return row;
+  const up = String(code ?? "").trim().toUpperCase();
+  const direct = LOCALE_TO_CODE[up] ?? (up as JurisdictionCode);
+  if (direct && TABLE[direct]) return TABLE[direct];
+  if (up.includes("-")) {
+    const parts = up.split("-");
+    const region = parts[parts.length - 1];
+    const mapped = (region === "GB" ? "UK" : region) as JurisdictionCode;
+    if (TABLE[mapped]) return TABLE[mapped];
+  }
+  throw new UnsupportedJurisdictionError(code);
 }
 
 export function listSupportedJurisdictions(): JurisdictionInfo[] {

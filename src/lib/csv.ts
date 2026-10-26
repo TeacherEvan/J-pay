@@ -1,7 +1,8 @@
 export function sanitizeCell(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return "";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   const s = String(value);
-  if (/^[=+\-@\t\r]/.test(s)) {
+  if (/^[\s]*[=+\-@\t\r]/.test(s)) {
     return `'${s}`;
   }
   return s;

@@ -30,6 +30,24 @@ import {
   assert.equal(j.defaultTimezone, "Europe/London");
 }
 
+{
+  const j = getPayStrategy("en-ZA");
+  assert.equal(j.code, "ZA");
+  assert.equal(j.strategy, "bcea");
+}
+
+{
+  const j = getPayStrategy("en-US");
+  assert.equal(j.code, "US");
+  assert.equal(j.strategy, "flsa");
+}
+
+{
+  const j = getPayStrategy("en-GB");
+  assert.equal(j.code, "UK");
+  assert.equal(j.strategy, "wtr_uk");
+}
+
 assert.throws(
   () => getPayStrategy("DE"),
   (e) => e instanceof UnsupportedJurisdictionError && e.code === "DE"
