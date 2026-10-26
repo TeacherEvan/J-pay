@@ -49,7 +49,8 @@ export default function LoginPage() {
     try {
       await signIn("password", {
         email: selectedEmail,
-        secret: signInId.trim(),
+        password: signInId.trim(),
+        flow: "signIn",
       });
     } catch (e) {
       setError(errMsg(e));

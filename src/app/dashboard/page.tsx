@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import Link from "next/link";
 import { api } from "../../../convex/_generated/api";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { formatCurrency, formatTime } from "@/lib/format";
+import { ForcedPasswordChange } from "../change-password";
 
 function formatMinutes(m: number) {
   const h = Math.floor(m / 60);
@@ -12,10 +14,34 @@ function formatMinutes(m: number) {
 }
 
 export default function DashboardPage() {
+  const me = useQuery(api.users_queries.me);
   const locale = useUserLocale();
-  const summary = useQuery(api.kpi.summary, {});
-  const audit = useQuery(api.moderator.auditRecentLogs, { limit: 100 });
-  const roster = useQuery(api.moderator.listEmployeesWithAssignments);
+  const summary = useQuery(api.kpi.summary, me?.role === "moderator" ? {} : "skip");
+  const audit = useQuery(
+    api.moderator.auditRecentLogs,
+    me?.role === "moderator" ? { limit: 100 } : "skip"
+  );
+  const roster = useQuery(
+    api.moderator.listEmployeesWithAssignments,
+    me?.role === "moderator" ? {} : "skip"
+  );
+
+  if (me === undefined) {
+    return <main className="grid min-h-dvh place-items-center text-sm text-neutral-400">Loading…</main>;
+  }
+  if (me !== null && me.passwordChangedAt === undefined && !me.isMasterTemp) {
+    return <ForcedPasswordChange />;
+  }
+  if (me === null || me.role !== "moderator") {
+    return (
+      <main className="grid min-h-dvh place-items-center p-6 text-center text-sm text-neutral-400">
+        Moderator access only.
+        <Link href="/" className="mt-2 text-emerald-400 underline">
+          Back to check-in
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-6" data-testid="dashboard-page">

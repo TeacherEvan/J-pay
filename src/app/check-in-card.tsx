@@ -421,12 +421,31 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
       {/* ── Quick actions ──────────────────────────────────────────── */}
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="What's happening">
+        <div
+          className="flex flex-wrap gap-2"
+          role="radiogroup"
+          aria-label="What's happening"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+              e.preventDefault();
+              const idx = chips.indexOf(pending);
+              const next = chips[(idx + 1) % chips.length];
+              setPending(next);
+            } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const idx = chips.indexOf(pending);
+              const prev = chips[(idx - 1 + chips.length) % chips.length];
+              setPending(prev);
+            }
+          }}
+        >
           {chips.map((s) => (
             <button
               key={s}
               type="button"
-              aria-pressed={pending === s}
+              role="radio"
+              aria-checked={pending === s}
+              tabIndex={pending === s ? 0 : -1}
               onClick={() => setPending(s)}
               className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${
                 pending === s
@@ -533,12 +552,12 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                   <span className="text-sm">{LABEL[log.status as Status] ?? log.status}</span>
                   <span className="ml-auto flex items-center gap-2">
                     {verdict === "outside" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">
+                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-400">
                         outside fence
                       </span>
                     )}
                     {verdict === "travel" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">
+                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-400">
                         travel flag
                       </span>
                     )}
@@ -598,7 +617,10 @@ function LiveSubmit({
       deviceToken.current = t;
       localStorage.setItem(TOKEN_KEY, t);
       return t;
-    })();
+    })().catch((err) => {
+      tokenReady.current = null;
+      throw err;
+    });
     return tokenReady.current;
   }, [issueToken]);
 

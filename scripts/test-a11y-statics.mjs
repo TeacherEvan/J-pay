@@ -84,12 +84,12 @@ test("a11y-statics: change-password.tsx has no setTimeout in the success-render 
   }
 });
 
-test("a11y-statics: status pill row in page.tsx is a radiogroup with aria-checked", () => {
-  const f = "src/app/page.tsx";
+test("a11y-statics: status pill row in check-in-card.tsx is a radiogroup with aria-checked", () => {
+  const f = "src/app/check-in-card.tsx";
   const src = fileByPath[f];
   assert.ok(/role=["']radiogroup["']/.test(src), `${f}: status row must be a radiogroup`);
   assert.ok(/aria-checked=/.test(src), `${f}: each pill must have aria-checked`);
   assert.ok(/role=["']radio["']/.test(src), `${f}: each pill must have role="radio"`);
-  assert.ok(/tabIndex=\{status === s \? 0 : -1\}/.test(src), `${f}: pills must use roving tabindex (0 on selected, -1 elsewhere)`);
+  assert.ok(/tabIndex=\{pending === s \? 0 : -1\}/.test(src), `${f}: pills must use roving tabindex (0 on selected, -1 elsewhere)`);
   assert.ok(/onKeyDown=/.test(src), `${f}: radiogroup must have onKeyDown handler for arrow keys`);
 });

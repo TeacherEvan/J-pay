@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -173,27 +174,30 @@ def deploy_vercel(dry_run: bool) -> dict:
     if dry_run:
         cmd.append("--dry-run")
     try:
-        proc = subprocess.run(
-            cmd, cwd=str(staging), stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, timeout=1200, env=os.environ.copy(),
-        )
-        code, out = proc.returncode, str(proc.stdout or "") + str(proc.stderr or "")
-    except subprocess.TimeoutExpired as exc:
-        code, out = 124, str(exc.stdout or "") + "\n[timed out after 1200s]"
-    print(tail(out), flush=True)
-    match = None
-    for line in out.splitlines():
-        candidate = VERCEL_URL_RE.search(line)
-        if candidate and "sso" not in candidate.group(0):
-            match = candidate
-    return {
-        "target": "vercel",
-        "exit_code": code,
-        "url": match.group(0) if match else None,
-        "ok": code == 0,
-        "stage": "deploy",
-        "staging": str(staging),
-    }
+        try:
+            proc = subprocess.run(
+                cmd, cwd=str(staging), stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, timeout=1200, env=os.environ.copy(),
+            )
+            code, out = proc.returncode, str(proc.stdout or "") + str(proc.stderr or "")
+        except subprocess.TimeoutExpired as exc:
+            code, out = 124, str(exc.stdout or "") + "\n[timed out after 1200s]"
+        print(tail(out), flush=True)
+        match = None
+        for line in out.splitlines():
+            candidate = VERCEL_URL_RE.search(line)
+            if candidate and "sso" not in candidate.group(0):
+                match = candidate
+        return {
+            "target": "vercel",
+            "exit_code": code,
+            "url": match.group(0) if match else None,
+            "ok": code == 0,
+            "stage": "deploy",
+            "staging": str(staging),
+        }
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def main() -> int:
