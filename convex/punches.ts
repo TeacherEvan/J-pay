@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireEmployee } from "./access";
 import { haversineMeters } from "./geo";
+import { internal } from "./_generated/api";
 
 export const recordPunch = mutation({
   args: {
@@ -63,7 +64,8 @@ export const recordPunch = mutation({
       }
     }
 
-    // 6. Insert punch
+    // 6. Insert punch into legacy punches table (backward compatibility)
+    const now = Date.now();
     const punchId = await ctx.db.insert("punches", {
       userId,
       siteId: args.siteId,
@@ -71,10 +73,28 @@ export const recordPunch = mutation({
       lat: args.lat,
       lng: args.lng,
       geoPassed,
-      ts: Date.now(),
+      ts: now,
     });
 
-    return { punchId, geoPassed, durationSec, ts: Date.now() };
+    // 7. Bridge to canonical shift engine logs so hours are payrolled
+    await ctx.db.insert("logs", {
+      userId,
+      siteId: args.siteId,
+      clientReportedTime: now,
+      clockSkewMs: 0,
+      status: args.type === "in" ? "arrived" : "day finish",
+      latitude: args.lat,
+      longitude: args.lng,
+      accuracyMeters: 10,
+      isWithinGeofence: geoPassed,
+      deviceMetadata: "web-punch-clock",
+      idempotencyKey: `punch-${punchId}`,
+    });
+
+    // 8. Trigger shift rederivation for payroll
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
+
+    return { punchId, geoPassed, durationSec, ts: now };
   },
 });
 

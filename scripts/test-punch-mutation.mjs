@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { haversineMeters, isInRadius } from "../convex/geo.ts";
+import { deriveSegments } from "../src/lib/shift-engine.ts";
 
 test("haversineMeters: zero distance for identical points", () => {
   assert.equal(haversineMeters(-26.2, 28.04, -26.2, 28.04), 0);
@@ -42,4 +43,36 @@ test("isInRadius: exactly at boundary returns true", () => {
   assert.equal(isInRadius(lat, lng, oneKmNorth, lng, 1000), true);
 });
 
-console.log("Geo helper tests passed!");
+test("punch bridge: punch-in and punch-out mapped to logs derive valid shifts", () => {
+  const t0 = 1700000000000;
+  const t1 = t0 + 8 * 3600 * 1000; // 8-hour shift
+
+  // Replicate the bridge logs created by recordPunch
+  const bridgeLogs = [
+    {
+      _creationTime: t0,
+      clientReportedTime: t0,
+      clockSkewMs: 0,
+      idempotencyKey: "punch-in-test-id",
+      status: "arrived", // punch 'in' maps to arrived
+      isWithinGeofence: true,
+    },
+    {
+      _creationTime: t1,
+      clientReportedTime: t1,
+      clockSkewMs: 0,
+      idempotencyKey: "punch-out-test-id",
+      status: "day finish", // punch 'out' maps to day finish
+      isWithinGeofence: true,
+    },
+  ];
+
+  const segments = deriveSegments(bridgeLogs);
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].startedAt, t0);
+  assert.equal(segments[0].endedAt, t1);
+  assert.equal(segments[0].totalMinutes, 480);
+  assert.equal(segments[0].needsReview, false);
+});
+
+console.log("Geo helper and punch bridge tests passed!");
