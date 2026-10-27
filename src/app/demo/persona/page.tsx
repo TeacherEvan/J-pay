@@ -55,52 +55,55 @@ export default function PersonaSwitcher() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="persona-switcher">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-emerald-300">Switch persona</h1>
+      <header className="flex items-baseline justify-between border-b border-[var(--line)] pb-3">
+        <h1 className="text-lg font-bold tracking-tight text-emerald-400">Switch persona</h1>
         <button
           type="button"
           onClick={() => router.push("/demo")}
-          className="text-sm text-neutral-400 underline"
+          className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-[var(--paper)]"
         >
-          Back to dashboard
+          ← Back to dashboard
         </button>
       </header>
-      <p className="text-sm text-neutral-400">
-        Currently acting as <span className="text-neutral-200">{binding?.personaName ?? "—"}</span>. Pick a persona below — your demo console will update in real time.
+      <p className="text-xs text-[var(--paper-dim)]">
+        Currently acting as <span className="text-[var(--paper)] font-medium">{binding?.personaName ?? "—"}</span>. Pick a persona below — your demo console will update in real time.
       </p>
       <ul className="flex flex-col gap-3">
-        {PERSONAS.map((p) => (
-          <li
-            key={p.email}
-            className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${
-              binding?.personaEmail === p.email
-                ? "border-emerald-500 bg-emerald-500/5"
-                : "border-neutral-800 bg-neutral-900/40"
-            }`}
-            data-testid="persona-row"
-          >
-            <div>
-              <p className="text-sm font-semibold text-neutral-100">{p.name}</p>
-              <p className="text-sm text-neutral-500">{p.email}</p>
-              <p className="mt-1 text-sm text-neutral-400">{p.narrative}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void pick(p.email)}
-              disabled={busyEmail === p.email || binding?.personaEmail === p.email}
-              className="rounded-md bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
-              data-testid="persona-play-button"
+        {PERSONAS.map((p) => {
+          const isCurrent = binding?.personaEmail === p.email;
+          return (
+            <li
+              key={p.email}
+              className={`card-surgical flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between transition-all ${
+                isCurrent
+                  ? "border-emerald-500/50 bg-emerald-950/20"
+                  : ""
+              }`}
+              data-testid="persona-row"
             >
-              {binding?.personaEmail === p.email
-                ? "Current"
-                : busyEmail === p.email
-                ? "Switching…"
-                : "Play as"}
-            </button>
-          </li>
-        ))}
+              <div>
+                <p className="text-sm font-semibold text-[var(--paper)]">{p.name}</p>
+                <p className="text-xs font-mono text-[var(--paper-dim)]">{p.email}</p>
+                <p className="mt-1 text-xs text-[var(--paper-dimmer)]">{p.narrative}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void pick(p.email)}
+                disabled={busyEmail === p.email || isCurrent}
+                className={isCurrent ? "btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider opacity-60 cursor-not-allowed" : "btn-surgical-mint rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"}
+                data-testid="persona-play-button"
+              >
+                {isCurrent
+                  ? "Current"
+                  : busyEmail === p.email
+                  ? "Switching…"
+                  : "Play as"}
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {message && <p className="text-sm text-red-400">{message}</p>}
+      {message && <p className="text-xs font-mono text-red-400">{message}</p>}
     </div>
   );
 }

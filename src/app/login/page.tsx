@@ -64,16 +64,16 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-dvh grid place-items-center p-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-xl font-bold mb-6 text-center">Employee Sign In</h1>
+      <div className="w-full max-w-sm card-surgical p-6 shadow-2xl">
+        <h1 className="text-xl font-bold mb-6 text-center tracking-tight text-[var(--paper)]">Employee Sign In</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="text-sm text-red-400 bg-red-900/30 border border-red-800 rounded p-3" role="alert">
+            <div className="text-xs font-mono text-red-400 bg-red-950/20 border border-red-500/30 rounded p-3" role="alert">
               {error}
             </div>
           )}
           <div>
-            <label htmlFor="employee" className="block text-sm font-medium mb-1">
+            <label htmlFor="employee" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
               Your Name
             </label>
             <select
@@ -83,7 +83,7 @@ export default function LoginPage() {
                 setSelectedEmail(e.target.value);
                 if (e.target.value) setManualEmail("");
               }}
-              className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
+              className="input-surgical w-full min-h-[44px]"
             >
               <option value="">{employees.length === 0 ? "— Enter email below —" : "— Select —"}</option>
               {employees.map((emp: { _id: string; name?: string; email?: string }) => (
@@ -95,7 +95,7 @@ export default function LoginPage() {
           </div>
           {employees.length === 0 && (
             <div>
-              <label htmlFor="manualEmail" className="block text-sm font-medium mb-1">
+              <label htmlFor="manualEmail" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
                 Email Address
               </label>
               <input
@@ -105,12 +105,12 @@ export default function LoginPage() {
                 onChange={(e) => setManualEmail(e.target.value)}
                 placeholder="name@company.com"
                 autoComplete="email"
-                className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
+                className="input-surgical w-full min-h-[44px]"
               />
             </div>
           )}
           <div>
-            <label htmlFor="signInId" className="block text-sm font-medium mb-1">
+            <label htmlFor="signInId" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
               Sign-In ID (Mod-assigned)
             </label>
             <input
@@ -121,18 +121,18 @@ export default function LoginPage() {
               required
               autoComplete="off"
               placeholder="JP-XXXXXXXXXX"
-              className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
+              className="input-surgical w-full min-h-[44px] font-mono"
             />
           </div>
           <button
             type="submit"
             disabled={isSubmitting || !effectiveEmail || !signInId.trim()}
-            className="w-full rounded bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+            className="btn-surgical-mint w-full rounded py-2.5 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
             {isSubmitting ? "Signing in…" : "Sign In"}
           </button>
         </form>
-        <p className="text-xs text-neutral-500 text-center mt-6">
+        <p className="text-xs font-mono text-[var(--paper-dimmer)] text-center mt-6">
           Don&apos;t have a sign-in ID? Contact your moderator.
         </p>
       </div>

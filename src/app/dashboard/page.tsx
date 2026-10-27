@@ -45,19 +45,20 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-6" data-testid="dashboard-page">
-      <header className="mb-6 flex items-baseline justify-between">
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-4 border-b border-[var(--line)] pb-4">
         <div>
-          <h1 className="text-xl font-semibold">Employee Logging Dashboard</h1>
-          <p className="text-sm text-neutral-400">Real-time overview of employee check-ins and payroll activity</p>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--paper)]">Employee Logging Dashboard</h1>
+          <p className="text-xs text-[var(--paper-dim)]">Real-time overview of employee check-ins and payroll activity</p>
         </div>
-        <a href="/moderator" className="text-sm text-emerald-400 underline hover:text-emerald-300">
+        <Link href="/moderator" className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-emerald-400">
           ← Back to moderator console
-        </a>
+        </Link>
       </header>
 
       <section className="mb-6" data-testid="dashboard-kpi-banner">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Key Metrics</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Key Metrics: tabular-nums (tnum) numeric readouts */}
+        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Key Metrics</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 tnum">
           <KpiCard label="Active on site" value={summary?.activeOnSite ?? "—"} />
           <KpiCard label="Billable (7d)" value={summary ? formatMinutes(summary.weeklyBillableMinutes) : "—"} />
           <KpiCard label="Pending reviews" value={summary?.pendingReviews ?? "—"} />
@@ -66,35 +67,35 @@ export default function DashboardPage() {
       </section>
 
       <section className="mb-6" data-testid="dashboard-audit">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent Check-ins</h2>
+        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Recent Check-ins</h2>
         {audit === undefined ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
+          <p className="text-sm text-[var(--paper-dimmer)]">Loading…</p>
         ) : audit.length === 0 ? (
-          <p className="text-sm text-neutral-500">No recent check-ins</p>
+          <p className="text-sm text-[var(--paper-dimmer)]">No recent check-ins</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-neutral-800">
+          <div className="card-surgical overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-neutral-900 text-left text-xs uppercase text-neutral-500">
+              <thead className="border-b border-[var(--line)] bg-[var(--surface-sunken)] text-left text-xs uppercase tracking-wider text-[var(--paper-dimmer)] font-mono">
                 <tr>
-                  <th className="px-3 py-2">Employee</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Time</th>
-                  <th className="px-3 py-2">Site</th>
-                  <th className="px-3 py-2 text-right">Geofence</th>
-                  <th className="px-3 py-2 text-right">Flags</th>
+                  <th scope="col" className="px-3 py-2">Employee</th>
+                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">Time</th>
+                  <th scope="col" className="px-3 py-2">Site</th>
+                  <th scope="col" className="px-3 py-2 text-right">Geofence</th>
+                  <th scope="col" className="px-3 py-2 text-right">Flags</th>
                 </tr>
               </thead>
               <tbody>
                 {audit.slice(0, 50).map((row) => (
-                  <tr key={row._id} className="border-t border-neutral-800" data-testid="dashboard-audit-row">
-                    <td className="px-3 py-2">{row.employeeName}</td>
-                    <td className="px-3 py-2">{row.status}</td>
-                    <td className="px-3 py-2 text-neutral-400">{formatTime(row.at, locale)}</td>
-                    <td className="px-3 py-2 text-neutral-400">{row.siteName}</td>
-                    <td className={`px-3 py-2 text-right ${row.isWithinGeofence ? "text-emerald-400" : "text-red-400"}`}>
+                  <tr key={row._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="dashboard-audit-row">
+                    <td className="px-3 py-2 font-medium text-[var(--paper)]">{row.employeeName}</td>
+                    <td className="px-3 py-2 text-[var(--paper-dim)]">{row.status}</td>
+                    <td className="px-3 py-2 text-[var(--paper-dim)] font-mono text-xs tnum">{formatTime(row.at, locale)}</td>
+                    <td className="px-3 py-2 text-[var(--paper-dim)]">{row.siteName}</td>
+                    <td className={`px-3 py-2 text-right font-medium text-xs ${row.isWithinGeofence ? "text-emerald-400" : "text-red-400"}`}>
                       {row.isWithinGeofence ? "inside" : "outside"}
                     </td>
-                    <td className="px-3 py-2 text-right text-red-400">
+                    <td className="px-3 py-2 text-right text-xs text-red-400 font-medium">
                       {row.impossibleTravelFlag ? "travel" : ""}
                     </td>
                   </tr>
@@ -106,33 +107,33 @@ export default function DashboardPage() {
       </section>
 
       <section data-testid="dashboard-roster">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Employee Roster</h2>
+        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Employee Roster</h2>
         {roster === undefined ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
+          <p className="text-sm text-[var(--paper-dimmer)]">Loading…</p>
         ) : roster.length === 0 ? (
-          <p className="text-sm text-neutral-500">No active employees</p>
+          <p className="text-sm text-[var(--paper-dimmer)]">No active employees</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-neutral-800">
+          <div className="card-surgical overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-neutral-900 text-left text-xs uppercase text-neutral-500">
+              <thead className="border-b border-[var(--line)] bg-[var(--surface-sunken)] text-left text-xs uppercase tracking-wider text-[var(--paper-dimmer)] font-mono">
                 <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Assigned Sites</th>
+                  <th scope="col" className="px-3 py-2">Name</th>
+                  <th scope="col" className="px-3 py-2">Email</th>
+                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">Assigned Sites</th>
                 </tr>
               </thead>
               <tbody>
                 {roster.map((emp) => (
-                  <tr key={emp._id} className="border-t border-neutral-800" data-testid="dashboard-roster-row">
-                    <td className="px-3 py-2">{emp.name ?? "—"}</td>
-                    <td className="px-3 py-2 text-neutral-400">{emp.email ?? "—"}</td>
+                  <tr key={emp._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="dashboard-roster-row">
+                    <td className="px-3 py-2 font-medium text-[var(--paper)]">{emp.name ?? "—"}</td>
+                    <td className="px-3 py-2 text-[var(--paper-dim)] font-mono text-xs">{emp.email ?? "—"}</td>
                     <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${emp.isActive ? "bg-emerald-500/10 text-emerald-300" : "bg-neutral-800 text-neutral-500"}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${emp.isActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-neutral-800 text-[var(--paper-dimmer)] border-neutral-700"}`}>
                         {emp.isActive ? "active" : "inactive"}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-neutral-400">
+                    <td className="px-3 py-2 text-[var(--paper-dim)]">
                       {emp.siteNames.length > 0 ? emp.siteNames.join(", ") : "none"}
                     </td>
                   </tr>
@@ -148,9 +149,9 @@ export default function DashboardPage() {
 
 function KpiCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-neutral-100">{value}</p>
+    <div className="card-surgical p-3">
+      <p className="text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-[var(--paper)] tnum font-mono">{value}</p>
     </div>
   );
 }

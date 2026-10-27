@@ -34,8 +34,8 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
 
   if (role === "employee") {
     return (
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Messages</h2>
+      <section className="card-surgical flex flex-col gap-3 p-4">
+        <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">Messages</h2>
         <div className="flex gap-2">
           <label className="sr-only" htmlFor="msg-employee">Message your moderator</label>
           <input
@@ -43,7 +43,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Message your moderator…"
-            className="flex-1 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
+            className="input-surgical flex-1 px-3 py-2 text-sm"
           />
           <button
             onClick={async () => {
@@ -52,15 +52,15 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
               setText("");
               setMsg("Sent to moderator.");
             }}
-            className="rounded-md bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-900"
+            className="btn-surgical btn-surgical-light min-h-[44px] px-4 py-2 text-sm font-semibold"
           >
             Send
           </button>
         </div>
-        {msg && <p role="status" aria-live="polite" className="text-sm text-neutral-400">{msg}</p>}
+        {msg && <p role="status" aria-live="polite" className="text-sm font-medium text-[var(--paper)]">{msg}</p>}
         {(inbox ?? []).map((m) => (
-          <p key={m._id} className={`rounded-md bg-neutral-900 px-3 py-1.5 text-sm ${m.isRead ? "text-neutral-500" : "text-emerald-300"}`}>
-            <span className="mr-2 opacity-60">{formatTime(m._creationTime, userLocale)}</span>
+          <p key={m._id} className={`card-subpanel px-3 py-2 text-sm ${m.isRead ? "text-[var(--fog)]" : "text-[var(--mint)] border-[var(--mint)]/40 bg-[var(--mint)]/10"}`}>
+            <span className="tnum mr-2 text-xs opacity-70">{formatTime(m._creationTime, userLocale)}</span>
             {m.content}
           </p>
         ))}
@@ -69,16 +69,16 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Messages</h2>
-      <div className="flex gap-2">
+    <section className="card-surgical flex flex-col gap-3.5 p-5">
+      <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">Messages</h2>
+      <div className="flex gap-2.5">
         <label className="sr-only" htmlFor="msg-broadcast">Broadcast to all employees</label>
         <input
           id="msg-broadcast"
           value={broadcastText}
           onChange={(e) => setBroadcastText(e.target.value)}
           placeholder="Broadcast to all employees…"
-          className="flex-1 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
+          className="input-surgical flex-1 px-3.5 py-2 text-sm"
         />
         <button
           onClick={async () => {
@@ -87,27 +87,27 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
             setBroadcastText("");
             setMsg("Broadcast sent.");
           }}
-          className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950"
+          className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2 text-sm font-semibold"
         >
           Broadcast
         </button>
       </div>
-      {(modInbox ?? []).length === 0 && <p className="text-sm text-neutral-400">Queue empty.</p>}
+      {(modInbox ?? []).length === 0 && <p className="text-sm text-[var(--fog)]">Queue empty.</p>}
       {(modInbox ?? []).map((m) => (
-        <div key={m._id} className={`rounded-md bg-neutral-900 p-3 text-sm ${m.isRead ? "" : "border-l-2 border-emerald-500"}`}>
-          <p>
-            <span className="font-semibold">{m.senderName}</span>
-            <span className="ml-2 text-neutral-500">{formatDateTime(m.at, userLocale)}</span>
+        <div key={m._id} className={`card-subpanel p-3.5 text-sm ${m.isRead ? "" : "border-l-4 border-l-[var(--mint)]"}`}>
+          <p className="flex items-baseline justify-between">
+            <span className="font-semibold text-[var(--paper)]">{m.senderName}</span>
+            <span className="tnum text-xs text-[var(--fog)]">{formatDateTime(m.at, userLocale)}</span>
           </p>
-          <p className="mt-1 text-neutral-300">{m.content}</p>
-          <div className="mt-2 flex gap-2">
+          <p className="mt-1.5 text-[var(--text-secondary)]">{m.content}</p>
+          <div className="mt-2.5 flex gap-2">
             <label className="sr-only" htmlFor={`msg-reply-${m._id}`}>Reply to {m.senderName}</label>
             <input
               id={`msg-reply-${m._id}`}
               value={replyText[m._id] ?? ""}
               onChange={(e) => setReplyText({ ...replyText, [m._id]: e.target.value })}
               placeholder="Reply directly…"
-              className="flex-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-2.5 text-sm"
+              className="input-surgical flex-1 px-3 py-1.5 text-xs"
             />
             <button
               onClick={async () => {
@@ -118,14 +118,14 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
                 setReplyText({ ...replyText, [m._id]: "" });
                 setMsg("Reply sent.");
               }}
-              className="rounded bg-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-900"
+              className="btn-surgical btn-surgical-light px-3.5 py-1.5 text-xs font-semibold"
             >
               Reply
             </button>
             {!m.isRead && (
               <button
                 onClick={() => void markQueueItemRead({ messageId: m._id as Id<"messages"> })}
-                className="rounded border border-neutral-700 px-3 py-2.5 text-sm"
+                className="btn-surgical px-3 py-1.5 text-xs"
               >
                 Dismiss
               </button>
@@ -133,7 +133,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
           </div>
         </div>
       ))}
-      {msg && <p role="status" aria-live="polite" className="text-sm text-neutral-400">{msg}</p>}
+      {msg && <p role="status" aria-live="polite" className="text-sm font-medium text-[var(--paper)]">{msg}</p>}
     </section>
   );
 }

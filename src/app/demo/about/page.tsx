@@ -6,42 +6,42 @@ export default function AboutPage() {
   const router = useRouter();
   return (
     <div className="flex flex-col gap-4" data-testid="demo-about">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-emerald-300">About this demo</h1>
+      <header className="flex items-baseline justify-between border-b border-[var(--line)] pb-3">
+        <h1 className="text-lg font-bold tracking-tight text-emerald-400">About this demo</h1>
         <button
           type="button"
           onClick={() => router.push("/demo")}
-          className="text-sm text-neutral-400 underline"
+          className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-[var(--paper)]"
         >
-          Back to dashboard
+          ← Back to dashboard
         </button>
       </header>
 
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm leading-relaxed text-neutral-300">
-        <p className="mb-2">
+      <section className="card-surgical p-5 text-sm leading-relaxed text-[var(--paper-dim)]">
+        <p className="mb-3 text-[var(--paper)]">
           This is a working preview of J-Pay, populated with seeded data so you can
           explore the real product without needing a live deployment.
         </p>
-        <p className="mb-2">
+        <p className="mb-3">
           You sign in anonymously — no password, no email — and you act as one of five
           seeded employees. The dashboard shows their 13-day history, derived shifts,
           payroll totals, the audit log, and shifts that the system itself flagged
           for review.
         </p>
-        <p className="mb-2">
+        <p className="mb-3">
           Check-ins you make here are attributed to the persona, not to you, so the
           review queue reacts as if a real employee were on site.
         </p>
-        <p className="mb-2 font-semibold text-amber-300">
+        <p className="border-l-2 border-amber-500 pl-3 py-1 font-medium text-amber-300 bg-amber-950/20 rounded-r">
           This is throwaway data, not a real customer. The reviewer row you created
           will be auto-purged after 7 days, along with its demo sessions, logs, and
           messages. The real product is unaffected.
         </p>
       </section>
 
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-100">What this demo is not</h2>
-        <ul className="ml-5 list-disc text-sm text-neutral-400">
+      <section className="card-surgical p-5 text-sm">
+        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">What this demo is not</h2>
+        <ul className="ml-5 list-disc space-y-1 text-xs text-[var(--paper-dim)]">
           <li>It is not a stress test — the seeded corpus is bounded (5 personas × 13 weekday days).</li>
           <li>It is not a multi-tenant preview — each reviewer gets one persona at a time.</li>
           <li>It is not a production data environment — switching personas does not move real payroll data.</li>

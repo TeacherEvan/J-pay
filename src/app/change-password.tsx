@@ -44,12 +44,12 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
   }
 
   const inputCls = compact
-    ? "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm"
-    : "rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm w-full";
+    ? "input-surgical px-3 py-2 text-sm"
+    : "input-surgical px-3.5 py-2.5 text-sm w-full";
   const idSuffix = compact ? "compact" : "forced";
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       <label className="sr-only" htmlFor={`${idSuffix}-pw-current`}>Current password / ID code</label>
       <input id={`${idSuffix}-pw-current`} value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="Current password / ID code" type="password" className={inputCls} />
       <label className="sr-only" htmlFor={`${idSuffix}-pw-next`}>New password (min 8 chars)</label>
@@ -57,10 +57,10 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
       <label className="sr-only" htmlFor={`${idSuffix}-pw-confirm`}>Confirm new password</label>
       <input id={`${idSuffix}-pw-confirm`} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" type="password" className={inputCls} />
       <button ref={buttonRef} onClick={() => void submit()} disabled={busy || !current || next.length < 8}
-        className={compact ? "min-h-[44px] self-start rounded border border-neutral-700 px-3 py-2.5 text-sm disabled:opacity-50" : "min-h-[44px] rounded-md bg-emerald-500 px-3 py-2.5 font-semibold text-emerald-950 disabled:opacity-50"}>
+        className={compact ? "btn-surgical min-h-[44px] self-start px-4 py-2 text-sm disabled:opacity-50" : "btn-surgical btn-surgical-mint min-h-[44px] w-full px-4 py-2.5 text-sm font-semibold disabled:opacity-50"}>
         {busy ? "Saving…" : "Update password"}
       </button>
-      {msg && <p role="status" aria-live="polite" className={compact ? "text-neutral-300" : "text-center text-sm"}>{msg}</p>}
+      {msg && <p role="status" aria-live="polite" className={compact ? "text-sm text-[var(--fog)]" : "text-center text-sm font-medium text-[var(--paper)]"}>{msg}</p>}
     </div>
   );
 }
@@ -68,10 +68,10 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
 export function ChangePassword() {
   return (
     <details className="text-sm">
-      <summary className="cursor-pointer text-neutral-400 hover:text-neutral-200">
+      <summary className="cursor-pointer text-[var(--fog)] hover:text-[var(--paper)] transition">
         Change password (replace your one-time ID code)
       </summary>
-      <div className="mt-2">
+      <div className="card-subpanel mt-2 p-3">
         <PasswordFields compact />
       </div>
     </details>
@@ -91,16 +91,16 @@ export function ForcedPasswordChange() {
   }, [saved]);
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/90 p-6"
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/90 backdrop-blur-sm p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="forced-pw-title"
     >
-      <div className="w-full max-w-sm rounded-xl border border-emerald-800 bg-neutral-950 p-6">
+      <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40 shadow-[0_0_24px_var(--mint-glow)]">
         {!saved ? (
           <>
-            <h2 id="forced-pw-title" className="mb-2 text-lg font-semibold">Set your own password</h2>
-            <p className="mb-4 text-sm text-neutral-400">
+            <h2 id="forced-pw-title" className="mb-2 text-lg font-bold text-[var(--paper)]">Set your own password</h2>
+            <p className="mb-4 text-sm text-[var(--text-secondary)]">
               You are signed in with a one-time code from your moderator. Choose a personal
               password to continue — you will only be asked once.
             </p>
@@ -108,8 +108,8 @@ export function ForcedPasswordChange() {
           </>
         ) : (
           <>
-            <h2 id="forced-pw-title" className="mb-2 text-lg font-semibold">Password saved ✓</h2>
-            <p role="status" aria-live="polite" className="mb-4 text-sm text-neutral-400">Reloading…</p>
+            <h2 id="forced-pw-title" className="mb-2 text-lg font-bold text-[var(--mint)]">Password saved ✓</h2>
+            <p role="status" aria-live="polite" className="mb-4 text-sm text-[var(--fog)]">Reloading…</p>
           </>
         )}
       </div>

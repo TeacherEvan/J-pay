@@ -127,41 +127,41 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
   if (!fix) return null;
   return (
     <div
-      className="fixed inset-0 z-[1000] grid place-items-center bg-black/70 p-4"
+      className="fixed inset-0 z-[1000] grid place-items-center bg-black/75 backdrop-blur-xs p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Geofence and audit detail"
     >
       <div
         ref={dialogRef}
-        className="w-full max-w-lg rounded-xl border border-neutral-800 bg-neutral-950 p-4"
+        className="w-full max-w-lg card-surgical p-5 shadow-2xl"
       >
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h3 className="text-sm font-semibold">
+          <h3 className="text-sm font-semibold tracking-tight text-[var(--paper)]">
             {fix.employeeName} · {fix.status}
           </h3>
           <button
             onClick={onClose}
-            className="rounded border border-neutral-700 px-3 py-2.5 text-sm hover:bg-neutral-800"
+            className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider"
           >
             Close
           </button>
         </div>
         <div
           ref={containerRef}
-          className="h-64 w-full overflow-hidden rounded-md border border-neutral-800"
+          className="h-64 w-full overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface-sunken)]"
           data-focus-skip="true"
           tabIndex={-1}
         />
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-neutral-400">
-          <dt>Site</dt>
-          <dd className="text-neutral-200">{fix.siteName}</dd>
-          <dt>Geofence radius</dt>
-          <dd className="text-neutral-200">{fix.siteRadius} m</dd>
-          <dt>GPS accuracy</dt>
-          <dd className="text-neutral-200">±{fix.accuracyMeters} m</dd>
-          <dt>Verdict</dt>
-          <dd className={fix.isWithinGeofence ? "text-emerald-400" : "text-red-400"}>
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-[var(--paper-dim)]">
+          <dt className="uppercase tracking-wider font-mono text-xs text-[var(--paper-dimmer)]">Site</dt>
+          <dd className="text-[var(--paper)]">{fix.siteName}</dd>
+          <dt className="uppercase tracking-wider font-mono text-xs text-[var(--paper-dimmer)]">Geofence radius</dt>
+          <dd className="text-[var(--paper)] tnum font-mono">{fix.siteRadius} m</dd>
+          <dt className="uppercase tracking-wider font-mono text-xs text-[var(--paper-dimmer)]">GPS accuracy</dt>
+          <dd className="text-[var(--paper)] tnum font-mono">±{fix.accuracyMeters} m</dd>
+          <dt className="uppercase tracking-wider font-mono text-xs text-[var(--paper-dimmer)]">Verdict</dt>
+          <dd className={fix.isWithinGeofence ? "text-emerald-400 font-medium" : "text-red-400 font-medium"}>
             {fix.isWithinGeofence ? "inside geofence" : "outside geofence"}
             {fix.impossibleTravelFlag ? " · travel flag" : ""}
           </dd>

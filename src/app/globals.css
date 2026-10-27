@@ -1,14 +1,35 @@
 @import "tailwindcss";
 
-:root {
-  --ink: #0b0e14;
-  --panel: #141927;
-  --panel-2: #10151f;
-  --line: #26304a;
-  --hivis: #ffb224;
-  --mint: #34d399;
-  --fog: #8b95ac;
-  --paper: #eef2f9;
+@layer tokens {
+  :root {
+    /* ── Base Obsidian Depth Stack (oklch) ───────────────────────── */
+    --ink: oklch(0.15 0.018 262);         /* Deep Void Base (#0b0e14) */
+    --panel-2: oklch(0.18 0.022 262);     /* Recessed Chassis (#10151f) */
+    --panel: oklch(0.21 0.026 262);       /* Elevated Card / Panel (#141927) */
+    --panel-elevated: oklch(0.25 0.030 262); /* Popovers / Modals / Active Bays */
+
+    /* ── Structural Borders & Physical Lighting ────────────────── */
+    --line: oklch(0.31 0.042 262);        /* Structural Hairline (#26304a) */
+    --line-active: oklch(0.42 0.060 262); /* Focused / Active Hairline */
+    --specular-top: inset 0 1px 0 0 oklch(1 0 0 / 0.14);
+    --specular-top-strong: inset 0 1px 0 0 oklch(1 0 0 / 0.25);
+    --shadow-recessed: inset 0 2px 4px 0 oklch(0 0 0 / 0.55);
+
+    /* ── Industrial High-Visibility Accents ──────────────────────── */
+    --mint: oklch(0.77 0.152 162);        /* High-Luminance Emerald (#34d399) */
+    --mint-glow: oklch(0.77 0.152 162 / 0.35);
+    --hivis: oklch(0.81 0.165 78);        /* High-Visibility Amber (#ffb224) */
+    --hivis-glow: oklch(0.81 0.165 78 / 0.35);
+    --danger: oklch(0.70 0.185 22);       /* Anomaly / Violation Crimson (#f87171) */
+
+    /* ── Precision Typography & Readouts ────────────────────────── */
+    --paper: oklch(0.96 0.010 255);       /* Primary Readout Text (#eef2f9) */
+    --text-secondary: oklch(0.82 0.018 258); /* Secondary Copy (#c4ccde) */
+    --fog: oklch(0.68 0.030 260);         /* Muted Metadata / Headers (#8b95ac) */
+    --fog-dim: oklch(0.50 0.025 260);     /* Tertiary Legends */
+    --text-on-mint: oklch(0.15 0.035 165);/* Extreme Contrast Dark on Green (8.4:1 AAA) */
+    --text-on-hivis: oklch(0.14 0.030 75);/* Extreme Contrast Dark on Amber (9.2:1 AAA) */
+  }
 }
 
 @layer base {
@@ -26,28 +47,320 @@
   body {
     background: var(--ink);
     color: var(--paper);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
-/* Time-clock numerals: timer, money, distances */
-.tnum {
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+@layer components {
+  /* ── 1. Tactile Push Button Base (.btn-surgical) ─────────────── */
+  .btn-surgical {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.25;
+    user-select: none;
+    touch-action: manipulation;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, oklch(0.24 0.024 262) 0%, oklch(0.19 0.022 262) 100%);
+    color: var(--paper);
+    box-shadow:
+      var(--specular-top),
+      0 1px 2px 0 oklch(0 0 0 / 0.45),
+      0 4px 8px -2px oklch(0 0 0 / 0.25);
+    transition:
+      transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Fine-pointer hover lift (gated strictly to fine pointer devices) */
+  @media (hover: hover) and (pointer: fine) {
+    .btn-surgical:hover:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]) {
+      border-color: var(--line-active);
+      transform: translate3d(0, -1px, 0) scale(1.005);
+      background: linear-gradient(180deg, oklch(0.27 0.028 262) 0%, oklch(0.21 0.024 262) 100%);
+    }
+  }
+
+  /* Instant physical active depression (<=16ms / 25ms transition) */
+  .btn-surgical:active:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]) {
+    transition-duration: 25ms;
+    transform: translate3d(0, 1px, 0) scale(0.985);
+    box-shadow:
+      inset 0 2px 4px 0 oklch(0 0 0 / 0.65),
+      0 1px 1px 0 oklch(0 0 0 / 0.3);
+  }
+
+  /* Disabled state */
+  .btn-surgical:disabled,
+  .btn-surgical[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(35%);
+    box-shadow: none;
+    transform: none !important;
+  }
+
+  /* ── 2. Semantic Button Variants ────────────────────────────── */
+  .btn-surgical-mint {
+    background: linear-gradient(180deg, oklch(0.79 0.155 162) 0%, oklch(0.72 0.150 162) 100%);
+    color: var(--text-on-mint);
+    border: 1px solid oklch(1 0 0 / 0.2);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.35),
+      0 1px 3px 0 oklch(0 0 0 / 0.4),
+      0 4px 12px -2px var(--mint-glow);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-surgical-mint:hover:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]) {
+      border-color: oklch(1 0 0 / 0.35);
+      background: linear-gradient(180deg, oklch(0.82 0.158 162) 0%, oklch(0.75 0.152 162) 100%);
+    }
+  }
+
+  .btn-surgical-hivis {
+    background: linear-gradient(180deg, oklch(0.83 0.168 78) 0%, oklch(0.77 0.160 78) 100%);
+    color: var(--text-on-hivis);
+    border: 1px solid oklch(1 0 0 / 0.25);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.4),
+      0 1px 3px 0 oklch(0 0 0 / 0.4),
+      0 4px 12px -2px var(--hivis-glow);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-surgical-hivis:hover:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]) {
+      border-color: oklch(1 0 0 / 0.4);
+      background: linear-gradient(180deg, oklch(0.86 0.170 78) 0%, oklch(0.80 0.165 78) 100%);
+    }
+  }
+
+  .btn-surgical-danger {
+    background: linear-gradient(180deg, oklch(0.68 0.19 22) 0%, oklch(0.60 0.18 22) 100%);
+    color: oklch(0.98 0.005 255);
+    border: 1px solid oklch(1 0 0 / 0.2);
+  }
+
+  .btn-surgical-light {
+    background: linear-gradient(180deg, oklch(0.92 0.015 255) 0%, oklch(0.85 0.015 255) 100%);
+    color: oklch(0.12 0.02 262);
+    border: 1px solid oklch(1 0 0 / 0.4);
+  }
+
+  /* ── 3. Tactile Pill Switch (.pill-surgical) ─────────────────── */
+  .pill-surgical {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--fog);
+    box-shadow: var(--specular-top);
+    touch-action: manipulation;
+    cursor: pointer;
+    transition:
+      transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .pill-surgical:hover {
+      border-color: var(--line-active);
+      color: var(--paper);
+    }
+  }
+  .pill-surgical:active {
+    transition-duration: 25ms;
+    transform: scale(0.98);
+  }
+
+  /* ── 4. Surface Containers & Cards ───────────────────────────── */
+  .card-surgical {
+    border-radius: 1rem;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, oklch(0.22 0.026 262) 0%, oklch(0.19 0.023 262) 100%);
+    box-shadow:
+      var(--specular-top),
+      0 1px 3px 0 oklch(0 0 0 / 0.4),
+      0 6px 16px -4px oklch(0 0 0 / 0.3);
+  }
+
+  .card-subpanel {
+    border-radius: 0.75rem;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    box-shadow: var(--shadow-recessed);
+  }
+
+  /* ── 5. Recessed Input & Select Styling ──────────────────────── */
+  .input-surgical {
+    border-radius: 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--paper);
+    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.45);
+    transition: border-color 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .input-surgical:focus {
+    border-color: var(--mint);
+    box-shadow: 0 0 0 1px var(--mint), inset 0 1px 2px oklch(0 0 0 / 0.45);
+    outline: none;
+  }
 }
 
-/* Live dot on the shift card — suppressed for reduced motion */
+@layer utilities {
+  /* Time-clock numerals & telemetry figures */
+  .tnum {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Glowing semantic status pips */
+  .status-pip {
+    display: inline-block;
+    border-radius: 9999px;
+  }
+  .status-pip-mint {
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint-glow);
+  }
+  .status-pip-hivis {
+    background: var(--hivis);
+    box-shadow: 0 0 8px var(--hivis-glow);
+  }
+  .status-pip-danger {
+    background: var(--danger);
+    box-shadow: 0 0 8px oklch(0.70 0.185 22 / 0.4);
+  }
+
+  /* Coarse touch target enforcement */
+  @media (any-pointer: coarse) {
+    .touch-target-44 {
+      min-height: 44px;
+    }
+  }
+
+  /* Sub-perceptual anti-banding dither container */
+  .canvas-dithered {
+    position: relative;
+    isolation: isolate;
+  }
+  .canvas-dithered::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    filter: url("#dither-noise");
+    opacity: 0.65;
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+/* ── Live dot pulse on shift lamp ───────────────────────────────── */
 @keyframes jpay-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
 }
 
 .pulse-dot {
   animation: jpay-pulse 2s ease-in-out infinite;
 }
 
+/* ── J-Pay animated loading emblem (TRD §4) ─────────────────────── */
+@keyframes jpay-radar {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0.3;
+  }
+}
+
+.jpay-loader-emblem {
+  animation: jpay-radar 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Leaflet Dark-Telemetry Theme Overrides ──────────────────────── */
+.leaflet-container {
+  background: var(--panel-2) !important;
+  font-family: inherit !important;
+}
+
+.leaflet-container .leaflet-tile-pane {
+  filter: brightness(0.72) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.35);
+}
+
+.leaflet-bar {
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.4) !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+}
+
+.leaflet-bar a {
+  background: var(--panel) !important;
+  color: var(--paper) !important;
+  border-bottom: 1px solid var(--line) !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 30px !important;
+}
+
+.leaflet-bar a:hover {
+  background: var(--panel-elevated) !important;
+  color: var(--mint) !important;
+}
+
+.leaflet-control-attribution {
+  background: oklch(0.15 0.018 262 / 0.85) !important;
+  color: var(--fog) !important;
+  font-size: 10px !important;
+  border-top-left-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-control-attribution a {
+  color: var(--mint) !important;
+}
+
+/* ── Global Accessibility: Reduced-Motion Guard ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .pulse-dot {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .pulse-dot,
+  .jpay-loader-emblem {
+    animation: none !important;
   }
 }
