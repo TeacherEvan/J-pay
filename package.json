@@ -17,6 +17,8 @@
     "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
     "@serwist/next": "^10.0.0-preview.14",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "convex": "^1.45.0",
     "leaflet": "^1.9.4",
     "next": "^16.3.3",
@@ -25,6 +27,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^22.0.0",
@@ -33,8 +36,7 @@
     "@types/web-push": "^3.6.4",
     "puppeteer-core": "^25.8.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "~5.9.0",
-    "@playwright/test": "^1.52.0"
+    "typescript": "~5.9.0"
   },
   "overrides": {
     "@auth/core": "^0.41.3",

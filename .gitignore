@@ -20,6 +20,9 @@ tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example
+# No-dot variants some CLIs write (NOT matched by `.env*` above)
+env.local
+env.local.*
 
 # Generated previews
 *.mmd.png
