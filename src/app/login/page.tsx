@@ -13,9 +13,12 @@ export default function LoginPage() {
   const { signIn } = useAuthActions();
   const employees = useQuery(api.users_queries.listEmployees) ?? [];
   const [selectedEmail, setSelectedEmail] = useState("");
+  const [manualEmail, setManualEmail] = useState("");
   const [signInId, setSignInId] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const effectiveEmail = selectedEmail || manualEmail.trim();
 
   if (auth.isLoading) {
     return (
@@ -41,14 +44,14 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!selectedEmail || !signInId.trim()) {
-      setError("Select your name and enter your sign-in ID");
+    if (!effectiveEmail || !signInId.trim()) {
+      setError("Please provide your email and sign-in ID");
       return;
     }
     setIsSubmitting(true);
     try {
       await signIn("password", {
-        email: selectedEmail,
+        email: effectiveEmail,
         password: signInId.trim(),
         flow: "signIn",
       });
@@ -76,11 +79,13 @@ export default function LoginPage() {
             <select
               id="employee"
               value={selectedEmail}
-              onChange={(e) => setSelectedEmail(e.target.value)}
-              required
+              onChange={(e) => {
+                setSelectedEmail(e.target.value);
+                if (e.target.value) setManualEmail("");
+              }}
               className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
             >
-              <option value="">— Select —</option>
+              <option value="">{employees.length === 0 ? "— Enter email below —" : "— Select —"}</option>
               {employees.map((emp: { _id: string; name?: string; email?: string }) => (
                 <option key={emp._id} value={emp.email ?? ""}>
                   {emp.name ?? "Unknown"} ({emp.email ?? "no email"})
@@ -88,6 +93,22 @@ export default function LoginPage() {
               ))}
             </select>
           </div>
+          {employees.length === 0 && (
+            <div>
+              <label htmlFor="manualEmail" className="block text-sm font-medium mb-1">
+                Email Address
+              </label>
+              <input
+                id="manualEmail"
+                type="email"
+                value={manualEmail}
+                onChange={(e) => setManualEmail(e.target.value)}
+                placeholder="name@company.com"
+                autoComplete="email"
+                className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-h-[44px]"
+              />
+            </div>
+          )}
           <div>
             <label htmlFor="signInId" className="block text-sm font-medium mb-1">
               Sign-In ID (Mod-assigned)
@@ -105,7 +126,7 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
-            disabled={isSubmitting || !selectedEmail || !signInId.trim()}
+            disabled={isSubmitting || !effectiveEmail || !signInId.trim()}
             className="w-full rounded bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
           >
             {isSubmitting ? "Signing in…" : "Sign In"}

@@ -17,13 +17,20 @@ export const me = query({
 export const listEmployees = query({
   args: {},
   handler: async (ctx) => {
+    const viewerId = await maybeCurrentUserId(ctx);
+    const isDemo = process.env.DEMO_MODE === "1";
+    // Security/Zero-Trust: Anonymous callers cannot enumerate employees in production.
+    // In demo mode (DEMO_MODE=1) or when authenticated, roster is accessible.
+    if (!viewerId && !isDemo) {
+      return [];
+    }
     const rows = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
       .collect();
     return rows
-      .filter((u) => !isDemoUser(u))
+      .filter((u) => (isDemo ? true : !isDemoUser(u)))
       .map((u) => ({
         _id: u._id,
         name: u.name,
