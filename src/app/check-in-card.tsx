@@ -184,7 +184,7 @@ function TodayStrip() {
   return (
     <p className="tnum text-xs text-[var(--fog)]">
       Today {formatMinutesShort(pay.totals.payableMinutes)} ·{" "}
-      <span className="text-[var(--paper)]">
+      <span className="text-[var(--paper)] font-medium">
         {formatCurrency(pay.totals.pay, pay.currency, pay.locale)}
       </span>
     </p>
@@ -275,6 +275,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     [sites]
   );
 
+  // Readout timing variables — tabular-nums (tnum) applied on readout
   const timerAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
   const elapsed = phase !== "off" && timerAnchor ? now - timerAnchor : null;
 
@@ -299,30 +300,36 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     <section
       aria-label="Shift clock"
       data-testid={isLive ? "checkin-card" : "demo-checkin"}
-      className="flex flex-col gap-3"
+      className="flex flex-col gap-3.5"
     >
-      {/* ── Shift card: the state lamp ─────────────────────────────── */}
+      {/* ── Shift card: the state lamp chassis ────────────────────── */}
       <div
-        className={`rounded-2xl border p-5 ${
+        className={`card-surgical relative overflow-hidden p-5 transition-all duration-300 ${
           phase === "on"
-            ? "border-[var(--hivis)]/60 bg-[var(--hivis)]/[0.07]"
+            ? "border-[var(--hivis)]/60 bg-[var(--hivis)]/[0.08]"
             : phase === "break"
               ? "border-[var(--hivis)]/35 bg-[var(--hivis)]/[0.04]"
               : "border-[var(--line)] bg-[var(--panel)]"
         }`}
       >
-        <div className="flex items-center justify-between gap-3">
+        {phase === "on" && (
+          <div
+            className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-[var(--hivis)]/15 blur-2xl"
+            aria-hidden="true"
+          />
+        )}
+        <div className="relative flex items-center justify-between gap-3">
           <p
             className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] ${
               phase === "off" ? "text-[var(--fog)]" : "text-[var(--hivis)]"
             }`}
           >
             <span
-              className={`pulse-dot inline-block h-2 w-2 rounded-full ${
+              className={`pulse-dot inline-block h-2.5 w-2.5 rounded-full ${
                 phase === "on"
-                  ? "bg-[var(--hivis)]"
+                  ? "bg-[var(--hivis)] shadow-[0_0_8px_var(--hivis)]"
                   : phase === "break"
-                    ? "bg-[var(--hivis)]/60"
+                    ? "bg-[var(--hivis)]/70 shadow-[0_0_6px_var(--hivis)]"
                     : "bg-[var(--fog)]"
               }`}
             />
@@ -335,31 +342,27 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
           {isLive && <TodayStrip />}
         </div>
 
-        <p className="tnum mt-2 text-5xl font-semibold tracking-tight" aria-live="off">
+        <p className="tnum relative mt-2 text-5xl font-semibold tracking-tight text-[var(--paper)]" aria-live="off">
           {!loaded ? "··:··:··" : elapsed !== null ? formatElapsed(elapsed) : "—:—:—"}
         </p>
 
-        <p className="mt-1 text-sm text-[var(--fog)]">
+        <p className="tnum relative mt-1.5 text-sm text-[var(--fog)]">
           {!loaded
             ? "Reading your latest event…"
             : phase === "off"
               ? last
-                ? `Last event: ${LABEL[last.status as Status]} at ${
-                    timerAnchor ? formatTime(timerAnchor, userLocale) : "—"
-                  }`
+                ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>
                 : "Your shift hasn't started yet."
-              : `${
-                  siteNameOf(last?.siteId) ? `At ${siteNameOf(last?.siteId)}` : "On shift"
-                } since ${timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}`}
+              : <>{siteNameOf(last?.siteId) ? `At ${siteNameOf(last?.siteId)}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>}
         </p>
       </div>
 
-      {/* ── Site picker ────────────────────────────────────────────── */}
+      {/* ── Site picker (recessed bay) ────────────────────────────── */}
       {sites.length > 0 && (phase === "off" || pickerOpen) && (
         <div
           role="radiogroup"
           aria-label="Site"
-          className="flex flex-col gap-1.5"
+          className="card-subpanel flex flex-col gap-1.5 p-2"
           onKeyDown={(e) => {
             if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
             e.preventDefault();
@@ -389,9 +392,9 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                   setSiteId(s._id);
                   setUserPickedSite(true);
                 }}
-                className={`flex min-h-[44px] items-center justify-between rounded-xl border px-4 py-2.5 text-left text-sm ${
+                className={`btn-surgical flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm ${
                   selected
-                    ? "border-[var(--mint)]/70 bg-[var(--mint)]/10 text-[var(--paper)]"
+                    ? "border-[var(--mint)]/70 bg-[var(--mint)]/10 text-[var(--paper)] shadow-[inset_0_1px_0_0_oklch(1_0_0/0.18)]"
                     : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
                 }`}
               >
@@ -408,18 +411,18 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         <button
           type="button"
           onClick={() => setPickerOpen((v) => !v)}
-          className="self-start text-xs text-[var(--fog)] underline hover:text-[var(--paper)]"
+          className="self-start text-xs text-[var(--fog)] underline hover:text-[var(--paper)] touch-target-44 flex items-center"
         >
           {pickerOpen ? "Hide sites" : `Site: ${siteNameOf(siteId || last?.siteId) ?? "choose"}`}
         </button>
       )}
       {sites.length === 0 && sitesQuery !== undefined && (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-300">
           No site assigned yet — your moderator must assign you before you can check in.
         </p>
       )}
 
-      {/* ── Quick actions ──────────────────────────────────────────── */}
+      {/* ── Quick actions (tactile rocker pills) ───────────────────── */}
       {chips.length > 0 && (
         <div
           className="flex flex-wrap gap-2"
@@ -447,9 +450,9 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
               aria-checked={pending === s}
               tabIndex={pending === s ? 0 : -1}
               onClick={() => setPending(s)}
-              className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${
+              className={`pill-surgical min-h-[44px] ${
                 pending === s
-                  ? "border-[var(--hivis)]/70 bg-[var(--hivis)]/10 text-[var(--hivis)]"
+                  ? "border-[var(--hivis)]/70 bg-[var(--hivis)]/15 text-[var(--hivis)] shadow-[0_0_10px_var(--hivis-glow)]"
                   : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
               }`}
             >
@@ -461,18 +464,18 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
       )}
 
       {submitStatus === "quick side mission" && (
-        <div className="flex items-center gap-2" role="group" aria-label="Side mission duration">
-          <span className="text-sm text-[var(--fog)]">Declared duration</span>
-          <div className="flex gap-1">
+        <div className="card-subpanel flex items-center gap-3 p-3" role="group" aria-label="Side mission duration">
+          <span className="text-sm font-medium text-[var(--fog)]">Declared duration</span>
+          <div className="flex gap-1.5">
             {SIDE_MISSION_DURATIONS.map((m) => (
               <button
                 key={m}
                 type="button"
                 aria-pressed={sideMinutes === m}
                 onClick={() => setSideMinutes(m)}
-                className={`tnum min-h-[44px] min-w-[44px] rounded-lg border px-2 py-2 text-sm ${
+                className={`btn-surgical tnum min-h-[44px] min-w-[44px] rounded-lg px-2.5 py-2 text-sm ${
                   sideMinutes === m
-                    ? "border-[var(--mint)]/70 bg-[var(--mint)]/10 text-[var(--paper)]"
+                    ? "border-[var(--mint)]/70 bg-[var(--mint)]/15 text-[var(--paper)] font-semibold shadow-[0_0_8px_var(--mint-glow)]"
                     : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
                 }`}
               >
@@ -511,7 +514,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
       {message && (
         <p
-          className="text-center text-sm text-[var(--paper)]"
+          className="text-center text-sm font-medium text-[var(--paper)]"
           data-testid={isLive ? "checkin-message" : "demo-checkin-message"}
           role="status"
         >
@@ -521,8 +524,8 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
       {/* ── Today timeline ─────────────────────────────────────────── */}
       {todayLogs.length > 0 && (
-        <section className="mt-3">
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
+        <section className="card-surgical mt-3 p-4">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
             Today&apos;s log
           </h2>
           <ol className="flex flex-col">
@@ -538,7 +541,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                   key={log._id}
                   data-testid="checkin-verdict"
                   data-verdict={verdict}
-                  className={`flex items-center gap-3 py-2 ${i > 0 ? "border-t border-[var(--line)]/50" : ""}`}
+                  className={`flex items-center gap-3 py-2.5 ${i > 0 ? "border-t border-[var(--line)]/50" : ""}`}
                 >
                   <span
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
@@ -549,15 +552,15 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                   >
                     <StatusIcon status={log.status} />
                   </span>
-                  <span className="text-sm">{LABEL[log.status as Status] ?? log.status}</span>
+                  <span className="text-sm font-medium">{LABEL[log.status as Status] ?? log.status}</span>
                   <span className="ml-auto flex items-center gap-2">
                     {verdict === "outside" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-400">
+                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
                         outside fence
                       </span>
                     )}
                     {verdict === "travel" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-400">
+                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
                         travel flag
                       </span>
                     )}
@@ -626,7 +629,7 @@ function LiveSubmit({
 
   const flushOne = useCallback(
     async (entry: OutboxEntry) => {
-      await createLog({
+      const payload = {
         siteId: entry.siteId as Id<"sites">,
         clientReportedTime: entry.clientReportedTime,
         status: entry.status as Status,
@@ -644,9 +647,33 @@ function LiveSubmit({
         idempotencyKey: entry.idempotencyKey,
         deviceMetadata: entry.deviceMetadata,
         queuedAt: entry.queuedAt,
-      });
+      };
+
+      try {
+        await createLog(payload);
+      } catch (err: unknown) {
+        const msg = String((err as { message?: string })?.message ?? err);
+        if (msg.includes("DEVICE_TOKEN_INVALID")) {
+          deviceToken.current = null;
+          tokenReady.current = null;
+          try {
+            localStorage.removeItem(TOKEN_KEY);
+          } catch {}
+          const fresh = await issueToken().catch(() => null);
+          if (fresh) {
+            deviceToken.current = fresh;
+            try {
+              localStorage.setItem(TOKEN_KEY, fresh);
+            } catch {}
+            payload.deviceToken = fresh;
+            await createLog(payload);
+            return;
+          }
+        }
+        throw err;
+      }
     },
-    [createLog]
+    [createLog, issueToken]
   );
 
   const { count, enqueue, flush, syncing, lastError } = useOutbox(flushOne);
@@ -750,27 +777,28 @@ function LiveSubmit({
     <>
       <button
         data-testid="checkin-submit"
+        data-loading={busy}
         onClick={checkIn}
         disabled={busy}
-        className={`h-16 rounded-xl text-lg font-bold transition disabled:opacity-50 ${
+        className={`btn-surgical h-16 rounded-xl text-lg font-bold transition disabled:opacity-50 ${
           status === "day finish"
-            ? "bg-[var(--hivis)] text-black hover:brightness-110"
-            : "bg-[var(--mint)] text-emerald-950 hover:brightness-110"
+            ? "btn-surgical-hivis"
+            : "btn-surgical-mint"
         }`}
       >
         {busy ? "Logging…" : label}
       </button>
       {lastError && <p className="text-center text-sm text-red-400">{lastError}</p>}
       {count > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
-          <span className="tnum">
+        <div className="card-subpanel flex items-center justify-between border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
+          <span className="tnum font-medium">
             {count} check-in{count === 1 ? "" : "s"} queued offline
           </span>
           <button
             data-testid="outbox-sync"
             onClick={() => void flush()}
             disabled={syncing}
-            className="min-h-[44px] underline disabled:opacity-50"
+            className="btn-surgical min-h-[44px] px-3 py-1 text-xs border-amber-500/40 text-amber-300 hover:text-amber-200 disabled:opacity-50"
           >
             {syncing ? "Syncing…" : "Sync now"}
           </button>
@@ -840,12 +868,13 @@ function PersonaSubmit({
     <button
       type="button"
       data-testid="demo-checkin-button"
+      data-loading={busy}
       onClick={() => void doCheckIn()}
       disabled={busy}
-      className={`h-14 rounded-xl text-base font-bold transition disabled:opacity-50 ${
+      className={`btn-surgical h-14 rounded-xl text-base font-bold transition disabled:opacity-50 ${
         status === "day finish"
-          ? "bg-[var(--hivis)] text-black hover:brightness-110"
-          : "bg-[var(--mint)] text-emerald-950 hover:brightness-110"
+          ? "btn-surgical-hivis"
+          : "btn-surgical-mint"
       }`}
     >
       {busy ? "Logging…" : `${label} (as persona)`}

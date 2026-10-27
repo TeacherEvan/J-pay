@@ -30,11 +30,6 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
-  // Stable query args: Date.now() inside the args literal produced a new
-  // value every render, which changes the JSON.stringify cache key Convex
-  // useQuery uses, which re-issues the query, which re-renders — an
-  // infinite loop ("Maximum update depth exceeded" on /moderator).
-  // Snapshot the window once per (range) change instead.
   const fromMs = useMemo(
     () => Date.now() - range * 24 * 3600 * 1000,
     [range],
@@ -48,15 +43,8 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
     api.payroll.calcForEmployee,
     payrollArgs as never,
   ) as PayrollResult | undefined;
-  const me = useQuery(api.users_queries.me);
-  const myLocale = me?.locale;
-  const jurisdictionArgs = useMemo(
-    () => ({ locale: myLocale }),
-    [myLocale],
-  );
   const supported = useQuery(
-    api.payroll.listJurisdictionsForLocale,
-    jurisdictionArgs as never,
+    api.payroll.listSupportedStrategies,
   ) as SupportedStrategy[] | undefined;
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
@@ -74,15 +62,15 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
   }
 
   return (
-    <section className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+    <section className="card-surgical p-5">
+      <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
         Payroll
       </h2>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2.5 text-sm">
         <select
           value={userId}
           onChange={(e) => setUserId(e.target.value as Id<"users">)}
-          className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2"
+          className="input-surgical px-3 py-2"
         >
           <option value="">Employee…</option>
           {active.map((e) => (
@@ -95,10 +83,10 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
           <button
             key={d}
             onClick={() => setRange(d)}
-            className={`rounded-full border px-3 py-2.5 text-sm ${
+            className={`btn-surgical pill-surgical px-3.5 py-1.5 text-xs font-semibold ${
               range === d
-                ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                : "border-neutral-800 bg-neutral-900 text-neutral-400"
+                ? "border-[var(--mint)]/70 bg-[var(--mint)]/15 text-[var(--mint)]"
+                : "text-[var(--fog)]"
             }`}
           >
             {d}d
@@ -108,12 +96,14 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
           <select
             value={result?.strategy ?? ""}
             onChange={(e) => void setPayStrategy({ userId: userId as Id<"users">, strategy: e.target.value as "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk" })}
-            className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2"
+            className="input-surgical px-3 py-2"
             aria-label="Pay strategy"
           >
             <option value="" disabled>
               Strategy…
             </option>
+            <option value="flat">Standard Flat Rate</option>
+            <option value="dailyOvertime">Daily Overtime (&gt;8h @ 1.5×)</option>
             {(supported ?? []).map((s) => (
               <option key={s.code} value={s.strategy}>
                 {s.displayName} ({s.currencySymbol} {s.currency})
@@ -131,7 +121,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
               });
               download(out.filename, out.csv);
             }}
-            className="ml-auto rounded-md border border-neutral-700 px-3 py-2.5 text-sm"
+            className="btn-surgical ml-auto min-h-[44px] px-4 py-2 text-xs font-semibold"
           >
             Export logs CSV
           </button>
@@ -139,39 +129,42 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
       </div>
       {result && (
         <div className="mt-4">
-          <p className="mb-2 text-sm text-neutral-500">
-            Rate {formatCurrency(result.rate, result.currency, result.locale ?? locale)}/h · strategy {result.strategy} · tz {result.timezone} ·{" "}
-            <span className={result.totals.flaggedCount ? "text-amber-400" : ""}>
+          <p className="tnum mb-2.5 text-xs text-[var(--fog)]">
+            Rate <span className="font-semibold text-[var(--paper)]">{formatCurrency(result.rate, result.currency, result.locale ?? locale)}</span>/h · strategy {result.strategy} · tz {result.timezone} ·{" "}
+            <span className={result.totals.flaggedCount ? "font-semibold text-[var(--hivis)]" : ""}>
               {result.totals.flaggedCount} flagged shift(s) excluded
             </span>
           </p>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-neutral-900 text-neutral-500">
-              <tr>
-                <th className="p-2">Day</th>
-                <th className="p-2">Minutes</th>
-                <th className="p-2">Pay ({result.currency})</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.days.map((d) => (
-                <tr key={d.day} className="border-t border-neutral-900">
-                  <td className="p-2">{d.day}</td>
-                  <td className="p-2">{d.minutes}</td>
-                  <td className="p-2">{formatCurrency(d.pay, result.currency, result.locale ?? locale)}</td>
+          <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--panel-2)]">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[var(--panel)] text-[var(--fog)]">
+                <tr>
+                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Day</th>
+                  <th scope="col" className="p-3 text-right text-xs uppercase tracking-wider">Minutes</th>
+                  <th scope="col" className="p-3 text-right text-xs uppercase tracking-wider">Pay ({result.currency})</th>
                 </tr>
-              ))}
-              <tr className="border-t border-neutral-700 font-semibold">
-                <td className="p-2">Total ({result.totals.shiftCount} shifts)</td>
-                <td className="p-2">{result.totals.payableMinutes}</td>
-                <td className="p-2">{formatCurrency(result.totals.pay, result.currency, result.locale ?? locale)}</td>
-              </tr>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {result.days.map((d) => (
+                  <tr key={d.day} className="border-t border-[var(--line)]/50 hover:bg-[var(--panel-elevated)]/40 transition">
+                    <td className="p-3 text-[var(--paper)]">{d.day}</td>
+                    <td className="tnum p-3 text-right text-[var(--text-secondary)]">{d.minutes}</td>
+                    <td className="tnum p-3 text-right font-medium text-[var(--paper)]">{formatCurrency(d.pay, result.currency, result.locale ?? locale)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-[var(--line)] bg-[var(--panel)] font-semibold">
+                  <td className="p-3 text-[var(--paper)]">Total ({result.totals.shiftCount} shifts)</td>
+                  <td className="tnum p-3 text-right text-[var(--paper)]">{result.totals.payableMinutes}</td>
+                  <td className="tnum p-3 text-right text-[var(--mint)] font-bold">{formatCurrency(result.totals.pay, result.currency, result.locale ?? locale)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           {result.flagged.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 text-sm text-amber-300">
+            <ul className="mt-3 flex flex-col gap-1 text-xs text-[var(--hivis)]">
               {result.flagged.map((f) => (
-                <li key={f.startedAt}>
+                <li key={f.startedAt} className="tnum flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--hivis)]" />
                   {formatDateTime(f.startedAt, result.locale ?? locale)} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)
                 </li>
               ))}
@@ -189,29 +182,29 @@ export function ReviewPanel() {
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
   const locale = useUserLocale();
   return (
-    <section className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+    <section className="card-surgical p-5">
+      <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
         Shifts needing review
       </h2>
-      {(review ?? []).length === 0 && <p className="text-sm text-neutral-400">Nothing flagged.</p>}
+      {(review ?? []).length === 0 && <p className="text-sm text-[var(--fog)]">Nothing flagged.</p>}
       {(review ?? []).map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
-        <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-900 py-2 text-sm first:border-0">
-          <span>
-            {formatDateTime(s.startedAt, locale)}
-            <span className="ml-2 rounded bg-red-500/20 px-1.5 py-0.5 text-red-300">{s.reviewReason}</span>
+        <div key={s._id} className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[var(--line)]/50 py-3 text-sm first:border-0">
+          <span className="flex items-center gap-2">
+            <span className="tnum font-medium text-[var(--paper)]">{formatDateTime(s.startedAt, locale)}</span>
+            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-300">{s.reviewReason}</span>
           </span>
           <span className="flex gap-2">
             <button
               data-testid="review-recompute"
               onClick={() => void recompute({ userId: s.userId })}
-              className="rounded border border-neutral-700 px-3 py-2.5 text-sm"
+              className="btn-surgical min-h-[44px] px-3.5 py-1.5 text-xs font-medium"
             >
               Recompute
             </button>
             <button
               data-testid="review-resolve"
               onClick={() => void resolveShift({ shiftId: s._id })}
-              className="rounded bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-emerald-950"
+              className="btn-surgical btn-surgical-mint min-h-[44px] px-3.5 py-1.5 text-xs font-semibold"
             >
               Resolve
             </button>

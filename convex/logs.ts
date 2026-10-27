@@ -253,29 +253,59 @@ export const createLogAs = internalMutation({
 export const purgeExpiredCoords = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
-    const batch = await ctx.db
-      .query("logs")
-      .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
-      .filter((q) => q.or(q.neq(q.field("latitude"), 0), q.neq(q.field("longitude"), 0)))
-      .take(200);
-
-    for (const log of batch) {
-      await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
-    }
-
-    if (batch.length > 0) {
-      await ctx.db.insert("purgeAudit", {
-        purgedAt: Date.now(),
-        purgedCount: batch.length,
-        kind: "coordinates",
-      });
-    }
-
-    if (batch.length === 200) {
-      await ctx.scheduler.runAfter(0, internal.logs.purgeExpiredCoords, {});
-    }
-
-    return batch.length;
+    return await purgeExpiredCoordsHandler(ctx, {});
   },
 });
+
+export const purgeExpiredCoordsBatch = internalMutation({
+  args: {
+    cursor: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return await purgeExpiredCoordsHandler(ctx, args);
+  },
+});
+
+async function purgeExpiredCoordsHandler(
+  ctx: import("./_generated/server").MutationCtx,
+  args: { cursor?: number }
+) {
+  const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
+  const batch = await ctx.db
+    .query("logs")
+    .withIndex("by_creation_time", (q) =>
+      args.cursor !== undefined
+        ? q.gt("_creationTime", args.cursor).lte("_creationTime", cutoff)
+        : q.lte("_creationTime", cutoff)
+    )
+    .take(200);
+
+  if (batch.length === 0) return 0;
+
+  let patchedCount = 0;
+  for (const log of batch) {
+    if (log.latitude !== 0 || log.longitude !== 0) {
+      await ctx.db.patch(log._id, { latitude: 0, longitude: 0 });
+      patchedCount++;
+    }
+  }
+
+  const lastEntry = batch[batch.length - 1];
+  const nextCursor = lastEntry._creationTime;
+
+  if (patchedCount > 0) {
+    await ctx.db.insert("purgeAudit", {
+      purgedAt: Date.now(),
+      purgedCount: patchedCount,
+      kind: "coordinates",
+    });
+  }
+
+  if (batch.length === 200 && nextCursor < cutoff) {
+    await ctx.scheduler.runAfter(0, internal.logs.purgeExpiredCoordsBatch, {
+      cursor: nextCursor,
+    });
+  }
+
+  return patchedCount;
+}

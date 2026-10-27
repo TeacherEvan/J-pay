@@ -49,9 +49,9 @@ export default function PunchPage() {
   if (!auth.isAuthenticated) {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
-        <div className="text-center text-sm">
-          <p className="text-neutral-400 mb-4">Please sign in first.</p>
-          <a href="/login" className="text-primary-400 hover:underline text-sm">
+        <div className="card-surgical max-w-sm p-6 text-center text-sm text-[var(--paper-dim)]">
+          <p className="mb-4 text-[var(--paper)]">Please sign in first.</p>
+          <a href="/login" className="btn-surgical-mint inline-flex px-4 py-2 text-xs font-semibold uppercase tracking-wider">
             Go to login
           </a>
         </div>
@@ -62,10 +62,10 @@ export default function PunchPage() {
   if (!site) {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
-        <div className="text-center text-sm">
-          <h1 className="text-xl font-bold mb-4">Punch Clock</h1>
-          <div className="text-red-400 bg-red-900/30 border border-red-800 rounded p-4 max-w-sm mx-auto">
-            <p className="font-medium mb-2">No Site Assigned</p>
+        <div className="card-surgical max-w-sm p-6 text-center text-sm">
+          <h1 className="text-xl font-bold mb-4 tracking-tight text-[var(--paper)]">Punch Clock</h1>
+          <div className="text-xs font-mono text-red-400 bg-red-950/20 border border-red-500/30 rounded p-4">
+            <p className="font-semibold uppercase tracking-wider mb-2">No Site Assigned</p>
             <p>You are not assigned to any active site. Contact your moderator.</p>
           </div>
         </div>
@@ -102,6 +102,7 @@ export default function PunchPage() {
         type,
         lat: latitude,
         lng: longitude,
+        accuracyMeters: accuracy,
       });
 
       if (result.geoPassed) {
@@ -136,11 +137,11 @@ export default function PunchPage() {
 
   return (
     <main className="min-h-dvh grid place-items-center p-6">
-      <div className="w-full max-w-sm space-y-6">
+      <div className="w-full max-w-sm card-surgical p-6 space-y-6 shadow-2xl">
         <div className="text-center">
-          <h1 className="text-xl font-bold mb-2">Punch Clock</h1>
-          <p className="text-neutral-400 text-sm">{site.name}</p>
-          <p className="text-xs text-neutral-500 mt-1">
+          <h1 className="text-xl font-bold tracking-tight text-[var(--paper)] mb-1">Punch Clock</h1>
+          <p className="text-sm font-medium text-[var(--paper-dim)]">{site.name}</p>
+          <p className="text-xs font-mono text-[var(--paper-dimmer)] mt-1 tnum">
             Radius: {(site.geofenceRadiusMeters / 1000).toFixed(1)} km
           </p>
         </div>
@@ -148,45 +149,45 @@ export default function PunchPage() {
         <div
           className={`rounded-lg border p-4 text-center transition-colors ${
             status === "success"
-              ? "border-green-700 bg-green-900/20"
+              ? "border-emerald-500/50 bg-emerald-950/20 text-emerald-400"
               : status === "error"
-              ? "border-red-700 bg-red-900/20"
+              ? "border-red-500/50 bg-red-950/20 text-red-400"
               : status === "locating"
-              ? "border-yellow-700 bg-yellow-900/20"
-              : "border-neutral-700"
+              ? "border-amber-500/50 bg-amber-950/20 text-amber-300"
+              : "border-[var(--line)] bg-[var(--surface-sunken)] text-[var(--paper-dim)]"
           }`}
           role="status"
           aria-live="polite"
         >
-          <p className="text-sm font-medium">
+          <p className="text-xs font-mono uppercase tracking-wider font-semibold">
             {status === "locating" && "📍 Locating…"}
-            {status === "success" && "✅ Success"}
-            {status === "error" && "❌ Failed"}
+            {status === "success" && "✓ Success"}
+            {status === "error" && "✕ Failed"}
             {status === "idle" && "Ready to punch"}
           </p>
-          <p className="text-sm mt-1">{message || "Press Clock In or Clock Out"}</p>
+          <p className="text-xs font-mono mt-1 tnum">{message || "Press Clock In or Clock Out"}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => handlePunch("in")}
             disabled={isClockingIn || isClockingOut}
-            className="rounded bg-green-600 px-4 py-3 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+            className="btn-surgical-mint rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
             {isClockingIn ? "Locating…" : "Clock In"}
           </button>
           <button
             onClick={() => handlePunch("out")}
             disabled={isClockingIn || isClockingOut}
-            className="rounded bg-red-600 px-4 py-3 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-neutral-950"
+            className="btn-surgical-danger rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
             {isClockingOut ? "Locating…" : "Clock Out"}
           </button>
         </div>
 
         {lastPunch && (
-          <div className="rounded border border-neutral-700 bg-neutral-900/50 p-3 text-xs text-center">
-            Last: {lastPunch.geoPassed ? "✅" : "❌"} {new Date(lastPunch.ts).toLocaleString()}
+          <div className="card-subpanel p-3 text-xs font-mono text-center tnum text-[var(--paper-dim)]">
+            Last: {lastPunch.geoPassed ? "✓" : "✕"} {new Date(lastPunch.ts).toLocaleString()}
             {lastPunch.durationSec !== undefined && (
               <> • Duration: {formatDuration(lastPunch.durationSec)}</>
             )}
@@ -194,16 +195,16 @@ export default function PunchPage() {
         )}
 
         {punchHistory.length > 0 && (
-          <details className="text-xs text-neutral-400">
-            <summary className="cursor-pointer mb-2">Recent Punches ({punchHistory.length})</summary>
-            <ul className="space-y-1 max-h-48 overflow-auto">
+          <details className="text-xs font-mono text-[var(--paper-dimmer)]">
+            <summary className="cursor-pointer mb-2 uppercase tracking-wider hover:text-[var(--paper)]">Recent Punches ({punchHistory.length})</summary>
+            <ul className="space-y-1.5 max-h-48 overflow-auto tnum">
               {punchHistory.slice(0, 10).map((p: { type: string; geoPassed: boolean; ts: number; durationSec?: number }) => (
-                <li key={p.ts} className="flex justify-between gap-2">
+                <li key={p.ts} className="flex justify-between gap-2 border-b border-[var(--line-subtle)] pb-1">
                   <span>
-                    {p.type === "in" ? "🟢 In" : "🔴 Out"} {new Date(p.ts).toLocaleTimeString()}
-                    {p.geoPassed ? " ✅" : " ❌"}
+                    {p.type === "in" ? "● In" : "○ Out"} {new Date(p.ts).toLocaleTimeString()}
+                    {p.geoPassed ? " ✓" : " ✕"}
                   </span>
-                  {p.durationSec !== undefined && <span>{formatDuration(p.durationSec)}</span>}
+                  {p.durationSec !== undefined && <span className="text-[var(--paper)]">{formatDuration(p.durationSec)}</span>}
                 </li>
               ))}
             </ul>

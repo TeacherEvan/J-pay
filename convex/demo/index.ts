@@ -621,6 +621,7 @@ export const purgeStaleReviewers = internalMutation({
     const stale = await ctx.db
       .query("users")
       .withIndex("by_creation_time", (q) => q.lte("_creationTime", cutoff))
+      .filter((q) => q.eq(q.field("isAnonymous"), true))
       .take(100);
     let purged = 0;
     for (const user of stale) {
@@ -630,6 +631,11 @@ export const purgeStaleReviewers = internalMutation({
         .withIndex("by_user_time", (q) => q.eq("userId", user._id))
         .collect();
       for (const log of logs) await ctx.db.delete(log._id);
+      const reviewerLogs = await ctx.db
+        .query("logs")
+        .filter((q) => q.eq(q.field("createdByDemoReviewerId"), user._id))
+        .collect();
+      for (const log of reviewerLogs) await ctx.db.delete(log._id);
       const shifts = await ctx.db
         .query("shifts")
         .withIndex("by_user_start", (q) => q.eq("userId", user._id))
@@ -662,7 +668,12 @@ export const purgeStaleReviewers = internalMutation({
       for (const m of receivedRead) await ctx.db.delete(m._id);
       const resolutions = await ctx.db
         .query("reviewResolutions")
-        .withIndex("by_user_key", (q) => q.eq("userId", user._id))
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("userId"), user._id),
+            q.eq(q.field("byModeratorId"), user._id)
+          )
+        )
         .collect();
       for (const r of resolutions) await ctx.db.delete(r._id);
       const sessions = await ctx.db

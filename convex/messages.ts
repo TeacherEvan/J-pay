@@ -40,20 +40,28 @@ export const moderatorInbox = query({
       .filter((q) => q.eq(q.field("archivedAt"), undefined))
       .take(50);
     const merged = [...unread, ...read].sort((a, b) => b._creationTime - a._creationTime);
-    const senders = new Map<string, string>();
+    const senders = new Map<string, { name: string; isDemo: boolean }>();
+    const isDemo = process.env.DEMO_MODE === "1";
     for (const m of merged) {
       if (!senders.has(m.senderId)) {
         const sender = await ctx.db.get(m.senderId);
-        senders.set(m.senderId, sender?.name ?? sender?.email ?? "unknown");
+        senders.set(m.senderId, {
+          name: sender?.name ?? sender?.email ?? "unknown",
+          isDemo: sender ? isDemoUser(sender) : false,
+        });
       }
     }
-    return merged.map((m) => ({
+    const filtered = merged.filter((m) => {
+      if (!isDemo && senders.get(m.senderId)?.isDemo) return false;
+      return true;
+    });
+    return filtered.map((m) => ({
       _id: m._id,
       senderId: m.senderId,
       content: m.content,
       isRead: m.isRead,
       at: m._creationTime,
-      senderName: senders.get(m.senderId) ?? "unknown",
+      senderName: senders.get(m.senderId)?.name ?? "unknown",
     }));
   },
 });
@@ -150,27 +158,29 @@ export const purgeExpiredMessages = internalMutation({
       )
       .take(batchSize);
 
+    let archivedCount = 0;
     for (const m of batch) {
       const retentionDays = m.retentionDays ?? MSG_RETENTION_DEFAULT_DAYS;
       const ageMs = now - m._creationTime;
       if (ageMs > retentionDays * 86_400_000) {
         await ctx.db.patch(m._id, { archivedAt: now });
+        archivedCount++;
       }
     }
 
-    if (batch.length > 0) {
+    if (archivedCount > 0) {
       await ctx.db.insert("purgeAudit", {
         purgedAt: now,
-        purgedCount: batch.length,
+        purgedCount: archivedCount,
         kind: "messages",
       });
     }
 
-    if (batch.length === batchSize) {
+    if (batch.length === batchSize && archivedCount > 0) {
       await ctx.scheduler.runAfter(0, internal.messages.purgeExpiredMessages, {});
     }
 
-    return batch.length;
+    return archivedCount;
   },
 });
 

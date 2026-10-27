@@ -171,7 +171,14 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         } else if (phase === "lunch") {
           phase = "active";
         } else if (phase === "none") {
-          closeCurrent(t, true, "illegal_transition:none->checkpoint");
+          segments.push({
+            startedAt: t,
+            endedAt: t,
+            totalMinutes: 0,
+            needsReview: true,
+            reviewReason: "illegal_transition:none->checkpoint",
+            timezone: log.siteTimezone,
+          });
         }
         break;
       case "lunch":
@@ -187,6 +194,9 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         } else {
           closeCurrent(t, true, `illegal_transition:${phase}->lunch`);
           current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+          if (phase === "none") {
+            segFlags.add("illegal_transition:none->lunch");
+          }
           for (const f of pendingFlags) segFlags.add(f);
           phase = "lunch";
           lunchOpenedAt = t;
@@ -198,6 +208,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         }
         if (!current) {
           current = { startedAt: t, needsReview: false, timezone: log.siteTimezone };
+          segFlags.add("illegal_transition:none->quick side mission");
         }
         for (const f of pendingFlags) segFlags.add(f);
         phase = "sideMission";

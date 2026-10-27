@@ -106,6 +106,36 @@ test("illegal transition flags needsReview with reason", () => {
   assert.equal(segs[1].needsReview, false);
 });
 
+test("illegal transition: none -> checkpoint creates needsReview stub", () => {
+  const segs = deriveSegments([
+    log("checkpoint", 0),
+  ]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "illegal_transition:none->checkpoint");
+  assert.equal(segs[0].totalMinutes, 0);
+});
+
+test("illegal transition: none -> lunch starts shift flagged for review", () => {
+  const segs = deriveSegments([
+    log("lunch", 0),
+    log("day finish", 120),
+  ]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.match(segs[0].reviewReason ?? "", /illegal_transition:none->lunch/);
+});
+
+test("illegal transition: none -> quick side mission starts shift flagged for review", () => {
+  const segs = deriveSegments([
+    log("quick side mission", 0, { fields: { sideMissionDurationMinutes: 30 } }),
+    log("day finish", 120),
+  ]);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].needsReview, true);
+  assert.match(segs[0].reviewReason ?? "", /illegal_transition:none->quick side mission/);
+});
+
 test("rule 3: open shift auto-closes at 16h with needsReview", () => {
   const now = Date.now();
   const start = now - MAX_SHIFT_MS - 2 * 60 * MIN;

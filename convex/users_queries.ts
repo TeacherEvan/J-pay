@@ -20,17 +20,28 @@ export const listEmployees = query({
     const viewerId = await maybeCurrentUserId(ctx);
     const isDemo = process.env.DEMO_MODE === "1";
     // Security/Zero-Trust: Anonymous callers cannot enumerate employees in production.
-    // In demo mode (DEMO_MODE=1) or when authenticated, roster is accessible.
     if (!viewerId && !isDemo) {
       return [];
     }
+
+    const viewer = viewerId ? await ctx.db.get(viewerId) : null;
+    const isModerator = viewer?.role === "moderator";
+
     const rows = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
       .collect();
+
     return rows
-      .filter((u) => (isDemo ? true : !isDemoUser(u)))
+      .filter((u) => {
+        // Unauthenticated or non-moderator caller: in demo mode, only surface demo personas
+        if (!isModerator) {
+          return isDemo && isDemoUser(u);
+        }
+        // Moderator viewer: in production, hide demo personas; in demo mode, show all
+        return isDemo ? true : !isDemoUser(u);
+      })
       .map((u) => ({
         _id: u._id,
         name: u.name,

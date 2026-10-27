@@ -51,6 +51,9 @@ export const calcForEmployee = query({
         flagged.push({ startedAt: s.startedAt, reason: s.reviewReason, minutes: s.totalMinutes });
         continue;
       }
+      if (s.endedAt === undefined) {
+        continue;
+      }
       const key = localDayKey(
         s.startedAt,
         (s as { timezone?: string }).timezone ?? timezone
@@ -101,16 +104,6 @@ export const setPayStrategy = mutation({
     await requireModerator(ctx);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
-    if (target.locale) {
-      try {
-        const row = getPayStrategy(target.locale);
-        if (row.strategy !== args.strategy) {
-          throw new ConvexError("JURISDICTION_UNSUPPORTED");
-        }
-      } catch (e) {
-        if (e instanceof ConvexError) throw e;
-      }
-    }
     await ctx.db.patch(args.userId, { payStrategy: args.strategy });
     return { ok: true as const };
   },

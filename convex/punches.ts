@@ -3,7 +3,12 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireEmployee } from "./access";
 import { haversineMeters } from "./geo";
+import { verifyDeviceToken } from "./deviceTokens";
 import { internal } from "./_generated/api";
+import { jpayConfig } from "../src/config/jpay.config";
+
+const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
+const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
 
 export const recordPunch = mutation({
   args: {
@@ -11,12 +16,29 @@ export const recordPunch = mutation({
     type: v.union(v.literal("in"), v.literal("out")),
     lat: v.number(),
     lng: v.number(),
+    accuracyMeters: v.optional(v.number()),
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // 1. AuthZ: require active employee
     const userId = await requireEmployee(ctx);
 
-    // 2. Site assignment check
+    // 2. Validate GPS accuracy if provided
+    if (args.accuracyMeters !== undefined && args.accuracyMeters > MAX_ACCURACY_METERS) {
+      throw new ConvexError("WEAK_GPS_SIGNAL");
+    }
+
+    // 3. Device token verification if provided
+    if (args.deviceToken) {
+      const secret = process.env.DEVICE_TOKEN_SECRET;
+      if (!secret) throw new ConvexError("DEVICE_TOKEN_SECRET_NOT_SET");
+      const user = await ctx.db.get(userId);
+      if (!user || !(await verifyDeviceToken(args.deviceToken, userId, secret, user.deviceId))) {
+        throw new ConvexError("DEVICE_TOKEN_INVALID");
+      }
+    }
+
+    // 4. Site assignment check
     const assignment = await ctx.db
       .query("userSites")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -24,25 +46,15 @@ export const recordPunch = mutation({
       .first();
     if (!assignment) throw new ConvexError("SITE_NOT_ASSIGNED");
 
-    // 3. Get site for geo
+    // 5. Get site for geo
     const site = await ctx.db.get(args.siteId);
     if (!site || site.archivedAt !== undefined) throw new ConvexError("SITE_NOT_FOUND");
 
-    // 4. Server-side haversine geo check
+    // 6. Server-side haversine geo check
     const distance = haversineMeters(args.lat, args.lng, site.latitude, site.longitude);
     const geoPassed = distance <= site.geofenceRadiusMeters;
-    if (!geoPassed) {
-      throw new ConvexError("GEOFENCE_FAILED");
-    }
 
-    // 5. Handle in/out pairing for duration
-    // SECURITY/CORRECTNESS (2026-09-01): the previous implementation built a
-    // set of "out" punch ids and then asked "is this in id in the out set?".
-    // An in id is structurally never in the out set (different documents),
-    // so the "is this in already paired?" check was always true and the
-    // first in iteration order always won — pairing a 17:00 OUT against the
-    // 08:00 IN instead of the 13:00 IN. The correct semantics: find the
-    // latest IN whose ts is older than this OUT's now.
+    // 7. Handle in/out pairing for duration
     let durationSec: number | undefined;
     if (args.type === "out") {
       const punches = await ctx.db
@@ -52,10 +64,6 @@ export const recordPunch = mutation({
         )
         .order("desc")
         .collect();
-      // Find the latest "in" whose ts is in the past (i.e. not the current
-      // one). We deliberately do not track "is this in already paired" in
-      // the schema; the latest-in-before-out heuristic matches normal
-      // sequential usage and is testable.
       const candidate = punches.find(
         (p) => p.type === "in" && p.ts < Date.now()
       );
@@ -64,7 +72,7 @@ export const recordPunch = mutation({
       }
     }
 
-    // 6. Insert punch into legacy punches table (backward compatibility)
+    // 8. Insert punch into legacy punches table
     const now = Date.now();
     const punchId = await ctx.db.insert("punches", {
       userId,
@@ -76,7 +84,25 @@ export const recordPunch = mutation({
       ts: now,
     });
 
-    // 7. Bridge to canonical shift engine logs so hours are payrolled
+    // 9. Impossible travel detection
+    let impossibleTravelFlag: boolean | undefined = undefined;
+    const previous = await ctx.db
+      .query("logs")
+      .withIndex("by_user_time", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(5);
+    const prevFix = previous
+      .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
+    if (prevFix) {
+      const hours = (now - prevFix.clientReportedTime) / 3600000;
+      if (hours > 0) {
+        const km =
+          haversineMeters(prevFix.latitude, prevFix.longitude, args.lat, args.lng) / 1000;
+        if (km / hours > IMPOSSIBLE_TRAVEL_KMH) impossibleTravelFlag = true;
+      }
+    }
+
+    // 10. Bridge to canonical shift engine logs so hours are payrolled
     await ctx.db.insert("logs", {
       userId,
       siteId: args.siteId,
@@ -85,13 +111,14 @@ export const recordPunch = mutation({
       status: args.type === "in" ? "arrived" : "day finish",
       latitude: args.lat,
       longitude: args.lng,
-      accuracyMeters: 10,
+      accuracyMeters: args.accuracyMeters ?? 10,
       isWithinGeofence: geoPassed,
       deviceMetadata: "web-punch-clock",
       idempotencyKey: `punch-${punchId}`,
+      impossibleTravelFlag,
     });
 
-    // 8. Trigger shift rederivation for payroll
+    // 11. Trigger shift rederivation for payroll
     await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
 
     return { punchId, geoPassed, durationSec, ts: now };
