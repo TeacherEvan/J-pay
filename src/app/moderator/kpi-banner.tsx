@@ -1,8 +1,8 @@
 "use client";
 
-import { useAction, useQuery } from "convex/react";
+import { useAction, useQuery } from "@/lib/backend/react";
 import { useState } from "react";
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { jpayConfig } from "../../config/jpay.config";
 
 export function KpiBanner() {

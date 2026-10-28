@@ -1,11 +1,11 @@
 "use client";
 
-import { useConvexAuth, useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth, useQuery } from "@/lib/backend/react";
+import { useAuthActions } from "@/lib/backend/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();

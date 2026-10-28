@@ -1,9 +1,9 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useQuery } from "convex/react";
+import { useAuthActions } from "@/lib/backend/react";
+import { useQuery } from "@/lib/backend/react";
 import { useState } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 
 export function SignIn() {

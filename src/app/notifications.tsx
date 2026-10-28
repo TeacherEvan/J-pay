@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "@/lib/backend/react";
 import { useState } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 
 export function EnableNotifications() {
   const vapidKey = useQuery(api.push_subs.publicVapidKey);

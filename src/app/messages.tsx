@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "@/lib/backend/react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatTime, formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
@@ -26,7 +26,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
   const userLocale = useUserLocale();
 
   useEffect(() => {
-    if (role === "employee" && inbox && inbox.some((m) => !m.isRead) && !seenUnread.current) {
+    if (role === "employee" && inbox && inbox.some((m: any) => !m.isRead) && !seenUnread.current) {
       seenUnread.current = true;
       void markThreadRead();
     }
@@ -58,7 +58,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
           </button>
         </div>
         {msg && <p role="status" aria-live="polite" className="text-sm font-medium text-[var(--paper)]">{msg}</p>}
-        {(inbox ?? []).map((m) => (
+        {(inbox ?? []).map((m: any) => (
           <p key={m._id} className={`card-subpanel px-3 py-2 text-sm ${m.isRead ? "text-[var(--fog)]" : "text-[var(--mint)] border-[var(--mint)]/40 bg-[var(--mint)]/10"}`}>
             <span className="tnum mr-2 text-xs opacity-70">{formatTime(m._creationTime, userLocale)}</span>
             {m.content}
@@ -93,7 +93,7 @@ export function MessagesPanel({ role }: { role: "employee" | "moderator" }) {
         </button>
       </div>
       {(modInbox ?? []).length === 0 && <p className="text-sm text-[var(--fog)]">Queue empty.</p>}
-      {(modInbox ?? []).map((m) => (
+      {(modInbox ?? []).map((m: any) => (
         <div key={m._id} className={`card-subpanel p-3.5 text-sm ${m.isRead ? "" : "border-l-4 border-l-[var(--mint)]"}`}>
           <p className="flex items-baseline justify-between">
             <span className="font-semibold text-[var(--paper)]">{m.senderName}</span>

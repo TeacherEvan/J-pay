@@ -1,9 +1,9 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "@/lib/backend/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api } from "../../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 
 const PERSONAS = [

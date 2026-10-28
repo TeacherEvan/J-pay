@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type * as LType from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useAction } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useAction } from "@/lib/backend/react";
+import { api } from "@/lib/backend/api";
 
 type Hit = { display_name: string; lat: string; lon: string };
 

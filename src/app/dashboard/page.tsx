@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery } from "@/lib/backend/react";
 import Link from "next/link";
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { formatCurrency, formatTime } from "@/lib/format";
 import { ForcedPasswordChange } from "../change-password";
@@ -86,7 +86,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {audit.slice(0, 50).map((row) => (
+                {audit.slice(0, 50).map((row: any) => (
                   <tr key={row._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="dashboard-audit-row">
                     <td className="px-3 py-2 font-medium text-[var(--paper)]">{row.employeeName}</td>
                     <td className="px-3 py-2 text-[var(--paper-dim)]">{row.status}</td>
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {roster.map((emp) => (
+                {roster.map((emp: any) => (
                   <tr key={emp._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="dashboard-roster-row">
                     <td className="px-3 py-2 font-medium text-[var(--paper)]">{emp.name ?? "—"}</td>
                     <td className="px-3 py-2 text-[var(--paper-dim)] font-mono text-xs">{emp.email ?? "—"}</td>

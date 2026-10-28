@@ -1,4 +1,4 @@
-import { auth } from "./auth";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -6,14 +6,25 @@ import { isDemoUser } from "./demo/scope";
 
 type Ctx = MutationCtx | QueryCtx;
 
+/**
+ * Identity lookup.
+ *
+ * NOTE (2026-10-28, Supabase cutover): this used to call `auth.getUserId(ctx)`
+ * from ./auth, which pulled the whole convexAuth() provider graph (and its JWT
+ * env requirements) into every module's import chain. `getAuthUserId` is the
+ * same lookup at the bottom of that stack — it reads
+ * `ctx.auth.getUserIdentity().subject` — and works unchanged against the
+ * Supabase-backed runtime in src/lib/backend.
+ */
 export async function currentUserId(ctx: Ctx): Promise<Id<"users">> {
-  const userId = await auth.getUserId(ctx);
+  const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("UNAUTHENTICATED");
-  return userId;
+  return userId as Id<"users">;
 }
 
 export async function maybeCurrentUserId(ctx: Ctx): Promise<Id<"users"> | null> {
-  return await auth.getUserId(ctx);
+  const userId = await getAuthUserId(ctx);
+  return userId ? (userId as Id<"users">) : null;
 }
 
 export async function requireActiveUser(

@@ -1,9 +1,9 @@
 "use client";
 
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "@/lib/backend/react";
 import { useState } from "react";
 import Link from "next/link";
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessagesPanel } from "../messages";
 import { PayrollPanel, ReviewPanel } from "../payroll";
@@ -101,14 +101,14 @@ export default function ModeratorPage() {
               </tr>
             </thead>
             <tbody>
-              {(employees ?? []).map((e) => (
+              {(employees ?? []).map((e: any) => (
                 <tr key={e._id} className="border-t border-[var(--line)]/60 hover:bg-[var(--panel-elevated)]/40 transition">
                   <td className="p-3 font-medium text-[var(--paper)]">{e.name ?? "—"}</td>
                   <td className="p-3 text-[var(--fog)]">{e.email}</td>
                   <td className="p-3 text-[var(--text-secondary)]">
                     {(sites ?? [])
-                      .filter((s) => e.assignedSiteIds?.includes(s._id))
-                      .map((s) => s.name)
+                      .filter((s: any) => e.assignedSiteIds?.includes(s._id))
+                      .map((s: any) => s.name)
                       .join(", ") || "—"}
                   </td>
                   <td className={`p-3 font-semibold ${e.archivedAt ? "text-red-400" : "text-[var(--mint)]"}`}>
@@ -162,7 +162,7 @@ export default function ModeratorPage() {
               </tr>
             </thead>
             <tbody>
-              {(audit ?? []).map((l) => (
+              {(audit ?? []).map((l: any) => (
                 <tr key={l._id} className="border-t border-[var(--line)]/60 hover:bg-[var(--panel-elevated)]/40 transition">
                   <td className="tnum p-3 font-medium text-[var(--paper)]">{formatDateTime(l.at, userLocale)}</td>
                   <td className="p-3 font-medium">{l.employeeName}</td>
@@ -382,14 +382,14 @@ function AssignPanel({
         <select value={userId} onChange={(e) => setUserId(e.target.value)}
           className="input-surgical px-3.5 py-2 text-sm">
           <option value="">Employee…</option>
-          {active.map((e) => (
+          {active.map((e: any) => (
             <option key={e._id} value={e._id}>{e.name ?? e.email}</option>
           ))}
         </select>
         <select value={siteId} onChange={(e) => setSiteId(e.target.value)}
           className="input-surgical px-3.5 py-2 text-sm">
           <option value="">Site…</option>
-          {sites.map((s) => (
+          {sites.map((s: any) => (
             <option key={s._id} value={s._id}>{s.name}</option>
           ))}
         </select>
@@ -465,7 +465,7 @@ function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: string 
       aria-label={`Locale for ${userId}`}
       className="input-surgical px-2.5 py-1.5 text-xs"
     >
-      {LOCALES.map((l) => (
+      {LOCALES.map((l: any) => (
         <option key={l} value={l}>
           {l}
         </option>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useAction, useMutation, useQuery } from "@/lib/backend/react";
+import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { OutboxEntry } from "@/lib/outbox";
 import { useOutbox } from "./use-outbox";

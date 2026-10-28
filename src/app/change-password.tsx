@@ -1,9 +1,9 @@
 "use client";
 
-import { useAction } from "convex/react";
+import { useAction } from "@/lib/backend/react";
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 
 type PasswordFormProps = {

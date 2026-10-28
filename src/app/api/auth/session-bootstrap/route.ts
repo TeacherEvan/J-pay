@@ -1,0 +1,139 @@
+import "server-only";
+
+import { NextResponse } from "next/server";
+import { createSupabaseAdminClient, hasSupabaseAdminKey } from "@/lib/supabase/admin";
+import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "../../../../../convex/demo/sites";
+
+/**
+ * POST /api/auth/session-bootstrap
+ *
+ * Supabase Auth can only sign a user in from the client, so the two
+ * server-authorised entry points create an account with an ephemeral password
+ * and hand those credentials back exactly once:
+ *
+ *   kind: "demo"    — anonymous demo reviewer (requires DEMO_MODE=1)
+ *   kind: "master"  — break-glass temp moderator (requires MASTER_PASSWORD)
+ *
+ * Everything else (employees, moderators) signs in normally with the ID code
+ * their moderator issued.
+ */
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Body = { kind?: string; email?: string; secret?: string };
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return result === 0;
+}
+
+function ephemeralPassword(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return `JP-${Array.from(bytes, (b) => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[b % 32]).join("")}`;
+}
+
+export async function POST(request: Request): Promise<Response> {
+  if (!hasSupabaseAdminKey()) {
+    return NextResponse.json({ error: "SUPABASE_NOT_CONFIGURED" }, { status: 503 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Body;
+  const admin = createSupabaseAdminClient();
+  const password = ephemeralPassword();
+
+  if (body.kind === "demo") {
+    if (process.env.DEMO_MODE !== "1") {
+      return NextResponse.json({ error: "DEMO_DISABLED" }, { status: 403 });
+    }
+    const authEmail = `demo+${Date.now().toString(36)}@jpay.local`;
+    const { data, error } = await admin.auth.admin.createUser({
+      email: authEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { demo: true },
+    });
+    if (error || !data.user) {
+      return NextResponse.json({ error: "DEMO_CREATE_FAILED" }, { status: 500 });
+    }
+    const userId = data.user.id;
+    await admin.from("users").insert({
+      _id: userId,
+      name: "Demo reviewer",
+      role: "employee",
+      isActive: true,
+      isAnonymous: true,
+      passwordChangedAt: Date.now(),
+    });
+
+    const now = Date.now();
+    let { data: sites } = await admin
+      .from("sites")
+      .select("_id")
+      .is("archivedAt", null);
+    if (!sites || sites.length === 0) {
+      const seeded = DEMO_SITES.map((site: any) => ({
+        name: site.name,
+        latitude: site.latitude,
+        longitude: site.longitude,
+        geofenceRadiusMeters: site.geofenceRadiusMeters,
+        timezone: DEMO_SITE_TIMEZONE,
+        createdBy: userId,
+      }));
+      const { data: created } = await admin.from("sites").insert(seeded).select("_id");
+      sites = created ?? [];
+    }
+    if (sites.length > 0) {
+      await admin
+        .from("userSites")
+        .insert(sites.map((site: any) => ({ userId, siteId: site._id })));
+    }
+    await admin.from("demoSessions").insert({
+      reviewerId: userId,
+      personaEmail: "thabo.demo@jpay.local",
+      mode: "full",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return NextResponse.json({ email: authEmail, password });
+  }
+
+  if (body.kind === "master") {
+    const masterPassword = process.env.MASTER_PASSWORD;
+    if (!masterPassword) {
+      return NextResponse.json({ error: "MASTER_DISABLED" }, { status: 403 });
+    }
+    if (!body.secret || !constantTimeEqual(body.secret, masterPassword)) {
+      return NextResponse.json({ error: "INVALID_MASTER_SECRET" }, { status: 401 });
+    }
+
+    const operatorEmail = String(body.email ?? "").trim().toLowerCase();
+    const authEmail = `master+${Date.now().toString(36)}@jpay.local`;
+    const { data, error } = await admin.auth.admin.createUser({
+      email: authEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { master: true },
+    });
+    if (error || !data.user) {
+      return NextResponse.json({ error: "MASTER_CREATE_FAILED" }, { status: 500 });
+    }
+    await admin.from("users").insert({
+      _id: data.user.id,
+      name: operatorEmail.split("@")[0] || "Moderator",
+      email: operatorEmail || null,
+      role: "moderator",
+      isActive: true,
+      isMasterTemp: true,
+      passwordChangedAt: Date.now(),
+    });
+
+    return NextResponse.json({ email: authEmail, password });
+  }
+
+  return NextResponse.json({ error: "UNKNOWN_KIND" }, { status: 400 });
+}

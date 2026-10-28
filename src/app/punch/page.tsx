@@ -2,9 +2,9 @@
 
 export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
-import { useConvexAuth } from "convex/react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useConvexAuth } from "@/lib/backend/react";
+import { useMutation, useQuery } from "@/lib/backend/react";
+import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 import type { Id } from "../../../convex/_generated/dataModel";
 

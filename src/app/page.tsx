@@ -1,14 +1,14 @@
 "use client";
 
-import { useConvexAuth, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "@/lib/backend/react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
 import { ChangePassword, ForcedPasswordChange } from "./change-password";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvex } from "convex/react";
+import { useAuthActions } from "@/lib/backend/react";
+import { useConvex } from "@/lib/backend/react";
 import { CheckInCard } from "./check-in-card";
 
 const CONSENT_KEY = "jpay.consent";

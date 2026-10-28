@@ -1,8 +1,8 @@
 "use client";
 
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "@/lib/backend/react";
 import { useState } from "react";
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/lib/backend/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errMsg } from "@/lib/errors";
 import { formatCurrency } from "@/lib/format";

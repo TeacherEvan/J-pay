@@ -2,10 +2,10 @@
 
 export const dynamic = "force-dynamic";
 import { useState, FormEvent } from "react";
-import { useConvexAuth } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { api } from "../../../convex/_generated/api";
-import { useQuery } from "convex/react";
+import { useConvexAuth } from "@/lib/backend/react";
+import { useAuthActions } from "@/lib/backend/react";
+import { api } from "@/lib/backend/api";
+import { useQuery } from "@/lib/backend/react";
 import { errMsg } from "@/lib/errors";
 
 export default function LoginPage() {
