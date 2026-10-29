@@ -47,9 +47,12 @@ jobs:
       - name: Re-run tests now that build artifacts exist
         run: npm test
       - name: Deploy to Vercel preview
+        id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --target preview --yes
+        run: |
+          url=$(npx vercel deploy --target preview --yes)
+          echo "preview-url=$url" >> "$GITHUB_OUTPUT"
       - name: Post preview URL
         uses: marocchino/sticky-pull-request-comment@v2
         with:
