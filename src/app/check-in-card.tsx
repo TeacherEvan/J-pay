@@ -23,7 +23,7 @@ import {
 } from "./check-in/types";
 import type { Status, Phase, CardLog, CardSite } from "./check-in/types";
 import { StatusIcon } from "./check-in/StatusIcon";
-import { ShiftTimer } from "./check-in/ShiftTimer";
+import { ShiftTimer } from "./check-in/ShiftTimer"; // tabular-nums
 import { SiteSelector } from "./check-in/SiteSelector";
 import { StatusChips } from "./check-in/StatusChips";
 
@@ -161,7 +161,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
       data-testid={isLive ? "checkin-card" : "demo-checkin"}
       className="flex flex-col gap-3.5"
     >
-      {/* ── Shift timer chassis ────────────────────────────────────── */}
+      {/* ── Shift timer chassis (tabular-nums) ────────────────────── */}
       <ShiftTimer
         phase={phase}
         last={last}

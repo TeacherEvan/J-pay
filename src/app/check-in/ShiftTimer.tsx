@@ -39,7 +39,8 @@ function TodayStrip() {
   );
 }
 
-export interface ShiftTimerProps {
+// Shift chronometer component with strict tabular-nums readout
+export interface ShiftClockProps {
   phase: Phase;
   last?: CardLog;
   loaded: boolean;
@@ -49,6 +50,7 @@ export interface ShiftTimerProps {
   siteName?: string;
 }
 
+// Shift chronometer display with tabular-nums enforcement
 export function ShiftTimer({
   phase,
   last,
@@ -57,13 +59,13 @@ export function ShiftTimer({
   userLocale,
   isLive,
   siteName,
-}: ShiftTimerProps) {
-  const timerAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
-  const elapsed = phase !== "off" && timerAnchor ? now - timerAnchor : null;
+}: ShiftClockProps) {
+  const clockAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
+  const elapsed = phase !== "off" && clockAnchor ? now - clockAnchor : null;
 
   return (
     <div
-      className={`card-surgical relative overflow-hidden p-5 transition-all duration-300 ${
+      className={`card-surgical telemetry-chassis tnum relative overflow-hidden p-5 transition-all duration-300 [font-variant-numeric:tabular-nums] ${
         phase === "on"
           ? "border-[var(--hivis)]/60 bg-[var(--hivis)]/[0.08]"
           : phase === "break"
@@ -101,18 +103,18 @@ export function ShiftTimer({
         {isLive && <TodayStrip />}
       </div>
 
-      <p className="tnum relative mt-2 text-5xl font-semibold tracking-tight text-[var(--paper)]" aria-live="off">
+      <p className="tnum font-mono relative mt-2 text-5xl font-semibold tracking-tight text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]" aria-live="off">
         {!loaded ? "··:··:··" : elapsed !== null ? formatElapsed(elapsed) : "—:—:—"}
       </p>
 
-      <p className="tnum relative mt-1.5 text-sm text-[var(--fog)]">
+      <p className="tnum relative mt-1.5 text-sm text-[var(--fog)] [font-variant-numeric:tabular-nums_lining-nums]">
         {!loaded
           ? "Reading your latest event…"
           : phase === "off"
             ? last
-              ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>
+              ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{clockAnchor ? formatTime(clockAnchor, userLocale) : "—"}</span></>
               : "Your shift hasn't started yet."
-            : <>{siteName ? `At ${siteName}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>}
+            : <>{siteName ? `At ${siteName}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{clockAnchor ? formatTime(clockAnchor, userLocale) : "—"}</span></>}
       </p>
     </div>
   );
