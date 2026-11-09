@@ -193,6 +193,31 @@ create table if not exists public."demoSessions" (
 create index if not exists demo_sessions_reviewer_idx on public."demoSessions" ("reviewerId");
 create index if not exists demo_sessions_persona_idx on public."demoSessions" ("personaEmail");
 
+-- --------------------------------------------------- jpay_id_registry view --
+-- Polyfill for untyped uuid lookup across tables (used by Database.tableOf)
+create or replace view public.jpay_id_registry as
+  select "_id"::text as id, 'users' as tbl from public.users
+  union all
+  select "_id"::text as id, 'sites' as tbl from public.sites
+  union all
+  select "_id"::text as id, 'punches' as tbl from public.punches
+  union all
+  select "_id"::text as id, 'userSites' as tbl from public."userSites"
+  union all
+  select "_id"::text as id, 'logs' as tbl from public.logs
+  union all
+  select "_id"::text as id, 'shifts' as tbl from public.shifts
+  union all
+  select "_id"::text as id, 'messages' as tbl from public.messages
+  union all
+  select "_id"::text as id, 'pushSubscriptions' as tbl from public."pushSubscriptions"
+  union all
+  select "_id"::text as id, 'purgeAudit' as tbl from public."purgeAudit"
+  union all
+  select "_id"::text as id, 'reviewResolutions' as tbl from public."reviewResolutions"
+  union all
+  select "_id"::text as id, 'demoSessions' as tbl from public."demoSessions";
+
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
 alter table public.sites                enable row level security;

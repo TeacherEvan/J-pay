@@ -1,7 +1,7 @@
 # J-Pay End-to-End Test Plan — Feature Surface Map
 
 **Date:** 2026-08-25
-**Scope:** Complete user-facing feature surface at `/home/ewaldt/Documents/VS/Other/J-pay`
+**Scope:** Complete user-facing feature surface at `/home/leandi-duplessis/github/workspaces/J-pay`
 **Method:** READ-ONLY enumeration of every interactive UI element, route, and reachable Convex function. No files were modified.
 **Audience:** Author of the next-generation e2e test plan. The existing `scripts/e2e-full.mjs` is the baseline; this document maps what is *already covered* and what is the *gap*.
 

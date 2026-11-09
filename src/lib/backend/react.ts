@@ -31,22 +31,204 @@ export class BackendError extends Error {
   }
 }
 
+/* ------------------------------------------------ table / scope mappings -- */
+
+export type TableName =
+  | "users"
+  | "sites"
+  | "punches"
+  | "userSites"
+  | "logs"
+  | "shifts"
+  | "messages"
+  | "pushSubscriptions"
+  | "purgeAudit"
+  | "reviewResolutions"
+  | "demoSessions";
+
+/**
+ * Mapping of known mutation function keys to the tables/domains they mutate.
+ */
+export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
+  // logs & punches
+  "logs:createLog": ["logs", "shifts"],
+  "punches:recordPunch": ["punches", "logs", "shifts"],
+  "punches:logPunch": ["punches", "logs", "shifts"], // alias for safety
+
+  // sites
+  "sites:createSite": ["sites"],
+  "sites:assignEmployee": ["userSites"],
+  "sites:unassignEmployee": ["userSites"],
+
+  // messages
+  "messages:sendToModerators": ["messages"],
+  "messages:replyToEmployee": ["messages"],
+  "messages:broadcast": ["messages"],
+  "messages:markThreadRead": ["messages"],
+  "messages:markQueueItemRead": ["messages"],
+
+  // moderator operations
+  "moderator:resolveShift": ["shifts", "reviewResolutions"],
+  "moderator:recomputeEmployeeShifts": ["shifts"],
+  "moderator:setHourlyOverride": ["users"],
+
+  // payroll
+  "payroll:setPayStrategy": ["users"],
+
+  // push
+  "push_subs:saveSubscription": ["pushSubscriptions"],
+
+  // users & account
+  "users:deactivateEmployee": ["users"],
+  "users:resetDeviceToken": ["users"],
+  "users:setMyLocale": ["users"],
+  "users:setUserLocale": ["users"],
+  "users:issueMyDeviceToken": ["users"],
+  "users:archiveMyMasterSession": ["users", "messages", "purgeAudit"],
+
+  // demo operations
+  "demo:bindReviewer": ["demoSessions"],
+  "demo:switchPersona": ["demoSessions"],
+  "demo:demoResolveShift": ["shifts", "reviewResolutions"],
+  "demo:demoRecomputeEmployeeShifts": ["shifts"],
+  "demo:demoMarkQueueItemRead": ["messages"],
+  "demo:demoReplyToEmployee": ["messages"],
+};
+
+/**
+ * Mapping of known query function keys to the tables they observe.
+ */
+export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
+  // users
+  "users_queries:me": ["users"],
+  "users_queries:listEmployees": ["users"],
+  "users:getMyLocale": ["users"],
+
+  // sites & punches
+  "sites:listMine": ["sites", "userSites"],
+  "sites:getSiteForPunch": ["sites", "userSites"],
+  "punches:getPunchHistory": ["punches", "userSites"],
+
+  // logs & shifts
+  "logs:listMine": ["logs"],
+
+  // messages
+  "messages:myInbox": ["messages"],
+  "messages:moderatorInbox": ["messages"],
+
+  // moderator
+  "moderator:auditRecentLogs": ["logs", "users", "sites"],
+  "moderator:auditNeedsReview": ["shifts", "users"],
+  "moderator:listEmployeesWithAssignments": ["users", "userSites", "sites"],
+  "moderator:listAllSites": ["sites", "users"],
+
+  // kpi & payroll
+  "kpi:summary": ["logs", "shifts", "users", "sites"],
+  "payroll:calcForEmployee": ["users", "shifts", "logs", "userSites", "sites"],
+  "payroll:listSupportedStrategies": [],
+  "payroll:listJurisdictionsForLocale": [],
+
+  // push
+  "push_subs:publicVapidKey": [],
+
+  // demo
+  "demo:status": ["demoSessions"],
+  "demo:getBinding": ["demoSessions"],
+  "demo:boundPersonaLogs": ["logs"],
+  "demo:boundPersonaShifts": ["shifts"],
+  "demo:boundPersonaPayroll": ["logs", "shifts", "users", "userSites", "sites"],
+  "demo:demoAudit": ["logs", "users", "sites"],
+  "demo:demoNeedsReview": ["shifts", "users"],
+  "demo:demoKpis": ["logs", "shifts", "users", "sites"],
+  "demo:demoEmployeeRoster": ["users", "userSites", "sites"],
+  "demo:demoModeratorInbox": ["messages"],
+  "demo:boundPersonaSites": ["sites", "userSites"],
+};
+
+export function getTablesForQuery(queryKey: string): readonly TableName[] | null {
+  if (Object.prototype.hasOwnProperty.call(QUERY_TABLE_MAP, queryKey)) {
+    return QUERY_TABLE_MAP[queryKey];
+  }
+  return null;
+}
+
+export function getTablesForMutation(mutationKey: string): readonly TableName[] | null {
+  if (Object.prototype.hasOwnProperty.call(MUTATION_TABLE_MAP, mutationKey)) {
+    return MUTATION_TABLE_MAP[mutationKey];
+  }
+  return null;
+}
+
 /* ------------------------------------------------------- invalidation bus -- */
 
-let version = 0;
-const listeners = new Set<() => void>();
+export type InvalidationEvent = {
+  mutationName?: string;
+  tables?: readonly TableName[] | readonly string[];
+};
 
-function bump(): void {
+type ListenerEntry = {
+  tables: readonly string[] | null; // null means wildcard listener
+  callback: () => void;
+};
+
+let version = 0;
+const listenerEntries = new Set<ListenerEntry>();
+
+export function bump(event?: InvalidationEvent): void {
   version += 1;
-  for (const listener of listeners) listener();
+
+  let affectedTables: readonly string[] | null = null;
+  if (event?.tables && event.tables.length > 0) {
+    affectedTables = event.tables;
+  } else if (event?.mutationName) {
+    affectedTables = getTablesForMutation(event.mutationName);
+  }
+
+  for (const entry of Array.from(listenerEntries)) {
+    // If mutation affected tables is unknown (null) or entry is wildcard (null), always notify
+    if (!affectedTables || !entry.tables) {
+      entry.callback();
+      continue;
+    }
+
+    // If query has 0 tables (static query like publicVapidKey or supportedStrategies), do not invalidate
+    if (entry.tables.length === 0) {
+      continue;
+    }
+
+    // Check intersection
+    const hasOverlap = entry.tables.some((t) => (affectedTables as readonly string[]).includes(t));
+    if (hasOverlap) {
+      entry.callback();
+    }
+  }
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
+export function subscribe(
+  tablesOrListener: readonly string[] | null | (() => void),
+  maybeListener?: () => void
+): () => void {
+  let tables: readonly string[] | null = null;
+  let listener: () => void;
+
+  if (typeof tablesOrListener === "function") {
+    tables = null;
+    listener = tablesOrListener;
+  } else {
+    tables = tablesOrListener;
+    listener = maybeListener!;
+  }
+
+  const entry: ListenerEntry = { tables, callback: listener };
+  listenerEntries.add(entry);
   return () => {
-    listeners.delete(listener);
+    listenerEntries.delete(entry);
   };
 }
+
+/* ------------------------------------------- in-flight query deduplication -- */
+
+const inFlightQueries = new Map<string, Promise<unknown>>();
 
 /* ------------------------------------------------------------- transport -- */
 
@@ -56,28 +238,47 @@ async function accessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-async function callBackend(ref: unknown, args?: unknown): Promise<unknown> {
-  const token = await accessToken();
-  const response = await fetch("/api/backend/call", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ ref: refToKey(ref), args: args ?? {} }),
-  });
+export function callBackend(ref: unknown, args?: unknown): Promise<unknown> {
+  const fnKey = refToKey(ref);
+  const cacheKey = `${fnKey}::${JSON.stringify(args ?? {})}`;
 
-  let payload: { result?: unknown; error?: string; message?: string } = {};
-  try {
-    payload = (await response.json()) as typeof payload;
-  } catch {
-    // non-JSON error page
+  const existing = inFlightQueries.get(cacheKey);
+  if (existing) {
+    return existing;
   }
 
-  if (!response.ok) {
-    throw new BackendError(payload.error ?? "INTERNAL", payload.message);
-  }
-  return payload.result;
+  const promise = (async () => {
+    const token = await accessToken();
+    const response = await fetch("/api/backend/call", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ ref: fnKey, args: args ?? {} }),
+    });
+
+    let payload: { result?: unknown; error?: string; message?: string } = {};
+    try {
+      payload = (await response.json()) as typeof payload;
+    } catch {
+      // non-JSON error page
+    }
+
+    if (!response.ok) {
+      throw new BackendError(payload.error ?? "INTERNAL", payload.message);
+    }
+    return payload.result;
+  })();
+
+  inFlightQueries.set(cacheKey, promise);
+
+  const cleanup = () => {
+    inFlightQueries.delete(cacheKey);
+  };
+  promise.then(cleanup, cleanup);
+
+  return promise;
 }
 
 /* ------------------------------------------------------------------ hooks -- */
@@ -89,7 +290,14 @@ export function useQuery<T = any>(
   args?: Record<string, unknown> | "skip"
 ): T | undefined {
   const skip = args === "skip";
-  const key = skip ? "" : `${refToKey(ref)}::${JSON.stringify(args ?? {})}`;
+  const refKey = useMemo(() => {
+    try {
+      return refToKey(ref);
+    } catch {
+      return "";
+    }
+  }, [ref]);
+  const key = skip ? "" : `${refKey}::${JSON.stringify(args ?? {})}`;
   const [tick, setTick] = useState(version);
   const [state, setState] = useState<QueryState>({ key: "", data: undefined, error: null });
   const mounted = useRef(true);
@@ -101,7 +309,11 @@ export function useQuery<T = any>(
     };
   }, []);
 
-  useEffect(() => subscribe(() => setTick(version)), []);
+  const tables = useMemo(() => (refKey ? getTablesForQuery(refKey) : null), [refKey]);
+
+  useEffect(() => {
+    return subscribe(tables, () => setTick((v) => v + 1));
+  }, [tables]);
 
   useEffect(() => {
     if (skip) return;
@@ -120,13 +332,13 @@ export function useQuery<T = any>(
           setState({ key, data: null, error: null });
           return;
         }
-        console.warn("[backend] query failed", refToKey(ref), resolved.message);
+        console.warn("[backend] query failed", refKey, resolved.message);
         setState({ key, data: undefined, error: resolved });
       });
     return () => {
       active = false;
     };
-  }, [key, tick, skip, ref, args]);
+  }, [key, tick, skip, ref, args, refKey]);
 
   if (skip) return undefined;
   if (state.key !== key) return undefined;
@@ -139,7 +351,8 @@ export function useMutation<TArgs = any, TResult = any>(
   return useCallback(
     async (args?: TArgs) => {
       const result = (await callBackend(ref, (args ?? {}) as unknown)) as TResult;
-      bump();
+      const mutationName = typeof ref === "string" ? ref : refToKey(ref);
+      bump({ mutationName });
       return result;
     },
     [ref]
@@ -152,7 +365,8 @@ export function useAction<TArgs = any, TResult = any>(
   return useCallback(
     async (args?: TArgs) => {
       const result = (await callBackend(ref, (args ?? {}) as unknown)) as TResult;
-      bump();
+      const actionName = typeof ref === "string" ? ref : refToKey(ref);
+      bump({ mutationName: actionName });
       return result;
     },
     [ref]
@@ -291,15 +505,37 @@ export function useConvex(): {
       query: async (ref: unknown, args?: unknown) => callBackend(ref, args),
       mutation: async (ref: unknown, args?: unknown) => {
         const result = await callBackend(ref, args);
-        bump();
+        const mutationName = typeof ref === "string" ? ref : refToKey(ref);
+        bump({ mutationName });
         return result;
       },
       action: async (ref: unknown, args?: unknown) => {
         const result = await callBackend(ref, args);
-        bump();
+        const actionName = typeof ref === "string" ? ref : refToKey(ref);
+        bump({ mutationName: actionName });
         return result;
       },
     }),
     []
   );
 }
+
+/* ---------------------------------------------------- test-only exports -- */
+
+export const __test_queryCache = {
+  size: () => inFlightQueries.size,
+  has: (key: string) => inFlightQueries.has(key),
+  clear: () => inFlightQueries.clear(),
+};
+
+export const __test_invalidationBus = {
+  subscribe,
+  bump,
+  reset: () => {
+    version = 0;
+    listenerEntries.clear();
+  },
+  listenerCount: () => listenerEntries.size,
+  getTablesForQuery,
+  getTablesForMutation,
+};

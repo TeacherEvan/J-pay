@@ -8,48 +8,36 @@ import type { OutboxEntry } from "@/lib/outbox";
 import { useOutbox } from "./use-outbox";
 import { errMsg } from "@/lib/errors";
 import { useUserLocale } from "@/lib/use-user-locale";
-import { formatCurrency, formatTime } from "@/lib/format";
+import { formatTime } from "@/lib/format";
 import { haversineMeters } from "../../convex/geo";
 
-const STATUSES = [
-  "arrived",
-  "checkpoint",
-  "lunch",
-  "quick side mission",
-  "feeling sick",
-  "day finish",
-  "job finish",
-] as const;
+import {
+  STATUSES,
+  LABEL,
+  TERMINAL,
+  WORKING,
+  PAUSED,
+  TOKEN_KEY,
+  SIDE_MISSION_DURATIONS,
+  phaseOf,
+} from "./check-in/types";
+import type { Status, Phase, CardLog, CardSite } from "./check-in/types";
+import { StatusIcon } from "./check-in/StatusIcon";
+import { ShiftTimer } from "./check-in/ShiftTimer";
+import { SiteSelector } from "./check-in/SiteSelector";
+import { StatusChips } from "./check-in/StatusChips";
 
-type Status = (typeof STATUSES)[number];
-
-const LABEL: Record<Status, string> = {
-  arrived: "Arrived on site",
-  checkpoint: "Checkpoint",
-  lunch: "Lunch break",
-  "quick side mission": "Side mission",
-  "feeling sick": "Feeling sick",
-  "day finish": "Day finish",
-  "job finish": "Job finish",
+export {
+  STATUSES,
+  LABEL,
+  TERMINAL,
+  WORKING,
+  PAUSED,
+  TOKEN_KEY,
+  SIDE_MISSION_DURATIONS,
+  phaseOf,
 };
-
-const TERMINAL: readonly Status[] = ["day finish", "job finish"];
-const WORKING: readonly Status[] = ["arrived", "checkpoint"];
-const PAUSED: readonly Status[] = ["lunch", "quick side mission", "feeling sick"];
-
-type Phase = "off" | "on" | "break";
-
-const TOKEN_KEY = "jpay.deviceToken";
-const SIDE_MISSION_DURATIONS = [15, 30, 45, 60, 120] as const;
-
-function phaseOf(last?: { status: string }): Phase {
-  if (!last) return "off";
-  const s = last.status as Status;
-  if (TERMINAL.includes(s)) return "off";
-  if (WORKING.includes(s)) return "on";
-  if (PAUSED.includes(s)) return "break";
-  return "off";
-}
+export type { Status, Phase, CardLog, CardSite };
 
 function getPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
@@ -61,134 +49,10 @@ function getPosition(): Promise<GeolocationPosition> {
   });
 }
 
-function formatElapsed(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return [h, m, s].map((n) => n.toString().padStart(2, "0")).join(":");
-}
-
 export function formatMinutesShort(m: number): string {
   const h = Math.floor(m / 60);
   const min = Math.round(m % 60);
   return h > 0 ? `${h}h ${min.toString().padStart(2, "0")}m` : `${min}m`;
-}
-
-function formatDistance(meters: number): string {
-  if (meters < 950) return `${Math.round(meters / 10) * 10} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function StatusIcon({ status }: { status: string }) {
-  const common = {
-    width: 16,
-    height: 16,
-    viewBox: "0 0 16 16",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.75,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-  switch (status as Status) {
-    case "arrived":
-      return (
-        <svg {...common}>
-          <path d="M9.5 2.5h4v11h-4" />
-          <path d="M2 8h7.5M6.5 5l3 3-3 3" />
-        </svg>
-      );
-    case "checkpoint":
-      return (
-        <svg {...common}>
-          <path d="M4 14V2.5" />
-          <path d="M4 3h7l-1.5 2.5L11 8H4" />
-        </svg>
-      );
-    case "lunch":
-      return (
-        <svg {...common}>
-          <path d="M3 6h8v3.5a4 4 0 0 1-8 0V6Z" />
-          <path d="M11 6.5h1.25a1.75 1.75 0 0 1 0 3.5H11" />
-          <path d="M2.5 14h9" />
-        </svg>
-      );
-    case "quick side mission":
-      return (
-        <svg {...common}>
-          <path d="M2.5 12.5 6 9l2.5 2.5L13.5 6" />
-          <path d="M10 6h3.5v3.5" />
-        </svg>
-      );
-    case "feeling sick":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="5.75" />
-          <path d="M5.5 8h5M8 5.5v5" />
-        </svg>
-      );
-    case "day finish":
-      return (
-        <svg {...common}>
-          <path d="M12.5 9.75A5.25 5.25 0 0 1 6.25 3.5a5.25 5.25 0 1 0 6.25 6.25Z" />
-        </svg>
-      );
-    case "job finish":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="5.75" />
-          <path d="m5.5 8 1.75 1.75L10.5 6.5" />
-        </svg>
-      );
-    default:
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="5.75" />
-        </svg>
-      );
-  }
-}
-
-type CardLog = {
-  _id: string;
-  status: string;
-  isWithinGeofence: boolean;
-  impossibleTravelFlag?: boolean;
-  siteId?: Id<"sites">;
-  clientReportedTime?: number;
-  _creationTime: number;
-};
-
-type CardSite = {
-  _id: Id<"sites">;
-  name: string;
-  latitude: number;
-  longitude: number;
-};
-
-/** Today's cleared minutes + pay, for the shift-card corner (live only). */
-function TodayStrip() {
-  const me = useQuery(api.users_queries.me);
-  const range = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return { fromMs: d.getTime(), toMs: d.getTime() + 36 * 3600 * 1000 };
-  }, []);
-  const pay = useQuery(
-    api.payroll.calcForEmployee,
-    me ? { userId: me._id, fromMs: range.fromMs, toMs: range.toMs } : "skip"
-  );
-  if (!pay || pay.totals.payableMinutes === 0) return null;
-  return (
-    <p className="tnum text-xs text-[var(--fog)]">
-      Today {formatMinutesShort(pay.totals.payableMinutes)} ·{" "}
-      <span className="text-[var(--paper)] font-medium">
-        {formatCurrency(pay.totals.pay, pay.currency, pay.locale)}
-      </span>
-    </p>
-  );
 }
 
 export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
@@ -213,7 +77,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [now, setNow] = useState<number>(() => Date.now());
   const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null);
   const [userPickedSite, setUserPickedSite] = useState(false);
-  const siteRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Live clock for the elapsed timer.
   useEffect(() => {
@@ -275,10 +138,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     [sites]
   );
 
-  // Readout timing variables — tabular-nums (tnum) applied on readout
-  const timerAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
-  const elapsed = phase !== "off" && timerAnchor ? now - timerAnchor : null;
-
   const primaryLabel =
     phase === "off"
       ? "Start shift"
@@ -302,166 +161,36 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
       data-testid={isLive ? "checkin-card" : "demo-checkin"}
       className="flex flex-col gap-3.5"
     >
-      {/* ── Shift card: the state lamp chassis ────────────────────── */}
-      <div
-        className={`card-surgical relative overflow-hidden p-5 transition-all duration-300 ${
-          phase === "on"
-            ? "border-[var(--hivis)]/60 bg-[var(--hivis)]/[0.08]"
-            : phase === "break"
-              ? "border-[var(--hivis)]/35 bg-[var(--hivis)]/[0.04]"
-              : "border-[var(--line)] bg-[var(--panel)]"
-        }`}
-      >
-        {phase === "on" && (
-          <div
-            className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-[var(--hivis)]/15 blur-2xl"
-            aria-hidden="true"
-          />
-        )}
-        <div className="relative flex items-center justify-between gap-3">
-          <p
-            className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] ${
-              phase === "off" ? "text-[var(--fog)]" : "text-[var(--hivis)]"
-            }`}
-          >
-            <span
-              className={`pulse-dot inline-block h-2.5 w-2.5 rounded-full ${
-                phase === "on"
-                  ? "bg-[var(--hivis)] shadow-[0_0_8px_var(--hivis)]"
-                  : phase === "break"
-                    ? "bg-[var(--hivis)]/70 shadow-[0_0_6px_var(--hivis)]"
-                    : "bg-[var(--fog)]"
-              }`}
-            />
-            {phase === "on"
-              ? "On the clock"
-              : phase === "break"
-                ? `On break · ${last ? LABEL[last.status as Status] : ""}`
-                : "Off the clock"}
-          </p>
-          {isLive && <TodayStrip />}
-        </div>
-
-        <p className="tnum relative mt-2 text-5xl font-semibold tracking-tight text-[var(--paper)]" aria-live="off">
-          {!loaded ? "··:··:··" : elapsed !== null ? formatElapsed(elapsed) : "—:—:—"}
-        </p>
-
-        <p className="tnum relative mt-1.5 text-sm text-[var(--fog)]">
-          {!loaded
-            ? "Reading your latest event…"
-            : phase === "off"
-              ? last
-                ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>
-                : "Your shift hasn't started yet."
-              : <>{siteNameOf(last?.siteId) ? `At ${siteNameOf(last?.siteId)}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)]">{timerAnchor ? formatTime(timerAnchor, userLocale) : "—"}</span></>}
-        </p>
-      </div>
+      {/* ── Shift timer chassis ────────────────────────────────────── */}
+      <ShiftTimer
+        phase={phase}
+        last={last}
+        loaded={loaded}
+        now={now}
+        userLocale={userLocale}
+        isLive={isLive}
+        siteName={siteNameOf(last?.siteId)}
+      />
 
       {/* ── Site picker (recessed bay) ────────────────────────────── */}
-      {sites.length > 0 && (phase === "off" || pickerOpen) && (
-        <div
-          role="radiogroup"
-          aria-label="Site"
-          className="card-subpanel flex flex-col gap-1.5 p-2"
-          onKeyDown={(e) => {
-            if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-            e.preventDefault();
-            const cur = sites.findIndex((s) => s._id === siteId);
-            const next =
-              e.key === "ArrowDown"
-                ? (cur + 1) % sites.length
-                : (cur - 1 + sites.length) % sites.length;
-            setSiteId(sites[next]!._id);
-            setUserPickedSite(true);
-            siteRefs.current[next]?.focus();
-          }}
-        >
-          {sites.map((s, i) => {
-            const selected = siteId ? siteId === s._id : i === 0;
-            const dist = distances.get(s._id) ?? null;
-            return (
-              <button
-                key={s._id}
-                ref={(el) => {
-                  siteRefs.current[i] = el;
-                }}
-                role="radio"
-                aria-checked={selected}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => {
-                  setSiteId(s._id);
-                  setUserPickedSite(true);
-                }}
-                className={`btn-surgical flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm ${
-                  selected
-                    ? "border-[var(--mint)]/70 bg-[var(--mint)]/10 text-[var(--paper)] shadow-[inset_0_1px_0_0_oklch(1_0_0/0.18)]"
-                    : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
-                }`}
-              >
-                <span className="font-medium">{s.name}</span>
-                {dist !== null && (
-                  <span className="tnum text-xs text-[var(--fog)]">{formatDistance(dist)}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {sites.length > 0 && phase !== "off" && (
-        <button
-          type="button"
-          onClick={() => setPickerOpen((v) => !v)}
-          className="self-start text-xs text-[var(--fog)] underline hover:text-[var(--paper)] touch-target-44 flex items-center"
-        >
-          {pickerOpen ? "Hide sites" : `Site: ${siteNameOf(siteId || last?.siteId) ?? "choose"}`}
-        </button>
-      )}
-      {sites.length === 0 && sitesQuery !== undefined && (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-300">
-          No site assigned yet — your moderator must assign you before you can check in.
-        </p>
-      )}
+      <SiteSelector
+        sites={sites}
+        sitesLoading={sitesQuery === undefined}
+        siteId={siteId}
+        phase={phase}
+        pickerOpen={pickerOpen}
+        setPickerOpen={setPickerOpen}
+        onSelectSite={(id) => {
+          setSiteId(id);
+          setUserPickedSite(true);
+        }}
+        distances={distances}
+        siteNameOf={siteNameOf}
+        lastSiteId={last?.siteId}
+      />
 
       {/* ── Quick actions (tactile rocker pills) ───────────────────── */}
-      {chips.length > 0 && (
-        <div
-          className="flex flex-wrap gap-2"
-          role="radiogroup"
-          aria-label="What's happening"
-          onKeyDown={(e) => {
-            if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-              e.preventDefault();
-              const idx = chips.indexOf(pending);
-              const next = chips[(idx + 1) % chips.length];
-              setPending(next);
-            } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-              e.preventDefault();
-              const idx = chips.indexOf(pending);
-              const prev = chips[(idx - 1 + chips.length) % chips.length];
-              setPending(prev);
-            }
-          }}
-        >
-          {chips.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={pending === s}
-              tabIndex={pending === s ? 0 : -1}
-              onClick={() => setPending(s)}
-              className={`pill-surgical min-h-[44px] ${
-                pending === s
-                  ? "border-[var(--hivis)]/70 bg-[var(--hivis)]/15 text-[var(--hivis)] shadow-[0_0_10px_var(--hivis-glow)]"
-                  : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
-              }`}
-            >
-              <StatusIcon status={s} />
-              {LABEL[s]}
-            </button>
-          ))}
-        </div>
-      )}
+      <StatusChips chips={chips} pending={pending} setPending={setPending} />
 
       {submitStatus === "quick side mission" && (
         <div className="card-subpanel flex items-center gap-3 p-3" role="group" aria-label="Side mission duration">

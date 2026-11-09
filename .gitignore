@@ -47,6 +47,7 @@ docs/.scratch-audit/
 # Surgical-pruning toolkit artifacts (dry-run output, not source)
 .prune/
 surgical-pruning-*.html
+.hermes/
 
 # Code-review skill advisory artifacts (Phase 1-4 outputs, not source)
 audit_report.md
