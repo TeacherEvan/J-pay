@@ -28,20 +28,32 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
     setSyncing(true);
     try {
       const items = await outboxAll();
+      // U5 fix: never let one stuck entry starve the rest of the queue.
+      // Permanent (deterministic, server-side 4xx-class) rejections are dropped
+      // loudly; anything else is SKIPPED for this pass and retried next flush.
+      const PERMANENT = /WEAK_GPS|SITE_NOT|INACTIVE|FORBIDDEN|PAYROLL_SEALED|ENDED_BEFORE_START|ENDED_IN_FUTURE|INVALID_COORDS|UNKNOWN_FUNCTION/;
+      let skipped = 0;
       for (const { key, entry } of items) {
         try {
           await flushOne(entry);
           await outboxRemove(key);
         } catch (e) {
           const msg = String(e);
-          if (/WEAK_GPS|SITE_NOT|INACTIVE|FORBIDDEN/.test(msg)) {
+          if (PERMANENT.test(msg)) {
             await outboxRemove(key);
             setLastError(`Dropped queued entry: ${msg}`);
           } else {
+            skipped += 1;
             setLastError(`Sync paused: ${msg}`);
-            break;
           }
         }
+      }
+      if (skipped > 0) {
+        setLastError((prev) =>
+          prev === null || !prev.startsWith("Sync paused")
+            ? `${skipped} queued ${skipped === 1 ? "entry" : "entries"} pending — will retry when back online`
+            : prev,
+        );
       }
     } finally {
       flushing = false;
