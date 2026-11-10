@@ -22,10 +22,10 @@ npm install
 npm run dev           # http://localhost:3000
 ```
 
-The database schema lives in `supabase/migrations/` (`0001_init.sql` is the baseline,
-`0002` the logs-idempotency unique index, `0003` the pg_cron retention jobs). Apply with
-`supabase db push` or the dashboard. The Convex deployment is retired — there is nothing
-to `npx convex dev` against.
+The database schema lives in `supabase/migrations/` (`0001_init.sql` is the baseline;
+`0002`–`0009` add constraints, crons, the manager role, travel tracking, shift overrides,
+the id-registry refresh, and organisations). Apply with `supabase db push` or the dashboard.
+The Convex deployment is retired — there is nothing to `npx convex dev` against.
 
 Bootstrap the first moderator (one-time, uses the service-role key on this machine):
 
@@ -49,7 +49,7 @@ offers **"Enter demo preview"**.
 Each client company gets an isolated fork + Supabase project:
 
 1. Fork/copy this repo → `jpay-<client>`. Update `name` in `package.json` and `manifest.webmanifest`.
-2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/0001..0003`.
+2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/0001..0009`.
 3. Set env vars per deployment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`, `DEVICE_TOKEN_SECRET`, `CRON_SECRET` (+ `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`,
    `MASTER_PASSWORD`, vapid keys if push is wanted).

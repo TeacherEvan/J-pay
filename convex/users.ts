@@ -46,7 +46,7 @@ async function requireModeratorActionCtx(ctx: import("./_generated/server").Acti
 }
 
 export const provisionEmployee = action({
-  args: { name: v.string(), email: v.string() },
+  args: { name: v.string(), email: v.string(), orgId: v.optional(v.id("organisations")) },
   handler: async (ctx, args) => {
     await requireModeratorActionCtx(ctx);
     const email = args.email.trim().toLowerCase();
@@ -65,6 +65,7 @@ export const provisionEmployee = action({
         email,
         role: "employee" as const,
         isActive: true,
+        orgId: args.orgId,
       },
     });
     return { email, idCode };

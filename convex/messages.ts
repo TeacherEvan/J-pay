@@ -2,7 +2,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, requireActiveUser } from "./access";
+import { requireModerator, requireActiveUser, requireManager } from "./access";
 import { isDemoUser } from "./demo/scope";
 
 function validContent(content: string): string {
@@ -110,6 +110,89 @@ export const replyToEmployee = mutation({
       title: "J-Pay",
       body: text.slice(0, 80),
     });
+  },
+});
+
+/** Manager messaging (2026-11-10): a manager may 1:1 message ANY active,
+ * non-demo user in their own organisation — not just crew at managed sites. */
+export const managerOrgUsers = query({
+  args: {},
+  handler: async (ctx) => {
+    const managerId = await requireManager(ctx);
+    const me = await ctx.db.get(managerId);
+    const orgId = me?.orgId;
+    const users = await ctx.db.query("users").collect();
+    const isDemo = process.env.DEMO_MODE === "1";
+    return users
+      .filter((u) => {
+        if (u._id === managerId) return false;
+        if (orgId !== undefined && u.orgId !== orgId) return false;
+        if (!u.isActive || u.archivedAt !== undefined) return false;
+        if (!isDemo && isDemoUser(u)) return false;
+        return true;
+      })
+      .map((u) => ({ _id: u._id, name: u.name ?? u.email ?? "unknown", email: u.email, role: u.role }))
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  },
+});
+
+export const managerMessage = mutation({
+  args: { recipientId: v.id("users"), content: v.string() },
+  handler: async (ctx, args) => {
+    const managerId = await requireManager(ctx);
+    const text = validContent(args.content);
+    const me = await ctx.db.get(managerId);
+    const recipient = await ctx.db.get(args.recipientId);
+    if (!recipient || !recipient.isActive || recipient.archivedAt !== undefined) {
+      throw new ConvexError("INVALID_RECIPIENT");
+    }
+    if (me?.orgId !== undefined && recipient.orgId !== me.orgId) {
+      throw new ConvexError("NOT_IN_ORG");
+    }
+    if (process.env.DEMO_MODE !== "1" && isDemoUser(recipient)) {
+      throw new ConvexError("INVALID_RECIPIENT");
+    }
+    await ctx.db.insert("messages", {
+      senderId: managerId,
+      recipientId: args.recipientId,
+      modQueue: false,
+      content: text,
+      isRead: false,
+    });
+    await ctx.scheduler.runAfter(0, internal.push.pushToUser, {
+      userId: args.recipientId,
+      title: "J-Pay",
+      body: text.slice(0, 80),
+    });
+  },
+});
+
+/** Manager broadcast: one message to every active, non-demo user in the manager's org. */
+export const managerBroadcast = mutation({
+  args: { content: v.string() },
+  handler: async (ctx, args) => {
+    const managerId = await requireManager(ctx);
+    const text = validContent(args.content);
+    const me = await ctx.db.get(managerId);
+    const orgId = me?.orgId;
+    const users = await ctx.db.query("users").collect();
+    const isDemo = process.env.DEMO_MODE === "1";
+    let sent = 0;
+    for (const u of users) {
+      if (u._id === managerId) continue;
+      if (orgId !== undefined && u.orgId !== orgId) continue;
+      if (!u.isActive || u.archivedAt !== undefined) continue;
+      if (!isDemo && isDemoUser(u)) continue;
+      await ctx.db.insert("messages", {
+        senderId: managerId,
+        recipientId: u._id,
+        modQueue: false,
+        content: text,
+        isRead: false,
+      });
+      sent += 1;
+    }
+    return { sent };
   },
 });
 

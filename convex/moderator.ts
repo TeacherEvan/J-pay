@@ -115,6 +115,7 @@ export const listEmployeesWithAssignments = query({
         role: e.role,
         name: e.name,
         email: e.email,
+        orgId: e.orgId,
         archivedAt: e.archivedAt,
         isActive: e.isActive,
         deviceId: e.deviceId,

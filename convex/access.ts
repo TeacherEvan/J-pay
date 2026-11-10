@@ -44,6 +44,12 @@ export async function requireModerator(ctx: Ctx): Promise<Id<"users">> {
   return userId;
 }
 
+export async function requireManager(ctx: Ctx): Promise<Id<"users">> {
+  const { userId, role } = await requireActiveUser(ctx);
+  if (role !== "manager") throw new ConvexError("FORBIDDEN");
+  return userId;
+}
+
 export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
   const { userId, role } = await requireActiveUser(ctx);
   // Managers are field staff with a management title: they check in, log and

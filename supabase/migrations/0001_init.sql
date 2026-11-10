@@ -33,16 +33,26 @@ create table if not exists public.users (
   "hourlyRateOverride"      double precision,
   "pushSubscriptionTokens"  text[],
   "payStrategy"             text check ("payStrategy" in ('flat','bcea','dailyOvertime','flsa','wtr_uk')),
-  "locale"                  text
+  "locale"                  text,
+  "orgId"                   uuid references public.organisations("_id") on delete set null
 );
 create index if not exists users_email_idx on public.users ("email");
 create index if not exists users_role_idx on public.users ("role");
 create index if not exists users_active_idx on public.users ("isActive");
+create index if not exists users_org_idx on public.users ("orgId");
 -- master-temp rows reuse the operator's email for audit, so uniqueness is partial
 create unique index if not exists users_real_email_uniq
   on public.users ("email") where "isMasterTemp" is not true;
 
 -- ---------------------------------------------------------------- sites -----
+create table if not exists public.organisations (
+  "_id"                   uuid primary key default gen_random_uuid(),
+  "_creationTime"         bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
+  "name"                  text not null,
+  "archivedAt"            bigint,
+  "createdBy"             uuid references public.users("_id") on delete set null
+);
+
 create table if not exists public.sites (
   "_id"                   uuid primary key default gen_random_uuid(),
   "_creationTime"         bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
@@ -54,8 +64,11 @@ create table if not exists public.sites (
   "archivedAt"            bigint,
   "createdBy"             uuid references public.users("_id") on delete set null,
   "updatedAt"             bigint,
-  "updatedBy"             uuid references public.users("_id") on delete set null
+  "updatedBy"             uuid references public.users("_id") on delete set null,
+  "orgId"                 uuid references public.organisations("_id") on delete set null
 );
+
+create index if not exists sites_org_idx on public.sites ("orgId");
 
 -- -------------------------------------------------------------- punches -----
 create table if not exists public.punches (
@@ -242,6 +255,8 @@ create index if not exists shift_overrides_user_key_idx on public."shiftOverride
 create or replace view public.jpay_id_registry as
   select "_id"::text as id, 'users' as tbl from public.users
   union all
+  select "_id"::text as id, 'organisations' as tbl from public.organisations
+  union all
   select "_id"::text as id, 'sites' as tbl from public.sites
   union all
   select "_id"::text as id, 'punches' as tbl from public.punches
@@ -270,6 +285,7 @@ create or replace view public.jpay_id_registry as
 
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
+alter table public.organisations        enable row level security;
 alter table public.sites                enable row level security;
 alter table public.punches              enable row level security;
 alter table public."userSites"          enable row level security;

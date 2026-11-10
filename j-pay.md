@@ -179,6 +179,7 @@ export default defineSchema({
     isActive: v.boolean(),
     passwordChangedAt: v.optional(v.number()), // undefined = still using provisioned ID code
     travelConsentAt: v.optional(v.number()),  // consent gate for on-shift off-site travel tracking (owner 2026-11-10)
+    orgId: v.optional(v.id("organisations")),  // organisation membership (owner 2026-11-10)
     deviceId: v.optional(v.string()),          // signed device token id
     archivedAt: v.optional(v.number()),        // soft delete (payroll compliance)
     isMasterTemp: v.optional(v.boolean()),     // transient moderator via master-password login
@@ -187,9 +188,17 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_org", ["orgId"]),
+
+  organisations: defineTable({                    // tenant grouping; one deployment may host several (owner 2026-11-10)
+    name: v.string(),
+    archivedAt: v.optional(v.number()),
+    createdBy: v.optional(v.id("users")),        // optional so a SQL migration can seed a default org pre-users
+  }),
 
   sites: defineTable({
+    orgId: v.optional(v.id("organisations")),    // sites are created AFTER (and inside) an organisation (owner 2026-11-10)
     name: v.string(),
     latitude: v.number(),
     longitude: v.number(),
@@ -199,7 +208,8 @@ export default defineSchema({
     createdBy: v.id("users"),                  // site provisioning audit (v1.2, M6)
     updatedAt: v.optional(v.number()),
     updatedBy: v.optional(v.id("users")),
-  }),
+  })
+    .index("by_org", ["orgId"]),
 
   userSites: defineTable({                     // employees assigned to one+ sites
     userId: v.id("users"),
@@ -450,6 +460,8 @@ erDiagram
     users ||--o{ travelSegments : "travels"
     users ||--o{ shiftOverrides : "overrides"
     sites ||--o{ travelSegments : "departs from / arrives at"
+    organisations ||--o{ users : "member of"
+    organisations ||--o{ sites : "contains"
 
     users {
         string name
@@ -461,11 +473,18 @@ erDiagram
         boolean isMasterTemp "OPTIONAL transient moderator"
         number passwordChangedAt "OPTIONAL force-set at provisioning"
         number travelConsentAt "OPTIONAL consent gate"
+        id orgId "OPTIONAL FK organisations"
 
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
     }
+    organisations {
+        string name
+        number archivedAt "SOFT DELETE"
+        id createdBy "OPTIONAL FK users"
+    }
     sites {
+        id orgId "OPTIONAL FK organisations"
         string name
         number latitude
         number longitude

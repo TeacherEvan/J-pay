@@ -17,12 +17,22 @@ import { formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { ConsoleWindow } from "@/components/console/window";
 import { ConsoleTabs } from "@/components/console/console-tabs";
+import { OrgProvider, useOrg } from "./org-context";
+import { OrgPanel } from "./org-panel";
 import { Pager } from "@/components/console/pager";
 import { usePagination } from "@/components/console/use-pagination";
 
 type ViewId = "live" | "crew" | "access" | "payroll" | "overrides" | "audit" | "messages";
 
 export default function ModeratorPage() {
+  return (
+    <OrgProvider>
+      <ModeratorConsole />
+    </OrgProvider>
+  );
+}
+
+function ModeratorConsole() {
   const me = useQuery(api.users_queries.me);
   const employees = useQuery(api.moderator.listEmployeesWithAssignments);
   const sites = useQuery(api.moderator.listAllSites);
@@ -265,16 +275,20 @@ function CrewView({
 
 /* ───────────────────── Access (provision / sites / scopes) ───────────────────── */
 
-type AccessTask = "provision" | "site" | "assign" | "managers";
+type AccessTask = "provision" | "site" | "assign" | "managers" | "orgs";
 
 function AccessView({
   employees,
   sites,
 }: {
-  employees: { _id: string; name?: string; email?: string; archivedAt?: number; assignedSiteIds?: string[]; role?: string }[];
-  sites: { _id: string; name: string }[];
+  employees: { _id: string; name?: string; email?: string; archivedAt?: number; assignedSiteIds?: string[]; role?: string; orgId?: string }[];
+  sites: { _id: string; name: string; orgId?: string }[];
 }) {
   const [task, setTask] = useState<AccessTask>("provision");
+  const { orgId } = useOrg();
+  // Sites picked AFTER an org is created — everything below operates inside the selected org.
+  const orgSites = orgId ? sites.filter((s) => s.orgId === orgId) : sites;
+  const orgEmployees = orgId ? employees.filter((e) => e.orgId === orgId) : employees;
   const cell = (id: AccessTask) =>
     `min-h-0 h-full ${task === id ? "block" : "hidden"} md:block`;
 
@@ -294,9 +308,15 @@ function AccessView({
           <option value="site">Create site (geofence)</option>
           <option value="assign">Assign employee ↔ sites</option>
           <option value="managers">Managers</option>
+          <option value="orgs">Organisations</option>
         </select>
       </div>
-      <div className="grid min-h-0 flex-1 gap-2 md:grid-cols-2 md:grid-rows-2">
+      <div className={`${task === "orgs" ? "block" : "hidden"} mb-2 flex-none md:mb-2 md:block`}>
+        <div className="h-44 md:h-36">
+          <OrgPanel />
+        </div>
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 md:grid-cols-2 md:grid-rows-2">
         <div className={cell("provision")}>
           <ProvisionPanel />
         </div>
@@ -304,10 +324,10 @@ function AccessView({
           <SitePanel />
         </div>
         <div className={cell("assign")}>
-          <AssignPanel employees={employees} sites={sites} />
+          <AssignPanel employees={orgEmployees} sites={orgSites} />
         </div>
         <div className={cell("managers")}>
-          <ManagersPanel employees={employees} sites={sites} />
+          <ManagersPanel employees={orgEmployees} sites={orgSites} />
         </div>
       </div>
     </div>
@@ -438,6 +458,7 @@ function AuditView({
 function ProvisionPanel() {
   const provisionEmployeeAction = useAction(api.users.provisionEmployee);
   const provisionModeratorAction = useAction(api.users.provisionModerator);
+  const { orgId } = useOrg();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"employee" | "moderator">("employee");
@@ -446,7 +467,12 @@ function ProvisionPanel() {
   const [busy, setBusy] = useState(false);
 
   return (
-    <ConsoleWindow title="Provision account" className="h-full" bodyClassName="flex min-h-0 flex-col gap-2 p-3">
+    <ConsoleWindow
+      title="Provision account"
+      className="h-full"
+      bodyClassName="flex min-h-0 flex-col gap-2 p-3"
+      aside={<span className="text-xs text-[var(--fog)]">{orgId ? "lands in selected org" : "no org selected — account will be unscoped"}</span>}
+    >
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fog)]">Full name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name"
@@ -474,7 +500,11 @@ function ProvisionPanel() {
           setError(null);
           try {
             const fn = role === "employee" ? provisionEmployeeAction : provisionModeratorAction;
-            setCode(await fn({ name, email }));
+            setCode(
+              role === "employee"
+                ? await fn({ name, email, orgId: orgId ?? undefined } as { name: string; email: string })
+                : await fn({ name, email })
+            );
             if (role === "employee" && typeof window !== "undefined") {
               (window as unknown as { __JPAY_LAST_EMPLOYEE_EMAIL?: string }).__JPAY_LAST_EMPLOYEE_EMAIL = email;
             }
@@ -513,6 +543,7 @@ function ProvisionPanel() {
 
 function SitePanel() {
   const createSite = useMutation(api.sites.createSite);
+  const { orgId } = useOrg();
   const [form, setForm] = useState({ name: "", lat: "", lng: "", radius: "150", tz: "Africa/Johannesburg" });
   const coord = (v: string): number | null => {
     const n = Number(v);
@@ -524,7 +555,12 @@ function SitePanel() {
   const [busy, setBusy] = useState(false);
 
   return (
-    <ConsoleWindow title="Create site" className="h-full" bodyClassName="flex min-h-0 flex-col gap-2 p-2 md:flex-row md:p-3">
+    <ConsoleWindow
+      title="Create site"
+      className="h-full"
+      bodyClassName="flex min-h-0 flex-col gap-2 p-2 md:flex-row md:p-3"
+      aside={<span className="text-xs text-[var(--fog)]">{orgId ? "inside selected org" : "create an org first"}</span>}
+    >
       <div className="flex min-h-0 flex-none flex-col md:w-[46%] md:flex-none">
         <SiteMapPicker lat={latNum} lng={lngNum} onPick={(a, b) => setForm({ ...form, lat: String(a), lng: String(b) })} />
       </div>
@@ -554,10 +590,15 @@ function SitePanel() {
           <input value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} placeholder="IANA timezone"
             className="input-surgical px-3 py-1.5 text-sm" />
         </label>
+        {!orgId && (
+          <p className="col-span-2 flex-none text-xs text-[var(--hivis)]">
+            Create or select an organisation above first — sites belong to an org.
+          </p>
+        )}
         <button
           data-loading={busy}
           aria-busy={busy}
-          disabled={busy}
+          disabled={busy || !orgId}
           onClick={async () => {
             setBusy(true);
             setMsg(null);
@@ -568,6 +609,7 @@ function SitePanel() {
                 longitude: Number(form.lng),
                 geofenceRadiusMeters: Number(form.radius),
                 timezone: form.tz,
+                orgId: orgId as never,
               });
               setMsg(`Created ${form.name}`);
               setForm({ ...form, name: "", lat: "", lng: "" });

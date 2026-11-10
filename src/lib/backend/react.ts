@@ -35,6 +35,7 @@ export class BackendError extends Error {
 
 export type TableName =
   | "users"
+  | "organisations"
   | "sites"
   | "punches"
   | "userSites"
@@ -73,6 +74,13 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
   // travel tracking
   "travel:setConsent": ["users"],
   "travel:recordFix": ["travelSegments"], // B10: fixes were nuking six tables sitewide every 15s
+
+  // organisations + manager messaging
+  "organisations:createOrg": ["organisations"],
+  "organisations:renameOrg": ["organisations"],
+  "organisations:archiveOrg": ["organisations", "sites", "users"],
+  "messages:managerMessage": ["messages"],
+  "messages:managerBroadcast": ["messages"],
 
   // messages
   "messages:sendToModerators": ["messages"],
@@ -117,6 +125,10 @@ export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
   "users_queries:me": ["users"],
   "users_queries:listEmployees": ["users"],
   "users:getMyLocale": ["users"],
+
+  // organisations + manager messaging
+  "organisations:listOrgs": ["organisations", "sites", "users"],
+  "messages:managerOrgUsers": ["users", "organisations"],
 
   // sites & punches
   "sites:listMine": ["sites", "userSites"],

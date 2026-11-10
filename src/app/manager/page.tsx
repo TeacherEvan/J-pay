@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "@/lib/backend/api";
 import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { ManagerMap } from "./manager-map";
+import { ManagerMessagesPanel } from "./messages-panel";
 import { ConsoleWindow } from "@/components/console/window";
 import { ConsoleTabs } from "@/components/console/console-tabs";
 import { Pager } from "@/components/console/pager";
@@ -36,7 +37,7 @@ type TravelRow = {
 import { formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
 
-type ViewId = "live" | "crew";
+type ViewId = "live" | "crew" | "messages";
 
 export default function ManagerPage() {
   const me = useQuery(api.users_queries.me);
@@ -83,6 +84,7 @@ export default function ManagerPage() {
   const tabs = [
     { id: "live", label: "Live map" },
     { id: "crew", label: `Crew (${(crew ?? []).length})` },
+    { id: "messages", label: "Messages" },
   ];
 
   return (
@@ -259,6 +261,12 @@ export default function ManagerPage() {
                 <Pager page={crewCards.page} pageCount={crewCards.pageCount} total={crewCards.total} onPage={crewCards.setPage} label="Crew" />
               </div>
             </ConsoleWindow>
+          </div>
+        )}
+
+        {view === "messages" && (
+          <div role="tabpanel" aria-label="Messages" className="h-full min-h-0">
+            <ManagerMessagesPanel />
           </div>
         )}
       </div>

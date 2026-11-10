@@ -30,12 +30,21 @@ export default defineSchema({
     ),
     locale: v.optional(v.string()),
     travelConsentAt: v.optional(v.number()),
+    orgId: v.optional(v.id("organisations")),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_org", ["orgId"]),
+
+  organisations: defineTable({
+    name: v.string(),
+    archivedAt: v.optional(v.number()),
+    createdBy: v.optional(v.id("users")), // optional so SQL migrations can insert a default org before any moderator exists
+  }),
 
   sites: defineTable({
+    orgId: v.optional(v.id("organisations")),
     name: v.string(),
     latitude: v.number(),
     longitude: v.number(),
@@ -45,7 +54,8 @@ export default defineSchema({
     createdBy: v.id("users"),
     updatedAt: v.optional(v.number()),
     updatedBy: v.optional(v.id("users")),
-  }),
+  })
+    .index("by_org", ["orgId"]),
 
   punches: defineTable({
     userId: v.id("users"),

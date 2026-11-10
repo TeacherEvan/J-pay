@@ -10,6 +10,7 @@ import { createSupabaseAdminClient, hasSupabaseAdminKey } from "@/lib/supabase/a
 import * as users from "../../../convex/users";
 import * as usersQueries from "../../../convex/users_queries";
 import * as sites from "../../../convex/sites";
+import * as organisations from "../../../convex/organisations";
 import * as punches from "../../../convex/punches";
 import * as logs from "../../../convex/logs";
 import * as shifts from "../../../convex/shifts";
@@ -60,6 +61,7 @@ const MODULES: Record<string, unknown> = {
   users,
   users_queries: usersQueries,
   sites,
+  organisations,
   punches,
   logs,
   shifts,
@@ -258,7 +260,7 @@ function normaliseName(raw: unknown): string {
  */
 async function createAccount(
   ctx: RequestContext,
-  args: { name: string; email: string; role: "moderator" | "employee" }
+  args: { name: string; email: string; role: "moderator" | "employee"; orgId?: string }
 ): Promise<string> {
   requireAdminKey();
   const admin = createSupabaseAdminClient();
@@ -280,6 +282,7 @@ async function createAccount(
     email: args.email,
     role: args.role,
     isActive: true,
+    orgId: args.orgId,
   });
   return idCode;
 }
@@ -298,12 +301,16 @@ const OVERRIDES: Record<string, Handler["_handler"]> = {
     await requireModeratorActionCtx(request);
     const email = normaliseEmail(args.email);
     const name = normaliseName(args.name);
+    if (args.orgId !== undefined) {
+      const org = await request.db.get(String(args.orgId));
+      if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
+    }
     const existing = await request.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", email))
       .first();
     if (existing) throw new ConvexError("USER_EXISTS");
-    const idCode = await createAccount(request, { name, email, role: "employee" });
+    const idCode = await createAccount(request, { name, email, role: "employee", orgId: args.orgId ? String(args.orgId) : undefined });
     return { email, idCode };
   },
 
