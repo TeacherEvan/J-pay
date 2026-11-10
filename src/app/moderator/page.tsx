@@ -81,6 +81,11 @@ export default function ModeratorPage() {
         sites={sites ?? []}
       />
 
+      <ManagersPanel
+        employees={(employees as any) ?? []}
+        sites={sites ?? []}
+      />
+
       <PayrollPanel employees={(employees ?? []) as never} role="moderator" />
       <ReviewPanel />
       <MessagesPanel role="moderator" />
@@ -367,11 +372,160 @@ function SitePanel() {
   );
 }
 
+function ManagersPanel({
+  employees,
+  sites,
+}: {
+  employees: { _id: string; name?: string; email?: string; archivedAt?: number; role?: string }[];
+  sites: { _id: string; name: string }[];
+}) {
+  const managers = useQuery(api.manager.listManagers) as
+    | { _id: string; name?: string; email?: string; isActive: boolean; managedSiteIds: string[]; managedSiteNames: string[] }[]
+    | undefined;
+  const promote = useMutation(api.manager.promoteToManager);
+  const demote = useMutation(api.manager.demoteManager);
+  const setSites = useMutation(api.manager.setManagerSites);
+  const [promoteUserId, setPromoteUserId] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [msg, setMsg] = useState<string | null>(null);
+  const promotable = employees.filter((e) => !e.archivedAt && e.role === "employee");
+
+  const openEditor = (m: { _id: string; managedSiteIds: string[] }) => {
+    setOpenId(m._id);
+    setChecked(new Set(m.managedSiteIds));
+    setMsg(null);
+  };
+
+  return (
+    <section className="card-surgical p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
+        Managers
+      </h2>
+      <p className="mb-3 text-xs text-[var(--text-secondary)]">
+        Promote an employee to manager — same login, scoped to the sites you assign below.
+        Managers see only their sites&apos; crew (map + roster). No payroll or provisioning rights.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--line)] pb-3">
+        <select value={promoteUserId} onChange={(e) => setPromoteUserId(e.target.value)}
+          className="input-surgical px-3.5 py-2 text-sm">
+          <option value="">Employee to promote…</option>
+          {promotable.map((e) => (
+            <option key={e._id} value={e._id}>{e.name ?? e.email}{e.role === "manager" ? " (manager)" : ""}</option>
+          ))}
+        </select>
+        <button
+          disabled={!promoteUserId}
+          onClick={async () => {
+            setMsg(null);
+            try {
+              await promote({ userId: promoteUserId as never });
+              setPromoteUserId("");
+              setMsg("Promoted to manager.");
+            } catch (e) {
+              setMsg(errMsg(e));
+            }
+          }}
+          className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          Promote
+        </button>
+        {msg && <span className="text-sm font-medium text-[var(--paper)]">{msg}</span>}
+      </div>
+
+      <ul className="mt-3 flex flex-col gap-2">
+        {(managers ?? []).map((m) => (
+          <li key={m._id} className="rounded-lg border border-[var(--line)] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-medium text-[var(--paper)]">{m.name ?? m.email}</span>
+                {!m.isActive && <span className="ml-2 text-xs text-[var(--danger)]">deactivated</span>}
+                <span className="ml-2 text-xs text-[var(--text-secondary)]">
+                  {m.managedSiteNames.length > 0 ? m.managedSiteNames.join(", ") : "no sites scoped yet"}
+                </span>
+              </div>
+              <span className="inline-flex gap-2">
+                <button
+                  onClick={() => (openId === m._id ? setOpenId(null) : openEditor(m))}
+                  className="btn-surgical min-h-[44px] px-3 py-2 text-xs font-semibold text-[var(--cyan)] border-[var(--cyan)]/40 hover:bg-[var(--cyan)]/10"
+                >
+                  {openId === m._id ? "Close" : "Assign sites"}
+                </button>
+                <button
+                  onClick={async () => {
+                    setMsg(null);
+                    try {
+                      await demote({ userId: m._id as never });
+                      setMsg("Demoted to employee.");
+                    } catch (e) {
+                      setMsg(errMsg(e));
+                    }
+                  }}
+                  className="btn-surgical min-h-[44px] px-3 py-2 text-xs font-semibold text-[var(--danger)] border-[var(--danger)]/40 hover:bg-[var(--danger)]/10"
+                >
+                  Demote
+                </button>
+              </span>
+            </div>
+            {openId === m._id && (
+              <div className="mt-3 flex flex-col gap-2 border-t border-[var(--line)] pt-3">
+                <div className="flex max-h-44 flex-col gap-1.5 overflow-y-auto rounded-lg border border-[var(--line)] p-2">
+                  {sites.map((s) => {
+                    const on = checked.has(s._id);
+                    return (
+                      <label key={s._id} className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm text-[var(--paper)] hover:bg-[var(--panel-elevated)]/50">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-[var(--mint)]"
+                          checked={on}
+                          onChange={() => {
+                            const next = new Set(checked);
+                            if (on) next.delete(s._id); else next.add(s._id);
+                            setChecked(next);
+                          }}
+                        />
+                        {s.name}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={async () => {
+                      setMsg(null);
+                      try {
+                        const result = await setSites({
+                          managerId: m._id as never,
+                          siteIds: [...checked] as never,
+                        });
+                        setMsg(`Saved — manager covers ${result.total} site${result.total === 1 ? "" : "s"}.`);
+                      } catch (e) {
+                        setMsg(errMsg(e));
+                      }
+                    }}
+                    className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2 text-sm font-semibold"
+                  >
+                    Save sites
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+        {managers !== undefined && managers.length === 0 && (
+          <li className="text-sm text-[var(--fog)]">No managers yet.</li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
 function AssignPanel({
   employees,
   sites,
 }: {
-  employees: { _id: string; name?: string; email?: string; archivedAt?: number; assignedSiteIds?: string[] }[];
+  employees: { _id: string; name?: string; email?: string; archivedAt?: number; assignedSiteIds?: string[]; role?: string }[];
   sites: { _id: string; name: string }[];
 }) {
   const setAssignments = useMutation(api.sites.setEmployeeSites);
@@ -398,7 +552,7 @@ function AssignPanel({
           className="input-surgical px-3.5 py-2 text-sm">
           <option value="">Employee…</option>
           {active.map((e: any) => (
-            <option key={e._id} value={e._id}>{e.name ?? e.email}</option>
+            <option key={e._id} value={e._id}>{e.name ?? e.email}{e.role === "manager" ? " (manager)" : ""}</option>
           ))}
         </select>
         {userId && (

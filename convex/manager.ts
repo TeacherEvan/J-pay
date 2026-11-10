@@ -1,0 +1,312 @@
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+import { ConvexError } from "convex/values";
+import { requireModerator, maybeCurrentUserId } from "./access";
+import { isDemoUser } from "./demo/scope";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+type Ctx = MutationCtx | QueryCtx;
+
+/**
+ * Manager role (owner 2026-11-10). A manager is a promoted employee with a
+ * scoped console: they see the crew assigned to the sites in their
+ * `managerSites` rows — employees (and managers) whose `userSites` assignments
+ * overlap. Managers never get payroll-edit, provisioning or moderator admin
+ * actions; promotion/demotion and site scoping are moderator-only.
+ *
+ * Live position comes from each crew member's latest log (same site-derivation
+ * rule as the moderator Live crew map); continuous on-shift travel fixes land
+ * in `travelSegments` (B-phase) and are merged in by `managedActiveShifts`.
+ */
+
+async function managedSiteIdSet(
+  ctx: Ctx,
+  managerId: Id<"users">
+): Promise<Set<Id<"sites">>> {
+  const rows = await ctx.db
+    .query("managerSites")
+    .withIndex("by_manager", (q) => q.eq("managerId", managerId))
+    .collect();
+  return new Set<Id<"sites">>(rows.map((r) => r.siteId));
+}
+
+async function requireManagerViewer(
+  ctx: Ctx
+): Promise<{ managerId: Id<"users">; siteIds: Set<Id<"sites">> } | null> {
+  const viewerId = await maybeCurrentUserId(ctx);
+  if (!viewerId) return null;
+  const viewer = await ctx.db.get(viewerId);
+  // Never serve a demo persona a manager console; real managers only.
+  if (!viewer || viewer.role !== "manager" || !viewer.isActive || viewer.archivedAt !== undefined) {
+    return null;
+  }
+  if (isDemoUser(viewer)) return null;
+  return { managerId: viewerId as Id<"users">, siteIds: await managedSiteIdSet(ctx, viewerId as Id<"users">) };
+}
+
+/** Sites the current manager covers (active, non-archived, not demo-provisioned). */
+export const listManagedSites = query({
+  args: {},
+  handler: async (ctx) => {
+    const scope = await requireManagerViewer(ctx);
+    if (!scope) return [];
+    const out = [];
+    for (const siteId of scope.siteIds) {
+      const site = await ctx.db.get(siteId);
+      if (!site || site.archivedAt !== undefined) continue;
+      const creator = await ctx.db.get(site.createdBy);
+      if (creator && isDemoUser(creator)) continue;
+      out.push(site);
+    }
+    out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    return out;
+  },
+});
+
+/**
+ * Map payload: active shifts of crew assigned to managed sites.
+ * Same site-derivation rule as the moderator map — the shift's site is the
+ * employee's latest log site; no logs yet means no pin, never an invented one.
+ * Returns [] to anyone who is not an active, real (non-demo) manager.
+ */
+export const managedActiveShifts = query({
+  args: {},
+  handler: async (ctx) => {
+    const scope = await requireManagerViewer(ctx);
+    if (!scope) return [];
+    if (scope.siteIds.size === 0) return [];
+
+    const assignments = await ctx.db.query("userSites").collect();
+    const crewIds = new Set<string>();
+    for (const a of assignments) {
+      if (scope.siteIds.has(a.siteId)) crewIds.add(a.userId);
+    }
+    if (crewIds.size === 0) return [];
+
+    const active = await ctx.db
+      .query("shifts")
+      .withIndex("by_active", (q) => q.eq("endedAt", undefined))
+      .collect();
+
+    const out = [];
+    for (const shift of active) {
+      if (!crewIds.has(shift.userId)) continue;
+      const user = await ctx.db.get(shift.userId);
+      if (!user || isDemoUser(user) || !user.isActive || user.archivedAt !== undefined) continue;
+
+      const lastLogs = await ctx.db
+        .query("logs")
+        .withIndex("by_user_time", (q) => q.eq("userId", shift.userId))
+        .order("desc")
+        .take(1);
+      const lastLog = lastLogs[0] ?? null;
+      const site = lastLog?.siteId ? await ctx.db.get(lastLog.siteId) : null;
+
+      out.push({
+        _id: shift._id,
+        userId: shift.userId,
+        name: user.name ?? user.email ?? "unknown",
+        startedAt: shift.startedAt,
+        siteName: site?.name,
+        siteLat: site?.latitude,
+        siteLng: site?.longitude,
+        siteRadiusMeters: site?.geofenceRadiusMeters,
+        lastLog: lastLog
+          ? {
+              lat: lastLog.latitude,
+              lng: lastLog.longitude,
+              accuracyMeters: lastLog.accuracyMeters,
+              clientReportedTime: lastLog.clientReportedTime,
+              status: lastLog.status,
+              isWithinGeofence: lastLog.isWithinGeofence,
+            }
+          : null,
+      });
+    }
+    out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    return out;
+  },
+});
+
+/** Roster for the manager console: crew, their sites, and live shift state. */
+export const myCrew = query({
+  args: {},
+  handler: async (ctx) => {
+    const scope = await requireManagerViewer(ctx);
+    if (!scope) return [];
+
+    const assignments = await ctx.db.query("userSites").collect();
+    const siteNames = new Map<string, string>();
+    const userSiteNames = new Map<string, string[]>();
+    for (const a of assignments) {
+      if (!scope.siteIds.has(a.siteId)) continue;
+      const site = await ctx.db.get(a.siteId);
+      if (!site || site.archivedAt !== undefined) continue;
+      siteNames.set(a.siteId, site.name);
+      const list = userSiteNames.get(a.userId) ?? [];
+      list.push(site.name);
+      userSiteNames.set(a.userId, list);
+    }
+
+    const active = await ctx.db
+      .query("shifts")
+      .withIndex("by_active", (q) => q.eq("endedAt", undefined))
+      .collect();
+    const openByUser = new Map<string, { _id: string; startedAt: number }>();
+    for (const s of active) openByUser.set(s.userId, { _id: s._id, startedAt: s.startedAt });
+
+    const out = [];
+    for (const [userId, names] of userSiteNames) {
+      const user = await ctx.db.get(userId as Id<"users">);
+      if (!user || isDemoUser(user) || !user.isActive || user.archivedAt !== undefined) continue;
+      out.push({
+        _id: user._id,
+        name: user.name ?? user.email ?? "unknown",
+        email: user.email,
+        role: user.role,
+        assignedSiteNames: [...new Set(names)].sort(),
+        onShift: openByUser.get(userId) ?? null,
+      });
+    }
+    out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    return out;
+  },
+});
+
+/** Moderator: list promoted managers with their managed sites. */
+export const listManagers = query({
+  args: {},
+  handler: async (ctx) => {
+    const modId = await maybeCurrentUserId(ctx as never);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+
+    const managers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .collect();
+    const out = [];
+    for (const m of managers) {
+      if (isDemoUser(m) || m.archivedAt !== undefined) continue;
+      const rows = await ctx.db
+        .query("managerSites")
+        .withIndex("by_manager", (q) => q.eq("managerId", m._id))
+        .collect();
+      const names: string[] = [];
+      const siteIds: string[] = [];
+      for (const r of rows) {
+        const site = await ctx.db.get(r.siteId);
+        if (site && site.archivedAt === undefined) {
+          siteIds.push(site._id);
+          names.push(site.name);
+        }
+      }
+      out.push({
+        _id: m._id,
+        name: m.name,
+        email: m.email,
+        isActive: m.isActive,
+        managedSiteIds: siteIds,
+        managedSiteNames: names.sort(),
+      });
+    }
+    out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    return out;
+  },
+});
+
+/** Moderator: replace a manager's managed-site set transactionally. */
+export const setManagerSites = mutation({
+  args: {
+    managerId: v.id("users"),
+    siteIds: v.array(v.id("sites")),
+  },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const manager = await ctx.db.get(args.managerId);
+    if (!manager || manager.role !== "manager") throw new ConvexError("NOT_A_MANAGER");
+    if (manager.archivedAt !== undefined || !manager.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
+    if (isDemoUser(manager)) throw new ConvexError("FORBIDDEN");
+
+    const uniqueSiteIds = [...new Set(args.siteIds)];
+    const wanted = new Set<string>();
+    for (const siteId of uniqueSiteIds) {
+      const site = await ctx.db.get(siteId);
+      if (!site) throw new ConvexError("SITE_NOT_FOUND");
+      if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
+      wanted.add(siteId);
+    }
+    const existing = await ctx.db
+      .query("managerSites")
+      .withIndex("by_manager", (q) => q.eq("managerId", args.managerId))
+      .collect();
+    let unassigned = 0;
+    for (const row of existing) {
+      if (!wanted.has(row.siteId)) {
+        await ctx.db.delete(row._id);
+        unassigned++;
+      }
+    }
+    const existingIds = new Set(existing.map((r) => r.siteId as string));
+    let assigned = 0;
+    for (const siteId of wanted) {
+      if (!existingIds.has(siteId)) {
+        await ctx.db.insert("managerSites", {
+          managerId: args.managerId,
+          siteId: siteId as Id<"sites">,
+        });
+        assigned++;
+      }
+    }
+    return { assigned, unassigned, total: wanted.size as number };
+  },
+});
+
+/** Moderator: promote an employee to manager (same account, no new login). */
+export const promoteToManager = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new ConvexError("USER_NOT_FOUND");
+    if (target.role !== "employee") {
+      if (target.role === "manager") return { ok: true as const, already: true as const };
+      throw new ConvexError("NOT_AN_EMPLOYEE");
+    }
+    if (target.archivedAt !== undefined || !target.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
+    if (isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+    await ctx.db.patch(args.userId, { role: "manager" });
+    return { ok: true as const, already: false as const };
+  },
+});
+
+/** Moderator: demote a manager back to employee (drops managed-site rows). */
+export const demoteManager = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new ConvexError("USER_NOT_FOUND");
+    if (target.role !== "manager") {
+      if (target.role === "employee") return { ok: true as const, already: true as const };
+      throw new ConvexError("NOT_A_MANAGER");
+    }
+    const rows = await ctx.db
+      .query("managerSites")
+      .withIndex("by_manager", (q) => q.eq("managerId", args.userId))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    await ctx.db.patch(args.userId, { role: "employee" });
+    return { ok: true as const, already: false as const };
+  },
+});
+
+/** Scoping helper shared with the travel module: site ids managed by a manager. */
+export async function managedSiteIds(
+  ctx: Ctx,
+  managerId: Id<"users">
+): Promise<Set<Id<"sites">>> {
+  return managedSiteIdSet(ctx, managerId);
+}

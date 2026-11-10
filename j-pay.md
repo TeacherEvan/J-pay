@@ -283,6 +283,13 @@ export default defineSchema({
   })
     .index("by_user_key", ["userId", "shiftKey"]),
 
+  managerSites: defineTable({                     // manager → managed sites; crew derived via userSites (owner 2026-11-10)
+    managerId: v.id("users"),
+    siteId: v.id("sites"),
+  })
+    .index("by_manager", ["managerId"])
+    .index("by_site", ["siteId"]),
+
   purgeAudit: defineTable({                   // observable purge run log (H7)
     purgedAt: v.number(),
     purgedCount: v.number(),
@@ -399,6 +406,8 @@ erDiagram
     users ||--o{ shifts : "derives"
     users ||--o{ messages : "sends"
     users ||--o{ pushSubscriptions : "registers"
+    users ||--o{ managerSites : "manages"
+    sites ||--o{ managerSites : "managed by"
 
     users {
         string name
@@ -482,6 +491,10 @@ erDiagram
         number purgedAt
         number purgedCount
         string kind "coordinates|messages|masterTemps"
+    }
+    managerSites {
+        id managerId
+        id siteId
     }
 ```
 

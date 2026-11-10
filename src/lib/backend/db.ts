@@ -58,6 +58,7 @@ const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
   purgeAudit: { by_purged_at: ["purgedAt"] },
   reviewResolutions: { by_user_key: ["userId", "shiftKey"] },
   demoSessions: { by_reviewer: ["reviewerId"], by_persona: ["personaEmail"] },
+  managerSites: { by_manager: ["managerId"], by_site: ["siteId"] },
 };
 
 /* ------------------------------------------------------------------ types -- */

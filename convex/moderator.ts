@@ -89,6 +89,11 @@ export const listEmployeesWithAssignments = query({
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .collect();
+    const managers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .collect();
+    employees.push(...managers);
     const allAssignments = await ctx.db.query("userSites").collect();
     const byUser = new Map<string, Id<"sites">[]>();
     for (const a of allAssignments) {
@@ -107,6 +112,7 @@ export const listEmployeesWithAssignments = query({
       }
       out.push({
         _id: e._id,
+        role: e.role,
         name: e.name,
         email: e.email,
         archivedAt: e.archivedAt,

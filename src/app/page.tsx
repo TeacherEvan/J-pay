@@ -102,7 +102,7 @@ export default function Home() {
                 Install app
               </button>
             )}
-            {me.role === "employee" && <EnableNotifications />}
+            {me.role !== "moderator" && <EnableNotifications />}
             <span className="rounded-full border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--fog)]">
               {me.role}
             </span>
@@ -139,14 +139,15 @@ export default function Home() {
             </button>
           </div>
         )}
-        {!mustChangePassword && (me.role === "employee" ? (
+        {!mustChangePassword && (me.role === "moderator" ? (
+          <ModeratorHome />
+        ) : (
           <>
             <CheckInCard variant="live" />
+            {me.role === "manager" && <ManagerCard />}
             <MessagesPanel role="employee" />
             <ChangePassword />
           </>
-        ) : (
-          <ModeratorHome />
         ))}
         <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-[var(--fog)]">
           Location is recorded only when you press CHECK IN — never continuous tracking. Raw
@@ -190,6 +191,25 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function ManagerCard() {
+  return (
+    <section className="card-surgical p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
+        Manager
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
+        Your crew is waiting — live positions, travel status and on-site arrival for the sites you manage.
+      </p>
+      <a
+        href="/manager"
+        className="btn-surgical btn-surgical-mint mt-4 flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold"
+      >
+        Open manager console →
+      </a>
+    </section>
   );
 }
 

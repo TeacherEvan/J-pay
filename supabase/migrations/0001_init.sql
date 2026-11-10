@@ -193,6 +193,17 @@ create table if not exists public."demoSessions" (
 create index if not exists demo_sessions_reviewer_idx on public."demoSessions" ("reviewerId");
 create index if not exists demo_sessions_persona_idx on public."demoSessions" ("personaEmail");
 
+-- ---------------------------------------------------------- managerSites -----
+create table if not exists public."managerSites" (
+  "_id"           uuid primary key default gen_random_uuid(),
+  "_creationTime" bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
+  "managerId"     uuid not null references public.users("_id") on delete cascade,
+  "siteId"        uuid not null references public.sites("_id") on delete cascade,
+  unique ("managerId", "siteId")
+);
+create index if not exists manager_sites_manager_idx on public."managerSites" ("managerId");
+create index if not exists manager_sites_site_idx on public."managerSites" ("siteId");
+
 -- --------------------------------------------------- jpay_id_registry view --
 -- Polyfill for untyped uuid lookup across tables (used by Database.tableOf)
 create or replace view public.jpay_id_registry as
@@ -216,7 +227,9 @@ create or replace view public.jpay_id_registry as
   union all
   select "_id"::text as id, 'reviewResolutions' as tbl from public."reviewResolutions"
   union all
-  select "_id"::text as id, 'demoSessions' as tbl from public."demoSessions";
+  select "_id"::text as id, 'demoSessions' as tbl from public."demoSessions"
+  union all
+  select "_id"::text as id, 'managerSites' as tbl from public."managerSites";
 
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
@@ -230,6 +243,7 @@ alter table public."pushSubscriptions"  enable row level security;
 alter table public."purgeAudit"         enable row level security;
 alter table public."reviewResolutions"  enable row level security;
 alter table public."demoSessions"       enable row level security;
+alter table public."managerSites"       enable row level security;
 
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;

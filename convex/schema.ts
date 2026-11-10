@@ -148,6 +148,13 @@ export default defineSchema({
     byModeratorId: v.id("users"),
   }).index("by_user_key", ["userId", "shiftKey"]),
 
+  managerSites: defineTable({
+    managerId: v.id("users"),
+    siteId: v.id("sites"),
+  })
+    .index("by_manager", ["managerId"])
+    .index("by_site", ["siteId"]),
+
   demoSessions: defineTable({
     reviewerId: v.id("users"),
     personaEmail: v.string(),

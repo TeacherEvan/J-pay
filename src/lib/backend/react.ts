@@ -44,7 +44,8 @@ export type TableName =
   | "pushSubscriptions"
   | "purgeAudit"
   | "reviewResolutions"
-  | "demoSessions";
+  | "demoSessions"
+  | "managerSites";
 
 /**
  * Mapping of known mutation function keys to the tables/domains they mutate.
@@ -60,6 +61,11 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
   "sites:assignEmployee": ["userSites"],
   "sites:unassignEmployee": ["userSites"],
   "sites:setEmployeeSites": ["userSites", "users"],
+
+  // manager console
+  "manager:setManagerSites": ["managerSites", "users", "sites"],
+  "manager:promoteToManager": ["users"],
+  "manager:demoteManager": ["users", "managerSites"],
 
   // messages
   "messages:sendToModerators": ["messages"],
@@ -123,6 +129,12 @@ export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
   "moderator:activeShifts": ["shifts", "logs", "users", "sites"],
   "moderator:listEmployeesWithAssignments": ["users", "userSites", "sites"],
   "moderator:listAllSites": ["sites", "users"],
+
+  // manager console
+  "manager:listManagedSites": ["managerSites", "sites", "users"],
+  "manager:managedActiveShifts": ["shifts", "logs", "users", "sites", "managerSites", "userSites"],
+  "manager:myCrew": ["userSites", "shifts", "sites", "users", "managerSites"],
+  "manager:listManagers": ["users", "managerSites", "sites"],
 
   // kpi & payroll
   "kpi:summary": ["logs", "shifts", "users", "sites"],
