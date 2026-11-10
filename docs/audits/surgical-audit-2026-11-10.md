@@ -293,3 +293,27 @@ The first cut of this report had four evidentiary gaps. All are now closed; the 
 5. **Score unchanged.** `S_health = 70`, HIGH. The evidence strengthening adds no new findings; it removes the "only a static read" caveat from P0-1.
 
 **Still not done (by design / by mandate):** no fix has been applied (the deliverable was the audit); no probe has executed any production-affecting action (the exploit was proven against a stub only); nothing was pushed; Phase 1 acceptance gate (live `pg_cron` inventory + one forced retention run) cannot be satisfied from this machine and is recorded in the plan.
+
+---
+
+## Remediation Addendum (same day, later session) — Phase 1 containment delivered
+
+Delivered as a green commit series on `main`, each commit independently green, none pushed (owner holds the push):
+
+| Commit | Finding | What landed | Local proof |
+| :--- | :--- | :--- | :--- |
+| `bd05b8f` | **P0-1** dead browser gate | Deny-by-default `handler.isPublic !== true`; **30-key internal census regression test** in `npm test`; repo-local transpile loader + in-memory DB stub (zero network) | Red pre-fix: `27/30 internal functions are browser-reachable`; green post-fix |
+| `b48b43d` | **P2-3** public inventory | `GET /api/backend/call` requires `x-smoke-key` (constant-time, fail-closed) in production; dev stays open; POST unaffected | `scripts/test-smoke-key.mjs` in gate |
+| `d2f9798` | **P1-5** infinite refetch | Effect deps `[key, tick, skip]`; mounted `useQuery` regression test (1 fetch on mount, 0 on stable re-render, +1 per invalidation) | Red pre-fix (3 fetches) / green post-fix, mechanically reverted and re-run |
+| `cb54a41` | **P1-3** silent scheduler | One bounded retry (150 ms backoff) + structured `event=scheduled_job_failed` JSON line on final failure (ref, userId, attempts, message) | `scripts/test-scheduler-retry.mjs` in gate |
+
+Gates on the tip: `npm test` green (95 + 6 + 4 new), `tsc --noEmit` clean, `check_consistency.py` PASS, `check_diagrams.py` PASS. Every commit in the series re-verified green on its own extracted tree (symlinked `node_modules`, per-commit `tsc` + `npm test`).
+
+**Promoted from the external `plans/Surgical Audit Report.txt` (manifest-only audit; line 15 self-discloses it never read the source):** the verified/duplicated items belong in this backlog, not in the P0/P1 set — its headline claims were stale or factually wrong (see comparison in the conversation that produced this file):
+- **[P2-backlog]** Complete the `check-in-card.tsx` decomposition (four stalled plans, `plans/2026-09-04…09-09-*.md`; extraction target `useCheckInController.ts`) — agreed with this audit's P2-2; their line-numbered blueprint is usable as a sketch only.
+- **[lead, unverified]** Sign-out / persona-switch teardown of `geolocation.watchPosition` and device tokens (no `clearWatch` found in sweep) — test before claiming.
+- **[P3, verified]** `gates.yml` runs only `npm test` — `tests-layout/*.mjs` and all Playwright e2e never execute in CI; add a nightly/e2e lane or delete the probes.
+- **[P3, verified]** `.agents/skills` (34) vs `.claude/skills` (33) near-duplicate tree; root-level `alias-prod.png` / `branch-7min.png` duplicate `docs/ops/screenshots/`.
+- **[lead, unverified]** 1 Hz `ShiftTimer` coupling into `check-in-card.tsx` re-render churn on low-end devices — profile before refactoring.
+
+**Explicitly not done (in order):** R2 PostgREST predicate pushdown + unique `logs(userId, idempotencyKey)` index (migration `0002`); P1-2 transaction/`rpc` write-set for punch+derivation; **P1-4 retention via `pg_cron` in `0002_crons.sql`** (needs production `pg_cron` inventory to close — nothing in this repo can prove it done); R3-full needsReview-flagging on derivation failure (needs the integration lane, MVTH #3); **ADR-004** (Supabase-authoritative cutover) + README/TRD/AGENTS sync (docs still describe Convex+Convex Auth as live); **deploy verification** — `main` is 4 commits ahead of `origin/main`, nothing has shipped to production (`j-pay.vercel.app` still serves `9a11f35` with the dead gate); pushing is the owner's call, and the redeploy order is server-first (backend route changes ship in the same build, so a single redeploy suffices here), then one round-trip per role against prod.
