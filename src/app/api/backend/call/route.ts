@@ -6,6 +6,7 @@ import { ConvexError } from "convex/values";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, createSupabaseAnonClient } from "@/lib/supabase/server";
 import { describeFunctions, describeModules, invoke, type Identity } from "@/lib/backend/runtime";
+import { isSmokeKeyValid } from "@/lib/smoke-key";
 
 /**
  * POST /api/backend/call
@@ -117,8 +118,21 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-/** GET /api/backend/call — function inventory, handy for smoke tests. */
-export async function GET(): Promise<Response> {
+/**
+ * GET /api/backend/call — function inventory for smoke tests.
+ *
+ * In production the inventory is not public: it discloses every internal
+ * handler name (see audit 2026-11-10, P2-3). Require the SMOKE_TEST_KEY
+ * shared secret in the `x-smoke-key` header; non-production stays open for
+ * local tooling. Missing or wrong key answers 403 either way (fail closed).
+ */
+export async function GET(request: Request): Promise<Response> {
+  if (
+    process.env.NODE_ENV === "production" &&
+    !isSmokeKeyValid(request.headers.get("x-smoke-key"), process.env.SMOKE_TEST_KEY)
+  ) {
+    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  }
   return NextResponse.json({
     functions: describeFunctions(),
     modules: describeModules(),
