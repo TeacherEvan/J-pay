@@ -184,16 +184,28 @@ export const recordFix = mutation({
       const lastLog = lastLogs[0];
       const fromSiteId = lastLog?.isWithinGeofence ? lastLog.siteId : undefined;
       const samples: PathSample[] = [{ lat: args.latitude, lng: args.longitude, t }];
-      const segmentId = await ctx.db.insert("travelSegments", {
-        userId,
-        fromSiteId,
-        departedAt: t,
-        distanceMeters: 0,
-        pathSamples: samples,
-        lastFixKey: args.idempotencyKey,
-        needsReview: false,
-      });
-      return { status: "recorded" as const, mode: "traveling" as const, segmentId, distanceMeters: 0 };
+      // B3: the partial-unique index travel_segments_one_open (0010) makes a
+      // concurrent double-insert throw. Treat that as a duplicate rather than
+      // a hard failure — the outbox will retry and hit the open leg on the
+      // next pass.
+      try {
+        const segmentId = await ctx.db.insert("travelSegments", {
+          userId,
+          fromSiteId,
+          departedAt: t,
+          distanceMeters: 0,
+          pathSamples: samples,
+          lastFixKey: args.idempotencyKey,
+          needsReview: false,
+        });
+        return { status: "recorded" as const, mode: "traveling" as const, segmentId, distanceMeters: 0 };
+      } catch (e) {
+        const msg = String(e);
+        if (/unique|duplicate|one_open/i.test(msg)) {
+          return { status: "duplicate" as const };
+        }
+        throw e;
+      }
     }
 
     // Idempotent replay of the exact last fix (offline outbox double-fire).
