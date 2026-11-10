@@ -113,6 +113,45 @@ export function refToKey(ref: unknown): string {
 
 /* -------------------------------------------------------------------- ctx -- */
 
+const SCHEDULED_MAX_ATTEMPTS = 2;
+const SCHEDULED_RETRY_DELAY_MS = 150;
+
+/**
+ * Run a scheduled job with bounded retries. Scheduled work (shift derivation
+ * after a punch) decides what pays; it must not vanish into a console line.
+ * Returns `{ok, value|error}` — never throws. Exported for tests.
+ */
+export async function withScheduledRetry<T>(
+  fn: () => Promise<T>,
+  attempts: number = SCHEDULED_MAX_ATTEMPTS
+): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return { ok: true, value: await fn() };
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, SCHEDULED_RETRY_DELAY_MS));
+      }
+    }
+  }
+  return { ok: false, error: lastError };
+}
+
+/** Structured failure line the host can alert on. Never throws. */
+function reportScheduledFailure(ref: unknown, args: Record<string, unknown>, error: unknown, attempts: number): void {
+  let key = "unknown";
+  try { key = refToKey(ref); } catch { /* keep unknown */ }
+  console.error(JSON.stringify({
+    event: "scheduled_job_failed",
+    ref: key,
+    userId: typeof args?.userId === "string" ? args.userId : undefined,
+    attempts,
+    message: error instanceof Error ? error.message : String(error),
+  }));
+}
+
 class RequestContext {
   db = new Database();
 
@@ -140,9 +179,12 @@ class RequestContext {
     invoke(ref, args, this.identity, true);
 
   /**
-   * Convex `runAfter(0, …)` fires after the mutation returns. We run inline:
-   * Postgres has no transaction wrapping these handlers, so finishing the
-   * derived work before the response keeps the data consistent.
+   * Convex `runAfter(0, …)` fires after the mutation returns. We run inline
+   * (Postgres has no transaction wrapping these handlers), but a failed job
+   * now gets bounded retries and, on final failure, a structured
+   * `scheduled_job_failed` line the host can alert on — it previously vanished
+   * into console.error (audit 2026-11-10, P1-3). The job itself is not made
+   * transactional here; failures still do not roll back the punch.
    */
   scheduler = {
     runAfter: async (
@@ -150,22 +192,16 @@ class RequestContext {
       ref: unknown,
       args: Record<string, unknown> = {}
     ): Promise<void> => {
-      try {
-        await invoke(ref, args, this.identity, true);
-      } catch (error) {
-        console.error("[backend] scheduled job failed", refToKey(ref), error);
-      }
+      const outcome = await withScheduledRetry(() => invoke(ref, args, this.identity, true));
+      if (!outcome.ok) reportScheduledFailure(ref, args, outcome.error, SCHEDULED_MAX_ATTEMPTS);
     },
     runAt: async (
       _when: number,
       ref: unknown,
       args: Record<string, unknown> = {}
     ): Promise<void> => {
-      try {
-        await invoke(ref, args, this.identity, true);
-      } catch (error) {
-        console.error("[backend] scheduled job failed", refToKey(ref), error);
-      }
+      const outcome = await withScheduledRetry(() => invoke(ref, args, this.identity, true));
+      if (!outcome.ok) reportScheduledFailure(ref, args, outcome.error, SCHEDULED_MAX_ATTEMPTS);
     },
     cancel: async (): Promise<void> => {},
   };
