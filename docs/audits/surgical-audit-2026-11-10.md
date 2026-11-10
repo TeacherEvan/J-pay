@@ -333,3 +333,21 @@ Delivered on `main` after the Phase 1 push (all verified live in production at `
 Still open by design: **R3-full** (needsReview flag on derivation failure — needs the integration lane), P1-2 write-set transaction (needs `rpc` or `serializable` discipline — separate change), **ADR-004** + README/TRD/AGENTS sync, **prod migration application + `CRON_SECRET`/`SMOKE_TEST_KEY` env** (owner's actions), npm audit advisories, e2e lane in CI.
 
 Deploy verification (production, after `9a11f35..21cd57c` → then the Phase 2 commits): `GET /api/backend/call` → **403**; unauthenticated internal refs (`payroll_data:logsForExport`, `users_queries:listByRole`, `logs:purgeExpiredCoords`, `demo:seedAll`) → **404 UNKNOWN_FUNCTION**; public ref `users_queries:me` → **200 null**; deployment `success` per GitHub Deployments API. No production data was read, written, or deleted by any of these checks.
+
+---
+
+## Phase 3 Addendum (same day, post-deploy, owner-reported) — live crashes fixed and verified
+
+Owner hit two issues after the Phase 2 deploy, both reproduced, fixed, and re-verified in production:
+
+| Commit | Finding | What landed | Proof |
+| :--- | :--- | :--- | :--- |
+| `3b97f38` | Login bounce — every successful sign-in landed back on `/login` | `src/app/page.tsx`: `useQuery(api.users_queries.me, isAuthenticated ? {} : "skip")` and render Loading (not the sign-in form) while the authenticated `me` is unresolved; the stale pre-sign-in `me === null` can no longer trigger the auto-sign-out effect | Owner first sign-in reached the dashboard; page probes green |
+| `b9c239a` | `kpi:summary` crashed for every moderator: `shifts: invalid input syntax for type bigint: "null"` | `db.ts` pushdown now emits `.is(col, null)` for absent-field `eq` constraints; null-valued range operators fall back to the JS path; recording stub gained `.is()` | Read-only prod probe: `.eq("endedAt", null)` reproduces the exact error; `.is("endedAt", null)` returns the open shifts; anonymous `kpi:summary` → **401 UNAUTHENTICATED** (auth door, never reaches SQL); deploy `success` 2026-11-10T04:09Z |
+
+**Root cause (b9c239a):** supabase-js serialises `.eq(col, null)` as the literal string `eq.null`; Postgres casts `'null'` to the column type and throws. The Phase 2 recording stub (`postgrest-stub.mjs`) had modelled `.eq(col, null)` as `IS NULL`, so the unit test asserted `eq` with `val: null` as *correct* — the stub taught the adapter comment a falsehood, and the divergence only existed against real PostgREST. Invariant now enforced by `test-db-adapter.mjs`: `eq(null)` must never reach SQL.
+
+**Operator notes:**
+- Console CSS `-moz-*` / `mozPressure` / Vercel `installHook.js.map` 403 lines in the owner's Firefox are inert (dropped decls + third-party source-map 403); no action.
+- Still open: R3-full needsReview flagging, P1-2 `rpc` transaction for punch+derivation, npm audit advisories, e2e CI lane, and the owner-only items (apply `0002` after the duplicate diagnostic; apply `0003` + set `CRON_SECRET`; set `SMOKE_TEST_KEY` or accept fail-closed 403).
+- `b9c239a` was deployed after explicit owner go-ahead; gates on the tip (`check_consistency.py`, `check_diagrams.py`, `npm test` exit 0 / 0 failures, `tsc --noEmit`) run before every commit above.
