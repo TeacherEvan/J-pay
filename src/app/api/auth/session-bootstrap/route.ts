@@ -21,6 +21,33 @@ import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "../../../../../convex/demo/sites
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// B6 fix: in-memory sliding-window rate limit. Serverless instances share no
+// state, but this still throttles per-instance abuse and costs nothing;
+// complements Supabase-side throttles. Demo: 5/min/IP. Master: 5/hour/IP.
+const WINDOW_DEMO_MS = 60_000;
+const WINDOW_MASTER_MS = 3_600_000;
+const LIMIT_DEMO = 5;
+const LIMIT_MASTER = 5;
+const hits = new Map<string, number[]>();
+
+function clientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0].trim();
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
+
+function rateLimited(key: string, windowMs: number, limit: number): boolean {
+  const now = Date.now();
+  const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (list.length >= limit) {
+    hits.set(key, list);
+    return true;
+  }
+  list.push(now);
+  hits.set(key, list);
+  return false;
+}
+
 type Body = { kind?: string; email?: string; secret?: string };
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -45,9 +72,14 @@ export async function POST(request: Request): Promise<Response> {
   const admin = createSupabaseAdminClient();
   const password = ephemeralPassword();
 
+  const ip = clientIp(request);
+
   if (body.kind === "demo") {
     if (process.env.DEMO_MODE !== "1") {
       return NextResponse.json({ error: "DEMO_DISABLED" }, { status: 403 });
+    }
+    if (rateLimited(`demo:${ip}`, WINDOW_DEMO_MS, LIMIT_DEMO)) {
+      return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
     }
     const authEmail = `demo+${Date.now().toString(36)}@jpay.local`;
     const { data, error } = await admin.auth.admin.createUser({
@@ -103,6 +135,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (body.kind === "master") {
+    if (rateLimited(`master:${ip}`, WINDOW_MASTER_MS, LIMIT_MASTER)) {
+      return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+    }
     const masterPassword = process.env.MASTER_PASSWORD;
     if (!masterPassword) {
       return NextResponse.json({ error: "MASTER_DISABLED" }, { status: 403 });
