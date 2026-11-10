@@ -335,10 +335,14 @@ export function useQuery<T = any>(
         console.warn("[backend] query failed", refKey, resolved.message);
         setState({ key, data: undefined, error: resolved });
       });
+    // Depend only on stable serialisations: `key` fully determines the request
+    // (ref identity from the Proxy and inline `args` object identity both
+    // change every render, so depending on them caused an endless fetch →
+    // setState → render → fetch loop — audit 2026-11-10, P1-5).
     return () => {
       active = false;
     };
-  }, [key, tick, skip, ref, args, refKey]);
+  }, [key, tick, skip]);
 
   if (skip) return undefined;
   if (state.key !== key) return undefined;
