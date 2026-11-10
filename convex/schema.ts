@@ -177,6 +177,16 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_departed", ["departedAt"]),
 
+  shiftOverrides: defineTable({
+    userId: v.id("users"),
+    shiftKey: v.string(),              // `${startedAt}` of the overridden segment
+    endedAt: v.number(),               // corrected end; applied at derivation time
+    reason: v.string(),                // mandatory, >= 10 chars (checked in mutation)
+    byModeratorId: v.id("users"),
+    previousEndedAt: v.optional(v.number()),
+    previousTotalMinutes: v.optional(v.number()),
+  }).index("by_user_key", ["userId", "shiftKey"]),
+
   demoSessions: defineTable({
     reviewerId: v.id("users"),
     personaEmail: v.string(),

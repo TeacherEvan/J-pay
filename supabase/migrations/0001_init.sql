@@ -223,6 +223,20 @@ create table if not exists public."travelSegments" (
 create index if not exists travel_segments_user_departed_idx on public."travelSegments" ("userId", "departedAt" desc);
 create index if not exists travel_segments_departed_idx on public."travelSegments" ("departedAt" desc);
 
+-- --------------------------------------------------------- shiftOverrides ---
+create table if not exists public."shiftOverrides" (
+  "_id"                   uuid primary key default gen_random_uuid(),
+  "_creationTime"         bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
+  "userId"                uuid not null references public.users("_id") on delete cascade,
+  "shiftKey"              text not null,
+  "endedAt"               bigint not null,
+  "reason"                text not null check (char_length(reason) >= 10),
+  "byModeratorId"         uuid not null references public.users("_id") on delete restrict,
+  "previousEndedAt"       bigint,
+  "previousTotalMinutes"  double precision
+);
+create index if not exists shift_overrides_user_key_idx on public."shiftOverrides" ("userId", "shiftKey");
+
 -- --------------------------------------------------- jpay_id_registry view --
 -- Polyfill for untyped uuid lookup across tables (used by Database.tableOf)
 create or replace view public.jpay_id_registry as
@@ -250,7 +264,9 @@ create or replace view public.jpay_id_registry as
   union all
   select "_id"::text as id, 'managerSites' as tbl from public."managerSites"
   union all
-  select "_id"::text as id, 'travelSegments' as tbl from public."travelSegments";
+  select "_id"::text as id, 'travelSegments' as tbl from public."travelSegments"
+  union all
+  select "_id"::text as id, 'shiftOverrides' as tbl from public."shiftOverrides";
 
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
@@ -266,6 +282,7 @@ alter table public."reviewResolutions"  enable row level security;
 alter table public."demoSessions"       enable row level security;
 alter table public."managerSites"       enable row level security;
 alter table public."travelSegments"     enable row level security;
+alter table public."shiftOverrides"     enable row level security;
 
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;

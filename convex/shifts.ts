@@ -1,6 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { deriveSegments, type EngineLog } from "../src/lib/shift-engine";
+import { deriveSegments, type EngineLog, type ShiftOverride } from "../src/lib/shift-engine";
 import type { Id } from "./_generated/dataModel";
 
 const HORIZON_SAFETY_BUFFER_MS = 16 * 60 * 60 * 1000; // 16 hours
@@ -58,7 +58,27 @@ export const deriveForUser = internalMutation({
       impossibleTravelFlag: l.impossibleTravelFlag,
     }));
 
-    const segments = deriveSegments(engineLogs);
+    // Moderator end-of-shift overrides: latest per segment start wins.
+    const overrideRows = await ctx.db
+      .query("shiftOverrides")
+      .withIndex("by_user_key", (q) => q.eq("userId", args.userId))
+      .collect();
+    const latest = new Map<number, { createdAt: number; override: ShiftOverride }>();
+    for (const row of overrideRows) {
+      const key = Number(row.shiftKey);
+      if (!Number.isFinite(key)) continue;
+      const cur = latest.get(key);
+      if (!cur || row._creationTime > cur.createdAt) {
+        latest.set(key, {
+          createdAt: row._creationTime,
+          override: { endedAt: row.endedAt, reason: row.reason, overrideId: row._id },
+        });
+      }
+    }
+    const overrides =
+      latest.size > 0 ? new Map([...latest].map(([k, v]) => [k, v.override])) : undefined;
+
+    const segments = deriveSegments(engineLogs, overrides);
 
     // 3. Clean up unsealed shifts within the active horizon
     // Sealed rows and rows strictly before horizonCutoff stay untouched.

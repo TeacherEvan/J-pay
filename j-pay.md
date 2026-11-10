@@ -75,6 +75,7 @@ Read every runtime-specific clause as superseded:
 | R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). Demo fix B2: `ensurePersonaSiteAssignments` called on bind so Thabo has site rows; `boundPersonaSites` query replaces hardcoded `sites.listMine` in demo CheckInPanel. Broadcast filtered to exclude demo users. TRD §6 + §10.2 + §11 updated. |
 | R39 | §6/§10.2/§11 | Manager feature set, phase A1–A2 groundwork (owner 2026-11-10): `users.role` check relaxed to `moderator|employee|manager` (migration `0004_manager_role.sql`); bulk multi-site assignment replaces one-at-a-time assign/unassign (`sites.setEmployeeSites`, single transaction); manager role + `managerSites` site-scoped assignment model (managers = promoted employees, auto-scoped crew = employees on managed sites; managers get no payroll/provisioning rights); §6/ERD synced |
 | R40 | §6/§10.2/§5.1/§9 | Travel tracking (owner 2026-11-10): on-shift, off-site-only, consent-gated `travelSegments` (server-decided geofence resolution in `travel.recordFix` — device-token verified, idempotency-deduped, sample-capped, impossible-travel/gps-gap flagged); raw `pathSamples` anonymised after `retentionDays` by the purge job; payroll unchanged (shift span already contains in-shift travel); manager + moderator visibility via `travel.forUser` / `manager.recentForCrew`; migration `0006_travel_tracking.sql` |
+| R41 | §6/§6.1/§10.2 | Moderator end-of-shift override (owner 2026-11-10 bonus): `shiftOverrides` table feeds shift derivation (latest row per `shiftKey`); mandatory ≥10-char reason; before-state preserved (`previousEndedAt`, `previousTotalMinutes`); sealed/payroll-finalized shifts REFUSE overrides; needsReview cleared via `moderator_override`; payroll reflects live (calcForEmployee reads shifts); migration `0007_shift_overrides.sql` |
 
 ---
 
@@ -286,6 +287,16 @@ export default defineSchema({
   })
     .index("by_user_key", ["userId", "shiftKey"]),
 
+  shiftOverrides: defineTable({                     // moderator end-of-shift override — INPUT TO DERIVATION (survives re-derivation); sealed shifts refuse
+    userId: v.id("users"),
+    shiftKey: v.string(),                      // `${startedAt}` of the overridden segment
+    endedAt: v.number(),                       // corrected end; applied by deriveSegments, not a one-off row edit
+    reason: v.string(),                        // mandatory, >= 10 chars (enforced in mutation + SQL check)
+    byModeratorId: v.id("users"),
+    previousEndedAt: v.optional(v.number()),   // before-state for audit; full history = rows for (userId, shiftKey)
+    previousTotalMinutes: v.optional(v.number()),
+  }).index("by_user_key", ["userId", "shiftKey"]),
+
   travelSegments: defineTable({                 // on-shift off-site travel legs (owner 2026-11-10); consent + evidence, NOT pay derivation
     userId: v.id("users"),
     fromSiteId: v.optional(v.id("sites")),
@@ -324,6 +335,8 @@ export default defineSchema({
 ```
 
 ### 6.1 Shift Derivation Grammar (strict)
+
+**Moderator override (v1.5.0):** `shiftOverrides` rows are INPUT to derivation — `deriveSegments` applies the latest override per segment start (`shiftKey`) after the state machine runs: the segment is closed at the corrected `endedAt`, `totalMinutes` recomputed with the segment's own deduction minutes, `needsReview` cleared (`reviewReason: "moderator_override"`). Overrides survive every re-derivation; sealed shifts (payroll-finalized via Resolve) refuse them outright. Payroll reads shifts live, so corrected minutes propagate immediately.
 
 Legal transitions:
 
@@ -433,6 +446,7 @@ erDiagram
     users ||--o{ managerSites : "manages"
     sites ||--o{ managerSites : "managed by"
     users ||--o{ travelSegments : "travels"
+    users ||--o{ shiftOverrides : "overrides"
     sites ||--o{ travelSegments : "departs from / arrives at"
 
     users {
@@ -513,6 +527,15 @@ erDiagram
         string shiftKey
         number resolvedAt
         id byModeratorId
+    }
+    shiftOverrides {
+        id userId
+        string shiftKey
+        number endedAt
+        string reason
+        id byModeratorId
+        number previousEndedAt "OPTIONAL"
+        number previousTotalMinutes "OPTIONAL"
     }
     purgeAudit {
         number purgedAt

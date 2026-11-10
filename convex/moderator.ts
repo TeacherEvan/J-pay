@@ -188,6 +188,84 @@ export const setHourlyOverride = mutation({
   },
 });
 
+/**
+ * Open or recently-closed, non-sealed shifts a moderator may correct the end
+ * of. Demo personas and sealed (payroll-finalized) rows are excluded — the
+ * override mutation refuses them too.
+ */
+export const overridableShifts = query({
+  args: {},
+  handler: async (ctx) => {
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+    const cutoff = Date.now() - 14 * 24 * 3600 * 1000;
+    const rows = await ctx.db
+      .query("shifts")
+      .withIndex("by_started", (q) => q.gte("startedAt", cutoff))
+      .order("desc")
+      .take(60);
+    const out = [];
+    for (const shift of rows) {
+      if (shift.sealed === true) continue;
+      const user = await ctx.db.get(shift.userId);
+      if (!user || isDemoUser(user)) continue;
+      if (!user.isActive || user.archivedAt !== undefined) continue;
+      out.push({
+        _id: shift._id,
+        userId: shift.userId,
+        employeeName: user.name ?? user.email ?? "unknown",
+        startedAt: shift.startedAt,
+        endedAt: shift.endedAt,
+        totalMinutes: shift.totalMinutes,
+        needsReview: shift.needsReview,
+        reviewReason: shift.reviewReason,
+        hasOverride: shift.reviewReason === "moderator_override",
+      });
+    }
+    out.sort((a, b) => b.startedAt - a.startedAt);
+    return out;
+  },
+});
+
+/**
+ * Moderator sets a corrected end for a shift — the forgotten-to-log-off fix.
+ * The override is recorded as derivation INPUT (shiftOverrides feeds the next
+ * deriveForUser), so it survives re-derivation. Sealed shifts refuse.
+ */
+export const endShiftOverride = mutation({
+  args: {
+    shiftId: v.id("shifts"),
+    endedAt: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const modId = await requireModerator(ctx);
+    const reason = args.reason.trim();
+    if (reason.length < 10) throw new ConvexError("REASON_TOO_SHORT");
+    if (!Number.isFinite(args.endedAt)) throw new ConvexError("INVALID_TIME");
+    const shift = await ctx.db.get(args.shiftId);
+    if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
+    if (shift.sealed === true) throw new ConvexError("PAYROLL_SEALED");
+    const target = await ctx.db.get(shift.userId);
+    if (!target || isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+    if (args.endedAt < shift.startedAt) throw new ConvexError("ENDED_BEFORE_START");
+    if (args.endedAt > Date.now() + 5 * 60 * 1000) throw new ConvexError("ENDED_IN_FUTURE");
+    await ctx.db.insert("shiftOverrides", {
+      userId: shift.userId,
+      shiftKey: String(shift.startedAt),
+      endedAt: args.endedAt,
+      reason,
+      byModeratorId: modId,
+      previousEndedAt: shift.endedAt,
+      previousTotalMinutes: shift.totalMinutes,
+    });
+    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId: shift.userId });
+    return { ok: true as const, previousEndedAt: shift.endedAt ?? null };
+  },
+});
+
 export const activeShifts = query({
   args: {},
   handler: async (ctx) => {

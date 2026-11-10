@@ -46,7 +46,8 @@ export type TableName =
   | "reviewResolutions"
   | "demoSessions"
   | "managerSites"
-  | "travelSegments";
+  | "travelSegments"
+  | "shiftOverrides";
 
 /**
  * Mapping of known mutation function keys to the tables/domains they mutate.
@@ -67,6 +68,7 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
   "manager:setManagerSites": ["managerSites", "users", "sites"],
   "manager:promoteToManager": ["users"],
   "manager:demoteManager": ["users", "managerSites"],
+  "moderator:endShiftOverride": ["shifts", "shiftOverrides"],
 
   // travel tracking
   "travel:setConsent": ["users"],

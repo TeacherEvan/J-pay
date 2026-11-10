@@ -14,6 +14,12 @@ export type EngineLog = {
   impossibleTravelFlag?: boolean;
 };
 
+export type ShiftOverride = {
+  endedAt: number;
+  reason: string;
+  overrideId: string;
+};
+
 export type Segment = {
   startedAt: number;
   endedAt?: number;
@@ -61,7 +67,10 @@ export function isOfflineReplay(log: EngineLog): boolean {
   return log._creationTime - skewCorrectedTime(log) > REPLAY_REVIEW_MS;
 }
 
-export function deriveSegments(allLogs: EngineLog[]): Segment[] {
+export function deriveSegments(
+  allLogs: EngineLog[],
+  overrides?: ReadonlyMap<number, ShiftOverride>
+): Segment[] {
   // Deduplicate deterministically. The previous version kept whichever row
   // arrived first in the caller's array, so the same set of logs could derive
   // different money depending on query order. Keep the earliest-persisted row
@@ -94,6 +103,11 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
   });
 
   const segments: Segment[] = [];
+  const deductions: number[] = [];
+  const emit = (seg: Segment, deduction: number) => {
+    segments.push(seg);
+    deductions.push(deduction);
+  };
   let current: Segment | null = null;
   let phase: "none" | "active" | "lunch" | "sideMission" = "none";
   let lunchOpenedAt: number | null = null;
@@ -128,7 +142,7 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
     );
     current.needsReview = review;
     current.reviewReason = reason;
-    segments.push(current);
+    emit(current, deductionMinutes);
     current = null;
     phase = "none";
     lunchOpenedAt = null;
@@ -171,14 +185,14 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
         } else if (phase === "lunch") {
           phase = "active";
         } else if (phase === "none") {
-          segments.push({
+          emit({
             startedAt: t,
             endedAt: t,
             totalMinutes: 0,
             needsReview: true,
             reviewReason: "illegal_transition:none->checkpoint",
             timezone: log.siteTimezone,
-          });
+          }, 0);
         }
         break;
       case "lunch":
@@ -227,14 +241,14 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
           phase = "active";
         }
         if (!current) {
-          segments.push({
+          emit({
             startedAt: t,
             endedAt: t,
             totalMinutes: 0,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
             timezone: log.siteTimezone,
-          });
+          }, 0);
         } else {
           closeCurrent(t, false);
         }
@@ -253,14 +267,14 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
           }
         }
         if (!current) {
-          segments.push({
+          emit({
             startedAt: t,
             endedAt: t,
             totalMinutes: 0,
             needsReview: true,
             reviewReason: "terminal_without_arrival",
             timezone: log.siteTimezone,
-          });
+          }, 0);
         } else {
           closeCurrent(
             t,
@@ -305,7 +319,25 @@ export function deriveSegments(allLogs: EngineLog[]): Segment[] {
       seg.needsReview = true;
       seg.reviewReason = seg.reviewReason ?? "auto_closed_no_terminal";
     }
-    segments.push(seg);
+    emit(seg, deductionMinutes);
+  }
+
+  // Moderator end-of-shift overrides: apply the latest override per segment
+  // start. The override is derivation INPUT, so corrected ends survive every
+  // re-derivation — an override is never silently reset by a later log.
+  if (overrides !== undefined && overrides.size > 0) {
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const override = overrides.get(seg.startedAt);
+      if (!override) continue;
+      seg.endedAt = override.endedAt;
+      seg.totalMinutes = Math.max(
+        0,
+        Math.round((override.endedAt - seg.startedAt) / 60000) - deductions[i]
+      );
+      seg.needsReview = false;
+      seg.reviewReason = "moderator_override";
+    }
   }
 
   return segments;
