@@ -88,7 +88,7 @@ export default function ManagerPage() {
   ];
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-[var(--ink)]">
+    <main className="flex min-h-dvh flex-col bg-[var(--ink)] md:h-dvh md:overflow-hidden">
       <header className="flex flex-none flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[var(--line)] bg-[var(--panel-2)] px-3 py-2 sm:px-4">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--hivis)]">
@@ -119,7 +119,7 @@ export default function ManagerPage() {
         ariaLabel="Manager console view"
       />
 
-      <div className="min-h-0 flex-1 p-2 sm:p-3">
+      <div className="p-2 sm:p-3 md:min-h-0 md:flex-1">
         {view === "live" && (
           <div role="tabpanel" aria-label="Live map and travel log" className="flex h-full min-h-0 flex-col gap-2">
             <ManagerMap />
