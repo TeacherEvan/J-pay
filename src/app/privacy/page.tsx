@@ -22,7 +22,9 @@ export default function PrivacyPage() {
           <strong>Travel tracking (automatic on shift).</strong> A one-time
           disclaimer is shown the first time you use the app after your
           password is set up; acknowledging it (stored as
-          users.travelConsentAt) is what enables this feature. While your shift
+          users.travelConsentAt) is what enables this feature. You may
+          dismiss it instead ("Not now") — tracking stays off and you are
+          re-asked after 7 days. While your shift
           clock is running J-Pay records coarse GPS fixes so your manager can
           see you travelling between sites. Tracking stops entirely
           <strong> when your shift ends</strong> and is never active during

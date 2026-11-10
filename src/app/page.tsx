@@ -14,6 +14,8 @@ import { errMsg } from "@/lib/errors";
 
 const CONSENT_KEY = "jpay.consent";
 const IOS_DISMISS_KEY = "jpay.iosInstallDismissed";
+const TRAVEL_SNOOZE_KEY = "jpay.travelDisclaimerSnoozedAt";
+const TRAVEL_SNOOZE_MS = 7 * 24 * 3600 * 1000;
 
 function isIos(): boolean {
   return (
@@ -39,11 +41,19 @@ export default function Home() {
   const [consented, setConsented] = useState(true);
   const [iosDismissed, setIosDismissed] = useState(false);
   const [installAsked, setInstallAsked] = useState(false);
+  const [travelSnoozed, setTravelSnoozed] = useState(false);
   const [ackBusy, setAckBusy] = useState(false);
   const [ackError, setAckError] = useState<string | null>(null);
   const installEvent = useRef<{ prompt: () => Promise<void> } | null>(null);
   const [showInstall, setShowInstall] = useState(false);
   const ackTravel = useMutation(api.travel.setConsent);
+
+  useEffect(() => {
+    try {
+      const snoozed = Number(localStorage.getItem(TRAVEL_SNOOZE_KEY) ?? 0);
+      setTravelSnoozed(Number.isFinite(snoozed) && Date.now() - snoozed < TRAVEL_SNOOZE_MS);
+    } catch { /* storage unavailable */ }
+  }, []);
 
   // One-time install request right after a forced first-login password change.
   useEffect(() => {
@@ -91,7 +101,10 @@ export default function Home() {
   const mustChangePassword = me.passwordChangedAt === undefined;
   const travelConsentAt = (me as unknown as { travelConsentAt?: number | null }).travelConsentAt;
   const travelAckNeeded =
-    me.role !== "moderator" && me.passwordChangedAt !== undefined && (travelConsentAt == null);
+    me.role !== "moderator" &&
+    me.passwordChangedAt !== undefined &&
+    travelConsentAt == null &&
+    !travelSnoozed;
 
   return (
     <>
@@ -113,6 +126,12 @@ export default function Home() {
         <TravelDisclaimerModal
           busy={ackBusy}
           error={ackError}
+          onDefer={() => {
+            try {
+              localStorage.setItem(TRAVEL_SNOOZE_KEY, String(Date.now()));
+            } catch { /* storage unavailable — modal just won't persist the snooze */ }
+            setTravelSnoozed(true);
+          }}
           onAck={() => {
             setAckBusy(true);
             setAckError(null);
@@ -295,10 +314,12 @@ function TravelDisclaimerModal({
   busy,
   error,
   onAck,
+  onDefer,
 }: {
   busy: boolean;
   error: string | null;
   onAck: () => void;
+  onDefer: () => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   useEffect(() => {
@@ -322,6 +343,9 @@ function TravelDisclaimerModal({
         {error && <p role="alert" className="mb-2 text-sm text-[var(--danger)]">{error}</p>}
         <button onClick={onAck} disabled={busy} autoFocus className="btn-surgical btn-surgical-mint min-h-[44px] w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
           {busy ? "Saving…" : "Got it — I understand"}
+        </button>
+        <button onClick={onDefer} className="mt-2 min-h-[44px] w-full rounded-lg px-4 py-2 text-sm text-[var(--text-secondary)] underline">
+          Not now — don&apos;t track me (re-asked in 7 days; travel stays off)
         </button>
       </div>
     </div>
