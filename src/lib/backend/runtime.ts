@@ -158,6 +158,29 @@ function reportScheduledFailure(ref: unknown, args: Record<string, unknown>, err
   }));
 }
 
+/**
+ * C1 (2026-11-10): a scheduled deriveForUser that exhausts retries must not
+ * die as a console line. Stamp unsealed shifts needsReview=derivation_failed
+ * and write a systemEvents row, both best-effort (never throws).
+ */
+async function noteDeriveFailure(
+  ctx: RequestContext,
+  ref: unknown,
+  args: Record<string, unknown>,
+  error: unknown
+): Promise<void> {
+  try {
+    const userId = typeof args?.userId === "string" ? args.userId : undefined;
+    let key = "";
+    try { key = refToKey(ref); } catch { return; }
+    if (key !== "shifts:deriveForUser" || !userId) return;
+    const detail = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+    await ctx.scheduler.runAfter(0, "shifts:markDerivationFailed", { userId, detail });
+  } catch (e) {
+    console.error("[derivation-failed] best-effort marker failed", e);
+  }
+}
+
 class RequestContext {
   db = new Database();
 
@@ -199,7 +222,10 @@ class RequestContext {
       args: Record<string, unknown> = {}
     ): Promise<void> => {
       const outcome = await withScheduledRetry(() => invoke(ref, args, this.identity, true));
-      if (!outcome.ok) reportScheduledFailure(ref, args, outcome.error, SCHEDULED_MAX_ATTEMPTS);
+      if (!outcome.ok) {
+        reportScheduledFailure(ref, args, outcome.error, SCHEDULED_MAX_ATTEMPTS);
+        await noteDeriveFailure(this, ref, args, outcome.error);
+      }
     },
     runAt: async (
       _when: number,

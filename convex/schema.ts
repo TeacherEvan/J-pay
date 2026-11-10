@@ -37,6 +37,14 @@ export default defineSchema({
     .index("by_active", ["isActive"])
     .index("by_org", ["orgId"]),
 
+  systemEvents: defineTable({                // server-side operational incidents (derivation failures etc.)
+    kind: v.string(),
+    userId: v.optional(v.id("users")),
+    at: v.number(),
+    detail: v.optional(v.string()),
+  })
+    .index("by_kind_time", ["kind"]),
+
   organisations: defineTable({
     name: v.string(),
     archivedAt: v.optional(v.number()),

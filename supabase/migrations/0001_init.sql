@@ -45,6 +45,16 @@ create unique index if not exists users_real_email_uniq
   on public.users ("email") where "isMasterTemp" is not true;
 
 -- ---------------------------------------------------------------- sites -----
+create table if not exists public."systemEvents" (
+  "_id"                   uuid primary key default gen_random_uuid(),
+  "_creationTime"         bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
+  "kind"                  text not null,
+  "userId"                uuid references public.users("_id") on delete set null,
+  "at"                    bigint not null,
+  "detail"                text
+);
+create index if not exists system_events_kind_idx on public."systemEvents" ("kind");
+
 create table if not exists public.organisations (
   "_id"                   uuid primary key default gen_random_uuid(),
   "_creationTime"         bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
@@ -257,6 +267,8 @@ create or replace view public.jpay_id_registry as
   union all
   select "_id"::text as id, 'organisations' as tbl from public.organisations
   union all
+  select "_id"::text as id, 'systemEvents' as tbl from public."systemEvents"
+  union all
   select "_id"::text as id, 'sites' as tbl from public.sites
   union all
   select "_id"::text as id, 'punches' as tbl from public.punches
@@ -286,6 +298,7 @@ create or replace view public.jpay_id_registry as
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
 alter table public.organisations        enable row level security;
+alter table public."systemEvents"          enable row level security;
 alter table public.sites                enable row level security;
 alter table public.punches              enable row level security;
 alter table public."userSites"          enable row level security;

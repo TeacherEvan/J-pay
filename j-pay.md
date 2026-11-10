@@ -191,6 +191,14 @@ export default defineSchema({
     .index("by_active", ["isActive"])
     .index("by_org", ["orgId"]),
 
+  systemEvents: defineTable({                     // operational incidents, e.g. derivation_failed after scheduler retries (C1, 2026-11-10)
+    kind: v.string(),
+    userId: v.optional(v.id("users")),
+    at: v.number(),
+    detail: v.optional(v.string()),
+  })
+    .index("by_kind_time", ["kind"]),
+
   organisations: defineTable({                    // tenant grouping; one deployment may host several (owner 2026-11-10)
     name: v.string(),
     archivedAt: v.optional(v.number()),
@@ -462,6 +470,7 @@ erDiagram
     sites ||--o{ travelSegments : "departs from / arrives at"
     organisations ||--o{ users : "member of"
     organisations ||--o{ sites : "contains"
+    users ||--o{ systemEvents : "records"
 
     users {
         string name
@@ -477,6 +486,12 @@ erDiagram
 
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
+    }
+    systemEvents {
+        string kind
+        id userId "OPTIONAL FK users"
+        number at
+        string detail "OPTIONAL"
     }
     organisations {
         string name

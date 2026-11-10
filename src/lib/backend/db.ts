@@ -34,6 +34,7 @@ const PAGE_SIZE = 1000;
 const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
   users: { email: ["email"], by_role: ["role"], by_active: ["isActive"], by_org: ["orgId"] },
   organisations: {},
+  systemEvents: { by_kind_time: ["kind"] },
   sites: { by_org: ["orgId"] },
   punches: { by_user_site_time: ["userId", "siteId"] },
   userSites: { by_user: ["userId"], by_site: ["siteId"] },

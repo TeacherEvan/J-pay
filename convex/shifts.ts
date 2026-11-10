@@ -3,6 +3,34 @@ import { v } from "convex/values";
 import { deriveSegments, type EngineLog, type ShiftOverride } from "../src/lib/shift-engine";
 import type { Id } from "./_generated/dataModel";
 
+/**
+ * C1 (2026-11-10): called by the runtime's scheduled-job failure path AFTER
+ * deriveForUser exhausts retries. Never throws; stamps the user's unsealed
+ * shifts needsReview + records a systemEvents row. The punch log is valid
+ * evidence — it is the shift cache that must not fail silently.
+ */
+export const markDerivationFailed = internalMutation({
+  args: { userId: v.id("users"), detail: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.db.insert("systemEvents", {
+      kind: "derivation_failed",
+      userId: args.userId,
+      at: now,
+      detail: args.detail,
+    });
+    const userShifts = await ctx.db
+      .query("shifts")
+      .withIndex("by_user_start", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const row of userShifts) {
+      if (row.sealed === true) continue;
+      if (row.needsReview && row.reviewReason === "derivation_failed") continue;
+      await ctx.db.patch(row._id, { needsReview: true, reviewReason: "derivation_failed" });
+    }
+  },
+});
+
 const HORIZON_SAFETY_BUFFER_MS = 16 * 60 * 60 * 1000; // 16 hours
 
 export const deriveForUser = internalMutation({
