@@ -55,3 +55,6 @@ review_findings.md
 investigation_report.md
 fix_summary.md
 .env*
+
+# owner-private working files — never commit
+plans/Surgical Audit Report.txt
