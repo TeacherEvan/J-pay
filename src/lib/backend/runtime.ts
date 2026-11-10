@@ -410,7 +410,10 @@ export async function invoke(
   }
   const handler = registry().get(key);
   if (!handler) throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
-  if (!fromServer && handler.isPublic === false) {
+  // Deny-by-default: ONLY an explicit `isPublic === true` may serve the browser.
+  // Internal functions carry `isInternal: true` with `isPublic` absent — the old
+  // `=== false` check refused nothing (audit 2026-11-10, P0-1).
+  if (!fromServer && handler.isPublic !== true) {
     throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
   }
   const ctx = new RequestContext(identity);
