@@ -170,7 +170,23 @@ function filterBuilder() {
 
 /** One pooled client and one id cache per server process, shared by every ctx. */
 let sharedClient: ReturnType<typeof createSupabaseAdminClient> | null = null;
+const ID_CACHE_CAP = 5000;
 const sharedIdCache = new Map<string, string>();
+
+/** LRU set: refresh recency on hit; evict oldest when full. */
+function idCacheSet(cache: Map<string, string>, id: string, table: string): void {
+  if (cache.has(id)) cache.delete(id);
+  else if (cache.size >= ID_CACHE_CAP) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(id, table);
+}
+function idCacheGet(cache: Map<string, string>, id: string): string | undefined {
+  const hit = cache.get(id);
+  if (hit !== undefined) { cache.delete(id); cache.set(id, hit); } // refresh recency
+  return hit;
+}
 
 function adminClient() {
   if (!sharedClient) sharedClient = createSupabaseAdminClient();
@@ -186,11 +202,12 @@ export class Database {
   remember(table: string, rows: RawRow[]): void {
     for (const row of rows) {
       const id = row._id;
-      if (typeof id === "string" && !this.idCache.has(id)) this.idCache.set(id, table);
+      if (typeof id === "string") idCacheSet(this.idCache, id, table);
     }
   }
 
-  private normalise(table: string, row: RawRow): Doc {
+  /** @internal used by QueryBuilder — do not call outside db.ts. */
+  normalise(table: string, row: RawRow): Doc {
     const out: RawRow = {};
     for (const [key, value] of Object.entries(row)) {
       if (value === null) continue; // Convex: absent field, not null
@@ -198,7 +215,7 @@ export class Database {
     }
     out._id = String(row._id);
     out._creationTime = Number(row._creationTime ?? 0);
-    this.idCache.set(out._id as string, table);
+    idCacheSet(this.idCache, out._id as string, table);
     return out as Doc;
   }
 
@@ -223,9 +240,14 @@ export class Database {
     return new QueryBuilder(this, table);
   }
 
+  /** @internal QueryBuilder pushes constraints through this client. */
+  postgrest() {
+    return this.client;
+  }
+
   /** Resolve the table that owns a uuid (cache first, registry view second). */
   private async tableOf(id: string): Promise<string | null> {
-    const cached = this.idCache.get(id);
+    const cached = idCacheGet(this.idCache, id);
     if (cached) return cached;
     const { data, error } = await this.client
       .from("jpay_id_registry")
@@ -235,7 +257,7 @@ export class Database {
       .maybeSingle();
     if (error) throw new Error(`id registry: ${error.message}`);
     const tbl = (data as { tbl?: string } | null)?.tbl ?? null;
-    if (tbl) this.idCache.set(id, tbl);
+    if (tbl) idCacheSet(this.idCache, id, tbl);
     return tbl;
   }
 
@@ -267,7 +289,7 @@ export class Database {
       .single();
     if (error) throw new Error(`${table} insert: ${error.message}`);
     const id = String((data as { _id: string })._id);
-    this.idCache.set(id, table);
+    idCacheSet(this.idCache, id, table);
     return id;
   }
 
@@ -362,6 +384,42 @@ export class QueryBuilder {
   }
 
   private async run(): Promise<Doc[]> {
+    // Push index constraints into PostgREST when at least one is pushable; only
+    // `neq` has no direct SQL equivalent worth relying on here, and `.filter`
+    // predicates stay JS. Previously EVERY query loaded the whole table into
+    // memory and filtered/sorted in JS — O(table) bytes per call (audit
+    // 2026-11-10, P1-1). Absent rows match `col IS NULL` via `.eq(col, null)`,
+    // mirroring the adapter's Convex-parity null handling.
+    const pushable = this.constraints.filter((constraint) => constraint.op !== "neq");
+    if (pushable.length === 0) return this.runFullTable();
+
+    const keys = this.sortKey();
+    const ascending = this.direction === "asc";
+    let query = this.db.postgrest().from(this.table).select("*");
+    for (const constraint of pushable) {
+      // `.eq(col, null)` becomes `is.null` (absent ↔ NULL parity); `never` satisfies the column-typed param.
+      const value = (constraint.value ?? null) as never;
+      switch (constraint.op) {
+        case "eq": query = query.eq(constraint.field, value); break;
+        case "lt": query = query.lt(constraint.field, value); break;
+        case "lte": query = query.lte(constraint.field, value); break;
+        case "gt": query = query.gt(constraint.field, value); break;
+        case "gte": query = query.gte(constraint.field, value); break;
+        default: break; // neq handled in finish()
+      }
+    }
+    for (const key of keys) {
+      query = query.order(key, { ascending, nullsFirst: false });
+    }
+    if (this.limit !== undefined) query = query.limit(this.limit);
+    const { data, error } = await query;
+    if (error) throw new Error(`${this.table}: ${error.message}`);
+    const rows = (data ?? []).map((row) => this.db.normalise(this.table, row));
+    return this.finish(rows);
+  }
+
+  /** Legacy path: no pushable constraint — load all rows and filter in JS. */
+  private async runFullTable(): Promise<Doc[]> {
     let rows = await this.db.loadAll(this.table);
     for (const constraint of this.constraints) {
       rows = rows.filter((row) => {
@@ -383,7 +441,6 @@ export class QueryBuilder {
         }
       });
     }
-    if (this.predicate) rows = rows.filter((row) => evaluate(this.predicate, row));
     const keys = this.sortKey();
     const sign = this.direction === "desc" ? -1 : 1;
     rows.sort((a, b) => {
@@ -393,7 +450,18 @@ export class QueryBuilder {
       }
       return 0;
     });
-    return this.limit === undefined ? rows : rows.slice(0, this.limit);
+    const sliced = this.limit === undefined ? rows : rows.slice(0, this.limit);
+    return this.finish(sliced);
+  }
+
+  /** Residual JS filtering for what cannot be pushed down (neq + predicates). */
+  private finish(rows: Doc[]): Doc[] {
+    for (const constraint of this.constraints) {
+      if (constraint.op !== "neq") continue;
+      rows = rows.filter((row) => (row[constraint.field] ?? null) !== (constraint.value ?? null));
+    }
+    if (this.predicate) rows = rows.filter((row) => evaluate(this.predicate, row));
+    return rows;
   }
 
   async collect(): Promise<Doc[]> {
@@ -412,7 +480,7 @@ export class QueryBuilder {
   }
 
   async unique(): Promise<Doc> {
-    const rows = await this.run();
+    const rows = await this.take(2); // .limit(2), never a full scan, for one expected row
     if (rows.length !== 1) {
       throw new Error(`Expected exactly one document in ${this.table}, found ${rows.length}`);
     }

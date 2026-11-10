@@ -32,6 +32,9 @@ export async function resolve(spec, context, next) {
   if (spec === "./db" && context.parentURL?.endsWith("/src/lib/backend/runtime.ts")) {
     return { url: "file://" + p("scripts", "lib", "db-stub.mjs"), shortCircuit: true };
   }
+  if (spec === "@/lib/supabase/admin" && context.parentURL?.endsWith("/src/lib/backend/db.ts")) {
+    return { url: "file://" + p("scripts", "lib", "postgrest-stub.mjs"), shortCircuit: true };
+  }
   if (spec === "@/lib/supabase/admin" && context.parentURL?.endsWith("runtime.ts")) {
     return {
       url: "data:text/javascript,export const hasSupabaseAdminKey=()=>false;export const createSupabaseAdminClient=()=>{throw new Error('test stub: no network')};",
