@@ -15,6 +15,19 @@ type CrewRow = {
   onShift: { _id: string; startedAt: number } | null;
 };
 type SiteRow = { _id: string; name: string };
+type TravelRow = {
+  _id: string;
+  employeeName: string;
+  departedAt: number;
+  arrivedAt?: number;
+  distanceMeters: number;
+  maxSpeedMps?: number;
+  sampleCount: number;
+  needsReview: boolean;
+  reviewReason?: string;
+  fromSiteName?: string;
+  toSiteName?: string;
+};
 import { formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
 
@@ -22,6 +35,7 @@ export default function ManagerPage() {
   const me = useQuery(api.users_queries.me);
   const crew = useQuery(api.manager.myCrew, {}) as CrewRow[] | undefined;
   const managedSites = useQuery(api.manager.listManagedSites, {}) as SiteRow[] | undefined;
+  const travel = useQuery(api.travel.recentForCrew, { limit: 25 }) as TravelRow[] | undefined;
   const userLocale = useUserLocale();
 
   if (me === undefined) {
@@ -73,6 +87,44 @@ export default function ManagerPage() {
       </header>
 
       <ManagerMap />
+
+      <section className="card-surgical p-5">
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
+          Travel log — last 25 legs
+        </h2>
+        {travel !== undefined && travel.length === 0 && (
+          <p className="text-sm text-[var(--fog)]">No travel recorded yet. Legs open when a consented employee leaves an assigned site on shift.</p>
+        )}
+        <ul className="flex flex-col divide-y divide-[var(--line)]">
+          {(travel ?? []).map((leg) => {
+            const end = leg.arrivedAt ?? Date.now();
+            const mins = Math.max(0, Math.round((end - leg.departedAt) / 60000));
+            const km = (leg.distanceMeters / 1000).toFixed(1);
+            const open = leg.arrivedAt === undefined;
+            return (
+              <li key={leg._id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                <div className="min-w-0">
+                  <span className="font-medium text-[var(--paper)]">{leg.employeeName}</span>
+                  <span className="ml-2 text-xs text-[var(--text-secondary)]">
+                    {leg.fromSiteName ?? "off-site"} → {open ? "in transit" : leg.toSiteName ?? "off-site"}
+                  </span>
+                  {leg.needsReview && (
+                    <span className="ml-2 rounded-full border border-[var(--danger)]/40 px-1.5 py-0.5 text-xs font-semibold text-[var(--danger)]">
+                      review: {leg.reviewReason ?? "flagged"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-xs tabular-nums text-[var(--text-secondary)]">
+                  {open && <span className="font-semibold text-[var(--amber,#fbbf24)]">in transit</span>}
+                  <span>{formatDateTime(leg.departedAt, userLocale)}{leg.arrivedAt ? ` → ${formatDateTime(leg.arrivedAt, userLocale)}` : ""}</span>
+                  <span>{mins} min</span>
+                  <span>{km} km</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       <section className="card-surgical p-5">
         <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">

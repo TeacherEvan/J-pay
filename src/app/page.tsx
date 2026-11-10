@@ -150,8 +150,9 @@ export default function Home() {
           </>
         ))}
         <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-[var(--fog)]">
-          Location is recorded only when you press CHECK IN — never continuous tracking. Raw
-          coordinates are anonymized after the payroll dispute window. No ads, no trackers.
+          Location is recorded when you press CHECK IN, and — only with your consent — while
+          you travel off-site on shift. Raw coordinates are anonymized after the payroll
+          dispute window. No ads, no trackers.
         </footer>
       </main>
     </>
@@ -173,9 +174,11 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
       <div className="card-surgical max-w-sm p-6">
         <h2 id="consent-title" className="mb-3 text-lg font-bold text-[var(--paper)]">All work, no ads!</h2>
         <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
-          J-Pay records your GPS location and time only at your check-ins so your employer can run
-          payroll accurately. Retention follows your local labor statute; raw coordinates are
-          zeroed after the dispute window. Your data is never sold or used for advertising.
+          J-Pay records your GPS location and time at your check-ins so your employer can run
+          payroll accurately. With your consent (a separate toggle in the app, off by default),
+          J-Pay also records coarse fixes while you are off-site on shift, so your manager can
+          see travel between sites. Retention follows your local labor statute; raw coordinates
+          are zeroed after the dispute window. Your data is never sold or used for advertising.
         </p>
         <p className="mb-4 text-xs leading-relaxed text-[var(--fog)]">
           See full details in our{" "}

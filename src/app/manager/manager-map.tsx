@@ -25,6 +25,14 @@ type ManagedShiftRow = {
     status: string;
     isWithinGeofence: boolean;
   } | null;
+  travel?: {
+    segmentId: string;
+    departedAt: number;
+    distanceMeters: number;
+    maxSpeedMps?: number;
+    sampleCount: number;
+    speedMps?: number;
+  } | null;
 };
 
 type ManagedSite = {
@@ -35,13 +43,14 @@ type ManagedSite = {
   geofenceRadiusMeters: number;
 };
 
-const MAP_TABLES = ["shifts", "logs", "users", "sites", "managerSites", "userSites"] as const;
+const MAP_TABLES = ["shifts", "logs", "users", "sites", "managerSites", "userSites", "travelSegments"] as const;
 const AUTO_REFRESH_MS = 45_000;
 const STALE_MS = 2 * 60 * 60 * 1000;
 
 const SITE_COLOR = "#22d3ee";
 const INSIDE_COLOR = "#34d399";
 const OUTSIDE_COLOR = "#f87171";
+const TRAVEL_COLOR = "#fbbf24";
 
 function formatElapsed(startedAt: number, now: number): string {
   const mins = Math.max(0, Math.floor((now - startedAt) / 60_000));
@@ -152,14 +161,25 @@ export function ManagerMap() {
       points.push([site.latitude, site.longitude]);
     }
 
-    // Employee layer: pin at latest logged GPS position.
+    // Employee layer: pin at latest position — travel fixes while off-site,
+    // else the employee's last check-in/checkpoint log.
     for (const row of rows) {
       if (!row.lastLog) continue;
       const { lat, lng } = row.lastLog;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const travelling = row.travel !== null && row.travel !== undefined;
       const inside = row.lastLog.isWithinGeofence;
-      const color = inside ? INSIDE_COLOR : OUTSIDE_COLOR;
+      const color = travelling ? TRAVEL_COLOR : inside ? INSIDE_COLOR : OUTSIDE_COLOR;
       const stale = now - row.lastLog.clientReportedTime > STALE_MS;
+      const travelMinutes = travelling
+        ? Math.max(0, Math.round(((row.travel as NonNullable<typeof row.travel>).departedAt ? now - (row.travel as NonNullable<typeof row.travel>).departedAt : 0) / 60000))
+        : 0;
+      const travelKm = travelling
+        ? ((row.travel as NonNullable<typeof row.travel>).distanceMeters / 1000).toFixed(1)
+        : null;
+      const topSpeed = travelling && row.travel?.maxSpeedMps
+        ? Math.round(row.travel.maxSpeedMps * 3.6)
+        : null;
       L.circleMarker([lat, lng], {
         radius: 7,
         color: color,
@@ -170,10 +190,15 @@ export function ManagerMap() {
         .bindPopup(
           popupElement([
             { text: row.name, strong: true },
-            { text: `${row.siteName ?? "off-site"} · on shift ${formatElapsed(row.startedAt, now)}` },
+            travelling
+              ? { text: `travelling · ${travelKm} km · ${travelMinutes} min · top ${topSpeed ?? 0} km/h`, strong: true, tone: "warn" as const }
+              : { text: `${row.siteName ?? "off-site"} · on shift ${formatElapsed(row.startedAt, now)}` },
             { text: `last ping ${formatDateTime(row.lastLog.clientReportedTime, userLocale)} (${row.lastLog.status})` },
             ...(stale ? [{ text: "stale — no ping in 2h+", tone: "warn" as const }] : []),
-            { text: inside ? "inside geofence" : "travelling / off-site", tone: inside ? ("good" as const) : ("bad" as const) },
+            {
+              text: travelling ? "travelling to a site" : inside ? "inside geofence" : "off-site",
+              tone: travelling ? ("warn" as const) : inside ? ("good" as const) : ("bad" as const),
+            },
           ])
         )
         .addTo(layer);
@@ -244,7 +269,8 @@ export function ManagerMap() {
       <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]" aria-hidden="true">
         <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SITE_COLOR }} />managed geofence</span>
         <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: INSIDE_COLOR }} />inside geofence</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: OUTSIDE_COLOR }} />travelling / off-site</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: TRAVEL_COLOR }} />travelling (on-shift, off-site)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: OUTSIDE_COLOR }} />off-site, no travel fixes</span>
       </p>
     </section>
   );

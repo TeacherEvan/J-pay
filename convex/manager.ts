@@ -103,6 +103,54 @@ export const managedActiveShifts = query({
       const lastLog = lastLogs[0] ?? null;
       const site = lastLog?.siteId ? await ctx.db.get(lastLog.siteId) : null;
 
+      // Open travel leg? The live pin comes from the freshest off-site fix —
+      // the employee is travelling, not "no GPS log yet".
+      const legs = await ctx.db
+        .query("travelSegments")
+        .withIndex("by_user", (q) => q.eq("userId", shift.userId))
+        .collect();
+      const openLeg = legs.find((l) => l.arrivedAt === undefined);
+      let travel: {
+        segmentId: string;
+        departedAt: number;
+        distanceMeters: number;
+        maxSpeedMps?: number;
+        sampleCount: number;
+        speedMps?: number;
+      } | null = null;
+      let pin = lastLog
+        ? {
+            lat: lastLog.latitude,
+            lng: lastLog.longitude,
+            accuracyMeters: lastLog.accuracyMeters,
+            clientReportedTime: lastLog.clientReportedTime,
+            status: lastLog.status as string,
+            isWithinGeofence: lastLog.isWithinGeofence,
+          }
+        : null;
+      if (openLeg) {
+        const samples = (openLeg.pathSamples ?? []) as Array<{ lat: number; lng: number; t: number; s?: number }>;
+        const lastSample = samples.length > 0 ? samples[samples.length - 1] : null;
+        travel = {
+          segmentId: openLeg._id,
+          departedAt: openLeg.departedAt,
+          distanceMeters: openLeg.distanceMeters,
+          maxSpeedMps: openLeg.maxSpeedMps,
+          sampleCount: samples.length,
+          speedMps: lastSample?.s,
+        };
+        if (lastSample) {
+          pin = {
+            lat: lastSample.lat,
+            lng: lastSample.lng,
+            accuracyMeters: 0,
+            clientReportedTime: lastSample.t,
+            status: "travelling",
+            isWithinGeofence: false,
+          };
+        }
+      }
+
       out.push({
         _id: shift._id,
         userId: shift.userId,
@@ -112,16 +160,8 @@ export const managedActiveShifts = query({
         siteLat: site?.latitude,
         siteLng: site?.longitude,
         siteRadiusMeters: site?.geofenceRadiusMeters,
-        lastLog: lastLog
-          ? {
-              lat: lastLog.latitude,
-              lng: lastLog.longitude,
-              accuracyMeters: lastLog.accuracyMeters,
-              clientReportedTime: lastLog.clientReportedTime,
-              status: lastLog.status,
-              isWithinGeofence: lastLog.isWithinGeofence,
-            }
-          : null,
+        lastLog: pin,
+        travel,
       });
     }
     out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));

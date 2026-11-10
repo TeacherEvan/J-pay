@@ -77,6 +77,14 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [now, setNow] = useState<number>(() => Date.now());
   const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null);
   const [userPickedSite, setUserPickedSite] = useState(false);
+  const me = useQuery(api.users_queries.me, isLive ? {} : "skip");
+  const recordFix = useMutation(api.travel.recordFix);
+  const setTravelConsent = useMutation(api.travel.setConsent);
+  const [fixLive, setFixLive] = useState(false);
+  const lastFixSentRef = useRef(0);
+  const serverModeRef = useRef<"on_site" | "traveling">("on_site");
+  const consentAt = (me as { travelConsentAt?: number | null } | null | undefined)?.travelConsentAt ?? undefined;
+  const onShift = phase !== "off";
 
   // Live clock for the elapsed timer.
   useEffect(() => {
@@ -126,6 +134,57 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     if (nearest) setSiteId(nearest._id);
   }, [fix, sites, userPickedSite]);
 
+  // On-shift, off-site-only, consent-gated live travel fixes. The server
+  // decides what is stored (inside a geofence -> fix dropped); the client only
+  // streams high-frequency fixes while off-site. Stops with the shift/consent.
+  useEffect(() => {
+    if (!isLive) return;
+    if (!onShift || consentAt === undefined || consentAt === null) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const send = (position: GeolocationPosition) => {
+      const now = Date.now();
+      const minInterval = serverModeRef.current === "on_site" ? 60_000 : 15_000;
+      if (now - lastFixSentRef.current < minInterval) return;
+      const accuracy = position.coords.accuracy;
+      if (!Number.isFinite(accuracy) || accuracy > 50) return; // server would reject anyway
+      if (!Number.isFinite(position.timestamp)) return;
+      lastFixSentRef.current = now;
+      const clientReportedTime = Math.round(position.timestamp);
+      const idempotencyKey =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${clientReportedTime}-${Math.random().toString(36).slice(2)}`;
+      recordFix({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracyMeters: accuracy,
+        clientReportedTime,
+        idempotencyKey,
+        deviceToken: localStorage.getItem(TOKEN_KEY) ?? "",
+      })
+        .then((res: { status?: string; mode?: string } | undefined) => {
+          if (res?.status === "recorded") {
+            serverModeRef.current = res.mode === "on_site" || res.mode === "arrived" ? "on_site" : "traveling";
+          }
+        })
+        .catch(() => {
+          /* offline / transient — the next watch tick retries */
+        });
+    };
+
+    const id = navigator.geolocation.watchPosition(send, () => {}, {
+      enableHighAccuracy: true,
+      maximumAge: 10_000,
+      timeout: 15_000,
+    });
+    setFixLive(true);
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      setFixLive(false);
+    };
+  }, [isLive, onShift, consentAt, recordFix]);
+
   const chips: Status[] = useMemo(() => {
     if (phase === "on") return ["lunch", "quick side mission", "checkpoint", "feeling sick"];
     if (phase === "break")
@@ -171,6 +230,19 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         isLive={isLive}
         siteName={siteNameOf(last?.siteId)}
       />
+
+      {/* ── Travel tracking consent + live indicator (on-shift, off-site, opt-in) ── */}
+      {isLive && (
+        <TravelConsentRow
+          loaded={me !== undefined}
+          onShift={onShift}
+          consented={consentAt !== undefined && consentAt !== null}
+          fixLive={fixLive}
+          onConsent={(consent) => {
+            void setTravelConsent({ consent }).catch(() => {});
+          }}
+        />
+      )}
 
       {/* ── Site picker (recessed bay) ────────────────────────────── */}
       <SiteSelector
@@ -615,5 +687,65 @@ function PersonaSubmit({
       <span className="btn-label">{`${label} (as persona)`}</span>
       <span className="btn-spinner" aria-hidden="true" />
     </button>
+  );
+}
+
+
+function TravelConsentRow({
+  loaded,
+  onShift,
+  consented,
+  fixLive,
+  onConsent,
+}: {
+  loaded: boolean;
+  onShift: boolean;
+  consented: boolean;
+  fixLive: boolean;
+  onConsent: (consent: boolean) => void;
+}) {
+  if (!loaded) {
+    return (
+      <div className="h-11 animate-pulse rounded-lg border border-[var(--line)] bg-[var(--panel-2)]" aria-hidden="true" />
+    );
+  }
+  if (!consented) {
+    return (
+      <div className="card-subpanel flex flex-wrap items-center justify-between gap-2 p-3" role="group" aria-label="Travel tracking consent">
+        <p className="max-w-xs text-xs leading-snug text-[var(--text-secondary)]">
+          Share your live location <strong>only while on shift and off-site</strong>? Your manager
+          sees you travelling between sites. Raw route data is anonymised after 90 days.
+        </p>
+        <button
+          type="button"
+          onClick={() => onConsent(true)}
+          className="btn-surgical btn-surgical-mint min-h-[44px] rounded-lg px-3.5 py-2 text-xs font-semibold"
+        >
+          Enable travel tracking
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--mint)]/30 bg-[var(--mint)]/5 px-3 py-2" role="status">
+      <p className="flex items-center gap-2 text-xs font-medium text-[var(--paper)]">
+        <span
+          aria-hidden="true"
+          className={`inline-block h-2.5 w-2.5 rounded-full ${fixLive ? "animate-pulse bg-[var(--mint)]" : "bg-[var(--fog)]"}`}
+        />
+        {fixLive
+          ? "Live — sharing travel with your manager (on-shift, off-site only)"
+          : onShift
+            ? "Travel tracking armed — shares when you leave a site"
+            : "Travel tracking consented — resumes when your shift starts"}
+      </p>
+      <button
+        type="button"
+        onClick={() => onConsent(false)}
+        className="min-h-[44px] px-2 text-xs text-[var(--fog)] underline hover:text-[var(--paper)]"
+      >
+        Stop
+      </button>
+    </div>
   );
 }
