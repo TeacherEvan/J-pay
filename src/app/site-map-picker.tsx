@@ -56,7 +56,22 @@ export function SiteMapPicker({
       pickRef.current(e.latlng.lat, e.latlng.lng);
     });
     mapRef.current = map;
+    // U4: the picker can mount inside a display:none container (mobile pane
+    // switch). Leaflet measures 0×0 and stays grey. Revalidate when the box
+    // first gets a real size.
+    let ro: ResizeObserver | null = null;
+    const el = containerRef.current;
+    if (el && (el.clientWidth === 0 || el.clientHeight === 0)) {
+      ro = new ResizeObserver(() => {
+        if (el.clientWidth > 0 && el.clientHeight > 0) {
+          map.invalidateSize();
+          ro?.disconnect();
+        }
+      });
+      ro.observe(el);
+    }
     return () => {
+      ro?.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;

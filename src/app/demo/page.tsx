@@ -134,6 +134,7 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
   const resolve = useMutation(api.demo.demoResolveShift);
   const recompute = useMutation(api.demo.demoRecomputeEmployeeShifts);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   return (
     <section data-testid="demo-needs-review">
       <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Shifts needing review</h2>
@@ -181,6 +182,7 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
                   <span className="btn-spinner" aria-hidden="true" />
                 </button>
               </div>
+              {resolveError && <p role="alert" className="mt-1 text-xs text-[var(--danger)]">{resolveError}</p>}
             </li>
           ))}
         </ul>
