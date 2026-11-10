@@ -79,9 +79,13 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [userPickedSite, setUserPickedSite] = useState(false);
   const me = useQuery(api.users_queries.me, isLive ? {} : "skip");
   const recordFix = useMutation(api.travel.recordFix);
+  const setConsent = useMutation(api.travel.setConsent);
   const lastFixSentRef = useRef(0);
   const serverModeRef = useRef<"on_site" | "traveling">("on_site");
   const consentAt = (me as { travelConsentAt?: number | null } | null | undefined)?.travelConsentAt ?? undefined;
+
+  // Track whether the OS-level watch has errored (permission denied, etc.)
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Live clock for the elapsed timer.
   useEffect(() => {
@@ -173,7 +177,17 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         });
     };
 
-    const id = navigator.geolocation.watchPosition(send, () => {}, {
+    const handleWatchError = (err: GeolocationPositionError) => {
+      const msg =
+        err.code === err.PERMISSION_DENIED
+          ? "Location permission denied — tracking paused"
+          : err.code === err.POSITION_UNAVAILABLE
+            ? "Position unavailable — tracking paused"
+            : "Location error — tracking paused";
+      setLocationError(msg);
+    };
+
+    const id = navigator.geolocation.watchPosition(send, handleWatchError, {
       enableHighAccuracy: true,
       maximumAge: 10_000,
       timeout: 15_000,
@@ -204,6 +218,10 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
           ? "Back to work"
           : `Confirm ${LABEL[pending].toLowerCase()}`;
 
+  // Travel tracking status for the employee (U2/U6): show whether fixes are
+  // streaming, surface OS-level permission errors, and offer a revoke button.
+  const isTrackingActive = isLive && phase === "on" && consentAt !== undefined;
+
   const submitStatus: Status = phase === "off" ? "arrived" : pending;
 
   const todayLogs = useMemo(() => {
@@ -229,10 +247,43 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         siteName={siteNameOf(last?.siteId)}
       />
 
-      {/* Travel tracking: no standing UI. Fixes stream automatically while the
-          shift clock is running (phase === "on") once the one-time disclaimer
-          (see page.tsx) is acknowledged; server drops them in lunch / side
-          missions / sick leave and when the clock is off. */}
+      {/* Travel tracking status (U2/U6) — live indicator + one-tap revoke */}
+      {isTrackingActive && (
+        <div
+          className="card-surgical flex items-center justify-between gap-2 p-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-2 text-sm">
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                locationError
+                  ? "bg-[var(--danger)]"
+                  : serverModeRef.current === "traveling"
+                    ? "bg-[var(--mint)] animate-pulse"
+                    : "bg-[var(--hivis)]/50"
+              }`}
+              aria-hidden="true"
+            />
+            <span className="font-medium text-[var(--paper)]">
+              Travel tracking:{" "}
+              {locationError
+                ? <span className="text-[var(--danger)]">{locationError}</span>
+                : serverModeRef.current === "traveling"
+                  ? "ON — moving between sites"
+                  : "ON — on site"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void setConsent({ consent: false }).catch(() => setMessage("Could not pause tracking — try again"))}
+            className="btn-surgical rounded-lg border-[var(--danger)]/50 px-3 py-1.5 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10"
+            aria-label="Pause travel tracking for this shift"
+          >
+            Pause tracking
+          </button>
+        </div>
+      )}
 
       {/* ── Site picker (recessed bay) ────────────────────────────── */}
       <SiteSelector
