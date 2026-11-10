@@ -8,6 +8,8 @@ the Convex-shaped handlers in `convex/*.ts` (see [ADR-004](docs/adr/ADR-004-supa
 
 The TRD (`j-pay.md`, **v1.6.0**) is the contract; its §6 schema is the source of truth. Docs index: [`docs/index.md`](docs/index.md).
 
+**Verify locally** with `npm run verify` (TRD checks + mermaid gate + `npm test` + strict typecheck). The GitHub Actions lanes were retired 2026-11-10 — the account never received runners (billing lock); CI will never report on pushes.
+
 ## Quick start (local)
 
 ```bash
