@@ -1,53 +1,143 @@
 "use client";
 
 import { useMutation, useQuery } from "@/lib/backend/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/backend/api";
+
+type NotifState = "unknown" | "unsupported" | "off" | "on" | "denied";
 
 export function EnableNotifications() {
   const vapidKey = useQuery(api.push_subs.publicVapidKey);
   const save = useMutation(api.push_subs.saveSubscription);
-  const [state, setState] = useState<"idle" | "on" | "off">(() =>
-    typeof Notification === "undefined"
-      ? "idle"
-      : Notification.permission === "granted"
-        ? "on"
-        : "off"
-  );
+  const remove = useMutation(api.push_subs.deleteMySubscription);
+  // U11: tri-state init kills the SSR/CSR hydration mismatch — the real
+  // permission + subscription state is read after mount only.
+  const [state, setState] = useState<NotifState>("unknown");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function detect() {
+      if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+        if (!cancelled) setState("unsupported");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        if (!cancelled) setState("denied");
+        return;
+      }
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!cancelled) setState(sub ? "on" : "off");
+      } catch {
+        if (!cancelled) setState("off");
+      }
+    }
+    void detect();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function enable() {
+    setError(null);
     if (!vapidKey) {
-      alert("Push not configured on this deployment (VAPID keys missing).");
+      setError("Push not configured on this deployment (VAPID keys missing).");
       return;
     }
-    const permission = await Notification.requestPermission();
-    setState(permission === "granted" ? "on" : "off");
-    if (permission !== "granted") return;
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    setBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setState(permission === "denied" ? "denied" : "off");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      }
+      const json = sub.toJSON();
+      await save({
+        endpoint: sub.endpoint,
+        keysP256dh: json.keys!.p256dh!,
+        keysAuth: json.keys!.auth!,
       });
+      setState("on");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not enable notifications.");
+    } finally {
+      setBusy(false);
     }
-    const json = sub.toJSON();
-    await save({
-      endpoint: sub.endpoint,
-      keysP256dh: json.keys!.p256dh!,
-      keysAuth: json.keys!.auth!,
-    });
   }
 
+  async function disable() {
+    setError(null);
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await remove({ endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      } else {
+        await remove({});
+      }
+      setState("off");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disable notifications.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (state === "unknown") {
+    return (
+      <button disabled className="btn-surgical pill-surgical rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--fog)]">
+        Notifications…
+      </button>
+    );
+  }
+  if (state === "unsupported") {
+    return (
+      <span className="text-xs text-[var(--fog)]" title="This browser or deployment does not support push">
+        Notifications unavailable
+      </span>
+    );
+  }
+  if (state === "denied") {
+    return (
+      <span
+        className="text-xs text-[var(--fog)]"
+        title="Notifications were blocked in the browser — re-enable them in the site settings to receive alerts"
+      >
+        Notifications blocked
+      </span>
+    );
+  }
   return (
-    <button
-      onClick={() => void enable()}
-      className={`btn-surgical pill-surgical rounded-full px-3 py-1.5 text-xs font-semibold ${
-        state === "on" ? "border-[var(--mint)]/60 text-[var(--mint)]" : "text-[var(--fog)]"
-      }`}
-    >
-      {state === "on" ? "Notifications on" : "Enable notifications"}
-    </button>
+    <span className="inline-flex items-center gap-2">
+      <button
+        onClick={() => void (state === "on" ? disable() : enable())}
+        disabled={busy}
+        aria-pressed={state === "on"}
+        className={`btn-surgical pill-surgical rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+          state === "on" ? "border-[var(--mint)]/60 text-[var(--mint)]" : "text-[var(--fog)]"
+        }`}
+      >
+        {state === "on" ? "Notifications on — tap to disable" : "Enable notifications"}
+      </button>
+      {error && (
+        <span role="alert" className="max-w-[14rem] truncate text-xs text-[var(--danger)]">
+          {error}
+        </span>
+      )}
+    </span>
   );
 }
 

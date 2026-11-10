@@ -34,6 +34,27 @@ export const saveSubscription = mutation({
   },
 });
 
+/** Owner-facing opt-out: remove the caller's subscription for `endpoint`
+ * (or all of the caller's subscriptions when omitted). */
+export const deleteMySubscription = mutation({
+  args: { endpoint: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await currentUserId(ctx);
+    const rows = await ctx.db
+      .query("pushSubscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    let removed = 0;
+    for (const row of rows) {
+      if (args.endpoint === undefined || row.endpoint === args.endpoint) {
+        await ctx.db.delete(row._id);
+        removed += 1;
+      }
+    }
+    return { removed };
+  },
+});
+
 export const subscriptionsFor = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
