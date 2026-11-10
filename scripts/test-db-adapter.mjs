@@ -57,4 +57,52 @@ await assert.rejects(
   /Expected exactly one document/,
 );
 
-console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact");
+// --- Test 6 (B1): predicate filter AFTER SQL LIMIT must not under-fill (limit deferred to JS)
+//   Fixture: 100 rows, newest 3 have status="sealed" (predicate rejects them),
+//   next 97 have status="open". take(100) must return 97 "open" rows, not 100 truncated to 97 by SQL LIMIT.
+__pg.reset();
+__pg.seed("logs", Array.from({ length: 100 }, (_, i) => ({
+  _id: `l${100 - i}`,
+  _creationTime: 100 + i,
+  userId: "X",
+  status: i >= 97 ? "sealed" : "open",
+})));
+__pg.calls.length = 0;
+const filtered = await db.query("logs").withIndex("by_user_time", (q) => q.eq("userId", "X"))
+  .filter((q) => q.eq(q.field("status"), "open"))
+  .take(100);
+assert.equal(filtered.length, 97, "take(100) with predicate rejecting 3 newest must return 97 older open rows");
+assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 100), "SQL LIMIT must not be the exact take(n) when predicate exists; oversized window used instead");
+
+// --- Test 7 (B1): first() with predicate must not return null when a matching row exists beyond the first N
+// Fixture: l1 (newest, sealed), l2...l10 (older, open). order("desc") + filter(open) + first() must return l2 (newest open).
+__pg.reset();
+__pg.seed("logs", Array.from({ length: 10 }, (_, i) => ({
+  _id: `l${10 - i}`,
+  _creationTime: 10 + i,
+  userId: "Y",
+  status: i === 9 ? "sealed" : "open",
+})));
+__pg.calls.length = 0;
+const firstOpen = await db.query("logs").withIndex("by_user_time", (q) => q.eq("userId", "Y"))
+  .filter((q) => q.eq(q.field("status"), "open"))
+  .order("desc")
+  .first();
+assert.equal(firstOpen._id, "l2", "first() with predicate must return the newest open row (l2), not the newest sealed (l1)");
+assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 1), "SQL LIMIT must not be 1 for first() with predicate");
+
+// --- Test 8 (B1): unique() with predicate must not throw when exactly one matching row exists but is beyond a filtered-out row
+// Fixture: l0 (newer, sealed), l1 (older, open). order desc default => l0 first. unique() with predicate must find l1.
+__pg.reset();
+__pg.seed("logs", [
+  { _id: "l0", _creationTime: 5, userId: "Z", status: "sealed" },
+  { _id: "l1", _creationTime: 10, userId: "Z", status: "open" },
+]);
+__pg.calls.length = 0;
+const u2 = await db.query("logs").withIndex("by_user_time", (q) => q.eq("userId", "Z"))
+  .filter((q) => q.eq(q.field("status"), "open"))
+  .unique();
+assert.equal(u2._id, "l1", "unique() with predicate must find the single open row (l1), not throw on 0");
+assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 2), "SQL LIMIT must not be 2 for unique() with predicate");
+
+console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact, predicate LIMIT deferral");

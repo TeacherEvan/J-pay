@@ -430,7 +430,17 @@ export class QueryBuilder {
     for (const key of keys) {
       query = query.order(key, { ascending, nullsFirst: false });
     }
-    if (this.limit !== undefined) query = query.limit(this.limit);
+    const hasResidual = this.predicate !== undefined || this.constraints.some((c) => c.op === "neq");
+    if (this.limit !== undefined && !hasResidual) {
+      query = query.limit(this.limit);
+    } else if (this.limit !== undefined) {
+      // When residual filtering exists, we must NOT push LIMIT to SQL because
+      // JS filtering happens after SQL execution and would under-fill.
+      // Instead, fetch an oversized window (limit * 2 + 50) and slice in JS.
+      // This bounds network/egress while guaranteeing correct results.
+      const fetchLimit = Math.min(this.limit * 2 + 50, 5000);
+      query = query.limit(fetchLimit);
+    }
     const { data, error } = await query;
     if (error) throw new Error(`${this.table}: ${error.message}`);
     const rows = (data ?? []).map((row) => this.db.normalise(this.table, row));
