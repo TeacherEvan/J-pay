@@ -119,6 +119,10 @@ export function ActiveShiftsMap() {
   const rowsKey = useMemo(() => JSON.stringify(rows ?? []), [rows]);
   useEffect(() => {
     if (!L || !mapRef.current || !layerRef.current || rows === undefined) return;
+    // U10: never yank an open popup out from under the moderator/manager on
+    // the 45s auto-refresh. Skip this redraw; the next bump re-renders.
+    const openPopup = (mapRef.current as unknown as { _popup?: { isOpen?: () => boolean } })._popup;
+    if (openPopup && typeof openPopup.isOpen === "function" && openPopup.isOpen()) return;
     const layer = layerRef.current;
     layer.clearLayers();
 
