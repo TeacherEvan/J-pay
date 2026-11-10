@@ -45,6 +45,25 @@ export const setConsent = mutation({
   handler: async (ctx, args) => {
     const userId = await requireEmployee(ctx);
     await ctx.db.patch(userId, { travelConsentAt: args.consent ? Date.now() : undefined });
+
+    // B2 fix: when revoking consent, close any open travel segments for this user.
+    if (!args.consent) {
+      const mine = await ctx.db
+        .query("travelSegments")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+      for (const seg of mine) {
+        if (seg.arrivedAt !== undefined) continue;
+        if (!seg.needsReview) {
+          await ctx.db.patch(seg._id, {
+            arrivedAt: Date.now(),
+            needsReview: true,
+            reviewReason: "consent_revoked",
+          });
+        }
+      }
+    }
+
     return { travelConsentAt: args.consent ? Date.now() : undefined };
   },
 });
