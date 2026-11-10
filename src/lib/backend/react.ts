@@ -72,7 +72,7 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
 
   // travel tracking
   "travel:setConsent": ["users"],
-  "travel:recordFix": ["travelSegments", "logs", "shifts", "userSites", "sites", "users"],
+  "travel:recordFix": ["travelSegments"], // B10: fixes were nuking six tables sitewide every 15s
 
   // messages
   "messages:sendToModerators": ["messages"],
