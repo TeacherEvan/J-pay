@@ -95,7 +95,7 @@ export const replyToEmployee = mutation({
     // H3 (2026-08-26): validate recipient exists, is a real employee, and is
     // active. Prevents silent message black-holes and leaked employee IDs.
     const recipient = await ctx.db.get(args.recipientId);
-    if (!recipient || recipient.role !== "employee" || !recipient.isActive || recipient.archivedAt !== undefined) {
+    if (!recipient || (recipient.role !== "employee" && recipient.role !== "manager") || !recipient.isActive || recipient.archivedAt !== undefined) {
       throw new ConvexError("INVALID_RECIPIENT");
     }
     await ctx.db.insert("messages", {
@@ -122,6 +122,11 @@ export const broadcast = mutation({
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .collect();
+    const managers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .collect();
+    employees.push(...managers);
     for (const e of employees) {
       if (e.archivedAt !== undefined || !e.isActive) continue;
       if (isDemoUser(e)) continue;

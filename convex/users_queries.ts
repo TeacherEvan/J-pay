@@ -32,6 +32,12 @@ export const listEmployees = query({
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
       .collect();
+    const managerRows = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("archivedAt"), undefined)))
+      .collect();
+    rows.push(...managerRows);
 
     return rows
       .filter((u) => {

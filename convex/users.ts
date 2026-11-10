@@ -253,7 +253,7 @@ export const deactivateEmployee = mutation({
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "employee") throw new ConvexError("NOT_AN_EMPLOYEE");
+    if (!user || (user.role !== "employee" && user.role !== "manager")) throw new ConvexError("NOT_AN_EMPLOYEE");
     await ctx.db.patch(args.userId, { archivedAt: Date.now(), isActive: false });
   },
 });
@@ -305,7 +305,7 @@ export const issueMyDeviceToken = mutation({
     }
     // Device tokens exist to bind an employee's check-in device; a moderator
     // has no check-in flow and must not mint one.
-    if (user.role !== "employee") throw new ConvexError("FORBIDDEN");
+    if (user.role !== "employee" && user.role !== "manager") throw new ConvexError("FORBIDDEN");
     if (user.deviceId !== undefined) {
       throw new ConvexError("DEVICE_ALREADY_ACTIVE");
     }

@@ -129,7 +129,7 @@ export const listMine = query({
     const userId = await maybeCurrentUserId(ctx);
     if (!userId) return [];
     const u = await ctx.db.get(userId);
-    if (!u || !u.isActive || u.archivedAt !== undefined || u.role !== "employee") return [];
+    if (!u || !u.isActive || u.archivedAt !== undefined || (u.role !== "employee" && u.role !== "manager")) return [];
     return await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", userId))

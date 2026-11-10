@@ -22,6 +22,11 @@ export const summary = query({
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "employee"))
       .collect();
+    const managers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .collect();
+    employees.push(...managers);
     // Owner directive 2026-08-26: demo reviewers / seeded personas / e2e
     // users must not count toward real workforce KPIs.
     const realEmployeeIds = new Set(
