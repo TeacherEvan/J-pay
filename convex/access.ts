@@ -29,7 +29,7 @@ export async function maybeCurrentUserId(ctx: Ctx): Promise<Id<"users"> | null> 
 
 export async function requireActiveUser(
   ctx: Ctx
-): Promise<{ userId: Id<"users">; role: "moderator" | "employee" }> {
+): Promise<{ userId: Id<"users">; role: "moderator" | "employee" | "manager" }> {
   const userId = await currentUserId(ctx);
   const user = await ctx.db.get(userId);
   if (!user || user.archivedAt !== undefined || !user.isActive) {
@@ -46,7 +46,9 @@ export async function requireModerator(ctx: Ctx): Promise<Id<"users">> {
 
 export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
   const { userId, role } = await requireActiveUser(ctx);
-  if (role !== "employee") throw new ConvexError("FORBIDDEN");
+  // Managers are field staff with a management title: they check in, log and
+  // travel exactly like employees. Provisioning/payroll stay moderator-only.
+  if (role !== "employee" && role !== "manager") throw new ConvexError("FORBIDDEN");
   return userId;
 }
 

@@ -371,67 +371,80 @@ function AssignPanel({
   employees,
   sites,
 }: {
-  employees: { _id: string; name?: string; email?: string; archivedAt?: number }[];
+  employees: { _id: string; name?: string; email?: string; archivedAt?: number; assignedSiteIds?: string[] }[];
   sites: { _id: string; name: string }[];
 }) {
-  const assign = useMutation(api.sites.assignEmployee);
-  const unassign = useMutation(api.sites.unassignEmployee);
+  const setAssignments = useMutation(api.sites.setEmployeeSites);
   const [userId, setUserId] = useState("");
-  const [siteId, setSiteId] = useState("");
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<string | null>(null);
   const active = employees.filter((e) => !e.archivedAt);
+
+  // Initialize the checklist from the employee's current assignments.
+  const applySelection = (nextUserId: string) => {
+    setUserId(nextUserId);
+    setMsg(null);
+    const emp = employees.find((e) => e._id === nextUserId);
+    setChecked(new Set(emp?.assignedSiteIds ?? []));
+  };
 
   return (
     <section className="card-surgical p-5">
       <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
-        Assign employee ↔ site
+        Assign employee ↔ sites
       </h2>
-      <div className="flex flex-wrap items-center gap-2.5">
-        <select value={userId} onChange={(e) => setUserId(e.target.value)}
+      <div className="flex flex-col gap-3">
+        <select value={userId} onChange={(e) => applySelection(e.target.value)}
           className="input-surgical px-3.5 py-2 text-sm">
           <option value="">Employee…</option>
           {active.map((e: any) => (
             <option key={e._id} value={e._id}>{e.name ?? e.email}</option>
           ))}
         </select>
-        <select value={siteId} onChange={(e) => setSiteId(e.target.value)}
-          className="input-surgical px-3.5 py-2 text-sm">
-          <option value="">Site…</option>
-          {sites.map((s: any) => (
-            <option key={s._id} value={s._id}>{s.name}</option>
-          ))}
-        </select>
-        <button
-          disabled={!userId || !siteId}
-          onClick={async () => {
-            setMsg(null);
-            try {
-              await assign({ userId: userId as never, siteId: siteId as never });
-              setMsg("Assigned.");
-            } catch (e) {
-              setMsg(errMsg(e));
-            }
-          }}
-          className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2 text-sm font-semibold disabled:opacity-50"
-        >
-          Assign
-        </button>
-        <button
-          disabled={!userId || !siteId}
-          onClick={async () => {
-            setMsg(null);
-            try {
-              await unassign({ userId: userId as never, siteId: siteId as never });
-              setMsg("Unassigned.");
-            } catch (e) {
-              setMsg(errMsg(e));
-            }
-          }}
-          className="btn-surgical min-h-[44px] px-4 py-2 text-sm disabled:opacity-50"
-        >
-          Remove
-        </button>
-        {msg && <span className="text-sm font-medium text-[var(--paper)]">{msg}</span>}
+        {userId && (
+          <div className="flex max-h-44 flex-col gap-1.5 overflow-y-auto rounded-lg border border-[var(--line)] p-2">
+            {sites.length === 0 && <p className="p-2 text-xs text-[var(--fog)]">No sites yet.</p>}
+            {sites.map((s: any) => {
+              const on = checked.has(s._id);
+              return (
+                <label key={s._id} className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm text-[var(--paper)] hover:bg-[var(--panel-elevated)]/50">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--mint)]"
+                    checked={on}
+                    onChange={() => {
+                      const next = new Set(checked);
+                      if (on) next.delete(s._id); else next.add(s._id);
+                      setChecked(next);
+                    }}
+                  />
+                  {s.name}
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-center gap-2.5">
+          <button
+            disabled={!userId}
+            onClick={async () => {
+              setMsg(null);
+              try {
+                const result = await setAssignments({
+                  userId: userId as never,
+                  siteIds: [...checked] as never,
+                });
+                setMsg(`Saved — ${result.total} site${result.total === 1 ? "" : "s"} assigned (+${result.assigned} / −${result.unassigned}).`);
+              } catch (e) {
+                setMsg(errMsg(e));
+              }
+            }}
+            className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            Save assignments
+          </button>
+          {msg && <span className="text-sm font-medium text-[var(--paper)]">{msg}</span>}
+        </div>
       </div>
     </section>
   );

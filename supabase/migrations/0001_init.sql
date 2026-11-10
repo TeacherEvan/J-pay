@@ -25,7 +25,7 @@ create table if not exists public.users (
   "image"                   text,
   "isAnonymous"             boolean,
   "isMasterTemp"            boolean,
-  "role"                    text not null check ("role" in ('moderator', 'employee')),
+  "role"                    text not null check ("role" in ('moderator', 'employee', 'manager')),
   "isActive"                boolean not null default true,
   "passwordChangedAt"       bigint,
   "deviceId"                text,

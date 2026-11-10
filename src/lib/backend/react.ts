@@ -59,6 +59,7 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
   "sites:createSite": ["sites"],
   "sites:assignEmployee": ["userSites"],
   "sites:unassignEmployee": ["userSites"],
+  "sites:setEmployeeSites": ["userSites", "users"],
 
   // messages
   "messages:sendToModerators": ["messages"],

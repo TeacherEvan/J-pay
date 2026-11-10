@@ -2,7 +2,7 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** This workspace (`J-pay`) — one fork per client per ADR-002
-**Version:** 1.4.0 (runtime supersession — see ADR-004)
+**Version:** 1.5.0 (manager role + travel tracking — see R39–R42)
 **Status:** Implemented — live in production (Supabase-authoritative; see ADR-004)
 
 ### Runtime Supersession (2026-11-10, ADR-004)
@@ -73,6 +73,7 @@ Read every runtime-specific clause as superseded:
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 | R37 | §2/§3/§11 | **Next 16.3.2 upgrade (closes D2).** `next` bumped 15.3 → 16.3.2 clearing the postcss 4 + sharp 4 high-severity advisories that were transitively bundled. `@serwist/next` bumped 9.5.12 → 10.0.0-preview.14 (Next 16 compat; export paths unchanged so `src/app/sw.ts` did not need a code change). `glob` pinned to `^11.1.0` via `overrides` to clear the Serwist-10 transitive GHSA-5j98-mcp5-4vw2 (CLI command injection in a build-time-only tool — not exploitable from this codebase, tracked as Open Question #10). Production build stays on **webpack** (`next build --webpack`) because Serwist 10-preview does not yet support Turbopack SW generation (https://github.com/serwist/serwist/issues/54); Turbopack adoption deferred to Open Question #11. New canary workflow at `.github/workflows/canary.yml` deploys to a Vercel preview on PRs labeled `next16-canary`. Rollback runbook at `docs/ops/next-16-rollback.md`. See `docs/plans/2026-08-25-next-16-upgrade.md` for the full plan + audit before/after snapshots. |
 | R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). Demo fix B2: `ensurePersonaSiteAssignments` called on bind so Thabo has site rows; `boundPersonaSites` query replaces hardcoded `sites.listMine` in demo CheckInPanel. Broadcast filtered to exclude demo users. TRD §6 + §10.2 + §11 updated. |
+| R39 | §6/§10.2/§11 | Manager feature set, phase A1–A2 groundwork (owner 2026-11-10): `users.role` check relaxed to `moderator|employee|manager` (migration `0004_manager_role.sql`); bulk multi-site assignment replaces one-at-a-time assign/unassign (`sites.setEmployeeSites`, single transaction); manager role + `managerSites` site-scoped assignment model (managers = promoted employees, auto-scoped crew = employees on managed sites; managers get no payroll/provisioning rights); §6/ERD synced |
 
 ---
 
@@ -169,7 +170,7 @@ export default defineSchema({
   users: defineTable({
     name: v.string(),
     email: v.string(),
-    role: v.union(v.literal("moderator"), v.literal("employee")),
+    role: v.union(v.literal("moderator"), v.literal("employee"), v.literal("manager")),
     isActive: v.boolean(),
     passwordChangedAt: v.optional(v.number()), // undefined = still using provisioned ID code
     deviceId: v.optional(v.string()),          // signed device token id
@@ -402,7 +403,7 @@ erDiagram
     users {
         string name
         string email
-        string role "moderator|employee"
+        string role "moderator|employee|manager"
         boolean isActive
         string deviceId
         number archivedAt "SOFT DELETE"

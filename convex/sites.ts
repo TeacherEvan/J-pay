@@ -98,7 +98,7 @@ export const assignEmployee = mutation({
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "employee") throw new ConvexError("NOT_AN_EMPLOYEE");
+    if (!user || (user.role !== "employee" && user.role !== "manager")) throw new ConvexError("NOT_AN_EMPLOYEE");
     const site = await ctx.db.get(args.siteId);
     if (!site) throw new ConvexError("SITE_NOT_FOUND");
     const existing = await ctx.db
@@ -123,5 +123,56 @@ export const unassignEmployee = mutation({
     const match = rows.find((a) => a.siteId === args.siteId);
     if (!match) throw new ConvexError("NOT_ASSIGNED");
     await ctx.db.delete(match._id);
+  },
+});
+
+/**
+ * Bulk multi-site assignment (owner 2026-11-10): the moderator picks the exact
+ * set of sites for one employee/manager in one call. Convex mutations are a
+ * single transaction, so the delete+insert below is atomic — no partial
+ * assignments. Replaces the one-at-a-time assign/unassign loop.
+ */
+export const setEmployeeSites = mutation({
+  args: {
+    userId: v.id("users"),
+    siteIds: v.array(v.id("sites")),
+  },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    const user = await ctx.db.get(args.userId);
+    if (!user || (user.role !== "employee" && user.role !== "manager")) {
+      throw new ConvexError("NOT_AN_EMPLOYEE");
+    }
+    if (user.archivedAt !== undefined || !user.isActive) {
+      throw new ConvexError("ACCOUNT_INACTIVE");
+    }
+    const uniqueSiteIds = [...new Set(args.siteIds)];
+    const wanted = new Set<string>();
+    for (const siteId of uniqueSiteIds) {
+      const site = await ctx.db.get(siteId);
+      if (!site) throw new ConvexError("SITE_NOT_FOUND");
+      if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
+      wanted.add(siteId);
+    }
+    const existing = await ctx.db
+      .query("userSites")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    let unassigned = 0;
+    for (const row of existing) {
+      if (!wanted.has(row.siteId)) {
+        await ctx.db.delete(row._id);
+        unassigned++;
+      }
+    }
+    const existingIds = new Set(existing.map((a) => a.siteId as string));
+    let assigned = 0;
+    for (const siteId of wanted) {
+      if (!existingIds.has(siteId)) {
+        await ctx.db.insert("userSites", { userId: args.userId, siteId: siteId as Id<"sites"> });
+        assigned++;
+      }
+    }
+    return { assigned, unassigned, total: wanted.size as number };
   },
 });

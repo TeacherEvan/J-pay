@@ -12,7 +12,7 @@ export default defineSchema({
     image: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
     isMasterTemp: v.optional(v.boolean()),
-    role: v.union(v.literal("moderator"), v.literal("employee")),
+    role: v.union(v.literal("moderator"), v.literal("employee"), v.literal("manager")),
     isActive: v.boolean(),
     passwordChangedAt: v.optional(v.number()),
     deviceId: v.optional(v.string()),
