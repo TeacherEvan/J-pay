@@ -1,0 +1,66 @@
+name: e2e-nightly
+
+# Nightly end-to-end walkthrough against a throwaway CI run.
+#
+# DISABLED UNTIL THE OWNER PROVIDES SECRETS — the job self-skips when
+# JPAY_EMAIL / JPAY_PASSWORD / E2E_SUPABASE_* are not configured, so this
+# workflow never pages anyone and never goes red on missing config.
+#
+# To enable:
+#   1. Create a dedicated throwaway Supabase project (NEVER the client one)
+#      and apply supabase/migrations/0001..0012.
+#   2. Seed a moderator account via scripts/create-moderator.mjs.
+#   3. Add repo secrets: JPAY_EMAIL, JPAY_PASSWORD (moderator creds),
+#      NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+#      SUPABASE_SERVICE_ROLE_KEY, DEVICE_TOKEN_SECRET.
+#   4. Trigger workflow_dispatch to verify, then let the cron run.
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC nightly
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      JPAY_EMAIL: ${{ secrets.JPAY_EMAIL }}
+      JPAY_PASSWORD: ${{ secrets.JPAY_PASSWORD }}
+    steps:
+      - name: Check secrets configured
+        id: secrets
+        run: |
+          if [ -z "$JPAY_EMAIL" ] || [ -z "$JPAY_PASSWORD" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::e2e-nightly skipped — JPAY_EMAIL/JPAY_PASSWORD secrets not configured (see workflow header)"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install deps
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm ci
+      - name: Start dev server
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEVICE_TOKEN_SECRET: ${{ secrets.DEVICE_TOKEN_SECRET }}
+        run: |
+          npm run dev &
+          npx wait-on http://localhost:3000 --timeout 60000
+      - name: Launch headless Chrome on CDP :9300
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          google-chrome --headless=new --remote-debugging-port=9300 --no-sandbox --disable-gpu &
+      - name: E2E walkthrough
+        if: steps.secrets.outputs.configured == 'true'
+        run: JPAY_BASE_URL=http://localhost:3000 npm run e2e
