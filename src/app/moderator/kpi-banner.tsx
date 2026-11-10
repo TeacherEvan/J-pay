@@ -13,9 +13,9 @@ export function KpiBanner() {
   const hours = Math.round((kpi.weeklyBillableMinutes / 60) * 10) / 10;
   const cards = [
     { label: "Active on site", value: String(kpi.activeOnSite), tone: "text-[var(--mint)]" },
-    { label: "Billable hrs (7d)", value: `${hours}h`, tone: "text-sky-400" },
+    { label: "Billable hrs (7d)", value: `${hours}h`, tone: "text-[var(--cyan)]" },
     { label: "Pending reviews", value: String(kpi.pendingReviews), tone: kpi.pendingReviews ? "text-[var(--hivis)]" : "text-[var(--fog)]" },
-    { label: "Anomalies (24h)", value: String(kpi.anomalies24h), tone: kpi.anomalies24h ? "text-red-400" : "text-[var(--fog)]" },
+    { label: "Anomalies (24h)", value: String(kpi.anomalies24h), tone: kpi.anomalies24h ? "text-[var(--danger)]" : "text-[var(--fog)]" },
   ];
   return (
     <section aria-label="Key metrics" className="tnum grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -23,7 +23,7 @@ export function KpiBanner() {
         <div
           key={c.label}
           aria-label={`${c.label}: ${c.value}`}
-          className="card-surgical p-4 transition-all"
+          className="card-surgical p-4 transition-colors"
         >
           <div className={`tnum text-2xl font-bold tracking-tight ${c.tone}`}>{c.value}</div>
           <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-[var(--fog)]">{c.label}</div>

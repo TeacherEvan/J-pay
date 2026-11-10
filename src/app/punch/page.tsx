@@ -38,9 +38,9 @@ export default function PunchPage() {
   if (auth.isLoading) {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
-        <div className="text-center text-sm animate-pulse">
-          <div className="h-8 bg-neutral-800 w-48 mx-auto rounded mb-4" />
-          <div className="h-4 bg-neutral-800 w-64 mx-auto rounded" />
+        <div className="text-center text-sm pulse-soft">
+          <div className="h-8 bg-[var(--panel-2)] w-48 mx-auto rounded mb-4" />
+          <div className="h-4 bg-[var(--panel-2)] w-64 mx-auto rounded" />
         </div>
       </main>
     );
@@ -49,7 +49,7 @@ export default function PunchPage() {
   if (!auth.isAuthenticated) {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
-        <div className="card-surgical max-w-sm p-6 text-center text-sm text-[var(--paper-dim)]">
+        <div className="card-surgical max-w-sm p-6 text-center text-sm text-[var(--text-secondary)]">
           <p className="mb-4 text-[var(--paper)]">Please sign in first.</p>
           <a href="/login" className="btn-surgical-mint inline-flex px-4 py-2 text-xs font-semibold uppercase tracking-wider">
             Go to login
@@ -64,7 +64,7 @@ export default function PunchPage() {
       <main className="min-h-dvh grid place-items-center p-6">
         <div className="card-surgical max-w-sm p-6 text-center text-sm">
           <h1 className="text-xl font-bold mb-4 tracking-tight text-[var(--paper)]">Punch Clock</h1>
-          <div className="text-xs font-mono text-red-400 bg-red-950/20 border border-red-500/30 rounded p-4">
+          <div className="text-xs font-mono text-[var(--danger)] bg-[var(--danger)]/10 border border-[var(--danger)]/30 rounded p-4">
             <p className="font-semibold uppercase tracking-wider mb-2">No Site Assigned</p>
             <p>You are not assigned to any active site. Contact your moderator.</p>
           </div>
@@ -140,8 +140,8 @@ export default function PunchPage() {
       <div className="w-full max-w-sm card-surgical p-6 space-y-6 shadow-2xl">
         <div className="text-center">
           <h1 className="text-xl font-bold tracking-tight text-[var(--paper)] mb-1">Punch Clock</h1>
-          <p className="text-sm font-medium text-[var(--paper-dim)]">{site.name}</p>
-          <p className="text-xs font-mono text-[var(--paper-dimmer)] mt-1 tnum">
+          <p className="text-sm font-medium text-[var(--text-secondary)]">{site.name}</p>
+          <p className="text-xs font-mono text-[var(--fog)] mt-1 tnum">
             Radius: {(site.geofenceRadiusMeters / 1000).toFixed(1)} km
           </p>
         </div>
@@ -149,12 +149,12 @@ export default function PunchPage() {
         <div
           className={`rounded-lg border p-4 text-center transition-colors ${
             status === "success"
-              ? "border-emerald-500/50 bg-emerald-950/20 text-emerald-400"
+              ? "border-[var(--mint)]/50 bg-[var(--mint)]/10 text-[var(--mint)]"
               : status === "error"
-              ? "border-red-500/50 bg-red-950/20 text-red-400"
+              ? "border-[var(--danger)]/50 bg-[var(--danger)]/10 text-[var(--danger)]"
               : status === "locating"
-              ? "border-amber-500/50 bg-amber-950/20 text-amber-300"
-              : "border-[var(--line)] bg-[var(--surface-sunken)] text-[var(--paper-dim)]"
+              ? "border-[var(--hivis)]/50 bg-[var(--hivis)]/10 text-[var(--hivis)]"
+              : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--text-secondary)]"
           }`}
           role="status"
           aria-live="polite"
@@ -186,7 +186,7 @@ export default function PunchPage() {
         </div>
 
         {lastPunch && (
-          <div className="card-subpanel p-3 text-xs font-mono text-center tnum text-[var(--paper-dim)]">
+          <div className="card-subpanel p-3 text-xs font-mono text-center tnum text-[var(--text-secondary)]">
             Last: {lastPunch.geoPassed ? "✓" : "✕"} {new Date(lastPunch.ts).toLocaleString()}
             {lastPunch.durationSec !== undefined && (
               <> • Duration: {formatDuration(lastPunch.durationSec)}</>
@@ -195,7 +195,7 @@ export default function PunchPage() {
         )}
 
         {punchHistory.length > 0 && (
-          <details className="text-xs font-mono text-[var(--paper-dimmer)]">
+          <details className="text-xs font-mono text-[var(--fog)]">
             <summary className="cursor-pointer mb-2 uppercase tracking-wider hover:text-[var(--paper)]">Recent Punches ({punchHistory.length})</summary>
             <ul className="space-y-1.5 max-h-48 overflow-auto tnum">
               {punchHistory.slice(0, 10).map((p: { type: string; geoPassed: boolean; ts: number; durationSec?: number }) => (

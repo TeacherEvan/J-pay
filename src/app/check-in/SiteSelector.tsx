@@ -93,7 +93,7 @@ export function SiteSelector({
         </button>
       )}
       {sites.length === 0 && !sitesLoading && (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-300">
+        <p className="rounded-xl border border-[var(--hivis)]/30 bg-[var(--hivis)]/10 p-3.5 text-sm text-[var(--hivis)]">
           No site assigned yet — your moderator must assign you before you can check in.
         </p>
       )}

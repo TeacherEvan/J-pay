@@ -55,7 +55,7 @@ export default function DemoPage() {
 
       <section data-testid="demo-kpi-banner">
         {/* KPIs: tabular-nums (tnum) telemetry readouts */}
-        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">KPIs (persona-scoped)</h2>
+        <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">KPIs (persona-scoped)</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 tnum">
           <KpiCard label="Active on site" value={kpi?.activeOnSite ?? "—"} />
           <KpiCard label="Billable this week" value={kpi ? formatMinutes(kpi.weeklyBillableMinutes) : "—"} />
@@ -78,7 +78,7 @@ function PersonaHeader({ binding }: { binding: { personaName: string; personaEma
   return (
     <section className="card-surgical p-4" data-testid="demo-persona-header">
       <h2 className="text-lg font-bold tracking-tight text-[var(--paper)]">{binding?.personaName ?? "—"}</h2>
-      <p className="text-xs font-mono text-[var(--paper-dim)]">{binding?.personaEmail}</p>
+      <p className="text-xs font-mono text-[var(--text-secondary)]">{binding?.personaEmail}</p>
     </section>
   );
 }
@@ -86,20 +86,20 @@ function PersonaHeader({ binding }: { binding: { personaName: string; personaEma
 function KpiCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="card-surgical p-3" data-testid="kpi-card">
-      <p className="text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">{label}</p>
+      <p className="text-xs font-mono uppercase tracking-wider text-[var(--fog)]">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-[var(--paper)] tnum font-mono">{value}</p>
     </div>
   );
 }
 
 function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; locale: string; days: { day: string; minutes: number; pay: number }[]; totals: { minutes: number; pay: number } } | null }) {
-  if (!payroll) return <section><h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">My week (payroll)</h2><p className="text-sm text-[var(--paper-dimmer)]">Loading…</p></section>;
+  if (!payroll) return <section><h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">My week (payroll)</h2><p className="text-sm text-[var(--fog)]">Loading…</p></section>;
   return (
     <section data-testid="demo-payroll">
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">My week (payroll)</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">My week (payroll)</h2>
       <div className="card-surgical overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-[var(--line)] bg-[var(--surface-sunken)] text-left text-xs uppercase tracking-wider text-[var(--paper-dimmer)] font-mono">
+          <thead className="border-b border-[var(--line)] bg-[var(--panel-2)] text-left text-xs uppercase tracking-wider text-[var(--fog)] font-mono">
             <tr>
               <th scope="col" className="px-3 py-2">Day</th>
               <th scope="col" className="px-3 py-2 text-right">Minutes</th>
@@ -108,24 +108,24 @@ function PayrollTable({ payroll }: { payroll: { rate: number; currency: string; 
           </thead>
           <tbody>
             {payroll.days.length === 0 && (
-              <tr><td colSpan={3} className="px-3 py-3 text-center text-sm text-[var(--paper-dimmer)]">No shifts yet</td></tr>
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-sm text-[var(--fog)]">No shifts yet</td></tr>
             )}
             {payroll.days.map((d) => (
-              <tr key={d.day} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="payroll-day-row">
+              <tr key={d.day} className="border-t border-[var(--line-subtle)] hover:bg-[var(--panel-elevated)]/30 transition-colors" data-testid="payroll-day-row">
                 <td className="px-3 py-2 text-[var(--paper)] font-medium">{d.day}</td>
-                <td className="px-3 py-2 text-right text-[var(--paper-dim)] tnum font-mono">{d.minutes}</td>
+                <td className="px-3 py-2 text-right text-[var(--text-secondary)] tnum font-mono">{d.minutes}</td>
                 <td className="px-3 py-2 text-right text-[var(--paper)] tnum font-mono font-medium">{formatCurrency(d.pay, payroll.currency, payroll.locale)}</td>
               </tr>
             ))}
-            <tr className="border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold" data-testid="payroll-total-row">
+            <tr className="border-t border-[var(--line)] bg-[var(--panel-elevated)] font-semibold" data-testid="payroll-total-row">
               <td className="px-3 py-2 text-[var(--paper)]">Total</td>
               <td className="px-3 py-2 text-right text-[var(--paper)] tnum font-mono">{payroll.totals.minutes}</td>
-              <td className="px-3 py-2 text-right text-emerald-400 tnum font-mono">{formatCurrency(payroll.totals.pay, payroll.currency, payroll.locale)}</td>
+              <td className="px-3 py-2 text-right text-[var(--mint)] tnum font-mono">{formatCurrency(payroll.totals.pay, payroll.currency, payroll.locale)}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p className="mt-1.5 text-xs font-mono text-[var(--paper-dimmer)]">Rate {formatCurrency(payroll.rate, payroll.currency, payroll.locale)}/h · currency {payroll.currency}</p>
+      <p className="mt-1.5 text-xs font-mono text-[var(--fog)]">Rate {formatCurrency(payroll.rate, payroll.currency, payroll.locale)}/h · currency {payroll.currency}</p>
     </section>
   );
 }
@@ -136,20 +136,20 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
   const [busyId, setBusyId] = useState<string | null>(null);
   return (
     <section data-testid="demo-needs-review">
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Shifts needing review</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Shifts needing review</h2>
       {(shifts ?? []).length === 0 ? (
-        <p className="text-sm text-[var(--paper-dimmer)]">No shifts flagged.</p>
+        <p className="text-sm text-[var(--fog)]">No shifts flagged.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {shifts!.map((s) => (
             <li
               key={s._id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--hivis)]/30 bg-[var(--hivis)]/10 px-3 py-2 text-sm"
               data-testid="needs-review-row"
             >
               <div>
                 <p className="text-[var(--paper)] font-mono text-xs tnum">{formatMsDateTime(s.startedAt, personaLocale)}</p>
-                <p className="text-xs text-amber-400/90 font-mono">{s.reviewReason ?? "flagged"} · <span className="tnum">{s.totalMinutes ?? 0}</span> min</p>
+                <p className="text-xs text-[var(--hivis)]/90 font-mono">{s.reviewReason ?? "flagged"} · <span className="tnum">{s.totalMinutes ?? 0}</span> min</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -186,10 +186,10 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
 function AuditTable({ logs, personaLocale }: { logs: { _id: string; status: string; at: number; accuracyMeters: number; clockSkewMs: number; isWithinGeofence: boolean; impossibleTravelFlag: boolean; siteName: string }[] | undefined; personaLocale: string }) {
   return (
     <section data-testid="demo-audit-log">
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Audit log</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Audit log</h2>
       <div className="card-surgical overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-[var(--line)] bg-[var(--surface-sunken)] text-left text-xs uppercase tracking-wider text-[var(--paper-dimmer)] font-mono">
+          <thead className="border-b border-[var(--line)] bg-[var(--panel-2)] text-left text-xs uppercase tracking-wider text-[var(--fog)] font-mono">
             <tr>
               <th scope="col" className="px-3 py-2">Time</th>
               <th scope="col" className="px-3 py-2">Status</th>
@@ -200,15 +200,15 @@ function AuditTable({ logs, personaLocale }: { logs: { _id: string; status: stri
           </thead>
           <tbody>
             {(logs ?? []).length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-3 text-center text-sm text-[var(--paper-dimmer)]">No audit entries in the last 7 days</td></tr>
+              <tr><td colSpan={5} className="px-3 py-3 text-center text-sm text-[var(--fog)]">No audit entries in the last 7 days</td></tr>
             )}
             {(logs ?? []).map((l) => (
-              <tr key={l._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--surface-raised)]/30 transition-colors" data-testid="audit-log-row">
-                <td className="px-3 py-2 text-[var(--paper-dim)] font-mono text-xs tnum">{formatMsTime(l.at, personaLocale)}</td>
+              <tr key={l._id} className="border-t border-[var(--line-subtle)] hover:bg-[var(--panel-elevated)]/30 transition-colors" data-testid="audit-log-row">
+                <td className="px-3 py-2 text-[var(--text-secondary)] font-mono text-xs tnum">{formatMsTime(l.at, personaLocale)}</td>
                 <td className="px-3 py-2 text-[var(--paper)]">{l.status}</td>
-                <td className="px-3 py-2 text-right text-[var(--paper-dim)] font-mono text-xs tnum">{l.accuracyMeters}</td>
-                <td className="px-3 py-2 text-right text-[var(--paper-dim)] font-mono text-xs tnum">{Math.round(l.clockSkewMs / 1000)}</td>
-                <td className="px-3 py-2 text-xs font-mono text-amber-400">
+                <td className="px-3 py-2 text-right text-[var(--text-secondary)] font-mono text-xs tnum">{l.accuracyMeters}</td>
+                <td className="px-3 py-2 text-right text-[var(--text-secondary)] font-mono text-xs tnum">{Math.round(l.clockSkewMs / 1000)}</td>
+                <td className="px-3 py-2 text-xs font-mono text-[var(--hivis)]">
                   {!l.isWithinGeofence && <span>outside</span>}
                   {l.impossibleTravelFlag && <span> · travel</span>}
                 </td>
@@ -224,12 +224,12 @@ function AuditTable({ logs, personaLocale }: { logs: { _id: string; status: stri
 function RosterList({ users }: { users: { _id: string; name?: string; email?: string; role: string }[] | undefined }) {
   return (
     <section>
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Demo personas</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Demo personas</h2>
       <ul className="grid gap-2 sm:grid-cols-2">
         {(users ?? []).map((u) => (
           <li key={u._id} className="card-surgical p-3">
             <p className="text-sm font-medium text-[var(--paper)]">{u.name ?? u.email ?? "—"}</p>
-            <p className="text-xs font-mono text-[var(--paper-dim)]">{u.email}</p>
+            <p className="text-xs font-mono text-[var(--text-secondary)]">{u.email}</p>
           </li>
         ))}
       </ul>
@@ -241,9 +241,9 @@ function MessagesSection({ inbox, personaLocale }: { inbox: { _id: string; conte
   const markRead = useMutation(api.demo.demoMarkQueueItemRead);
   return (
     <section data-testid="demo-messages">
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">My moderator messages</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">My moderator messages</h2>
       {(inbox ?? []).length === 0 ? (
-        <p className="text-sm text-[var(--paper-dimmer)]">No messages from this persona to the moderator queue.</p>
+        <p className="text-sm text-[var(--fog)]">No messages from this persona to the moderator queue.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {inbox!.map((m) => (
@@ -253,10 +253,10 @@ function MessagesSection({ inbox, personaLocale }: { inbox: { _id: string; conte
               data-testid="message-row"
             >
               <p className="text-[var(--paper)]">{m.content}</p>
-              <div className="mt-2 flex items-center justify-between text-xs font-mono text-[var(--paper-dim)]">
+              <div className="mt-2 flex items-center justify-between text-xs font-mono text-[var(--text-secondary)]">
                 <span className="tnum">{formatMsDateTime(m.at, personaLocale)}</span>
                 {m.isRead ? (
-                  <span className="text-[var(--paper-dimmer)] uppercase tracking-wider">read</span>
+                  <span className="text-[var(--fog)] uppercase tracking-wider">read</span>
                 ) : (
                   <button
                     type="button"
@@ -304,7 +304,7 @@ function ExportPanel() {
   }
   return (
     <section data-testid="demo-export" className="card-surgical p-4">
-      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--paper-dimmer)]">Export my logs</h2>
+      <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Export my logs</h2>
       <button
         type="button"
         onClick={() => void doExport()}
@@ -313,7 +313,7 @@ function ExportPanel() {
       >
         {busy ? "Building CSV…" : "Download CSV (last 14 days)"}
       </button>
-      {message && <p className="mt-2 text-xs font-mono text-[var(--paper-dim)]">{message}</p>}
+      {message && <p className="mt-2 text-xs font-mono text-[var(--text-secondary)]">{message}</p>}
     </section>
   );
 }

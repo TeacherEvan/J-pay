@@ -276,7 +276,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
                       verdict === "inside"
                         ? "bg-[var(--mint)]/15 text-[var(--mint)]"
-                        : "bg-red-500/15 text-red-400"
+                        : "bg-[var(--danger)]/15 text-[var(--danger)]"
                     }`}
                   >
                     <StatusIcon status={log.status} />
@@ -284,12 +284,12 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
                   <span className="text-sm font-medium">{LABEL[log.status as Status] ?? log.status}</span>
                   <span className="ml-auto flex items-center gap-2">
                     {verdict === "outside" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
+                      <span className="rounded-full bg-[var(--danger)]/15 px-2 py-0.5 text-xs font-medium text-[var(--danger)]">
                         outside fence
                       </span>
                     )}
                     {verdict === "travel" && (
-                      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
+                      <span className="rounded-full bg-[var(--danger)]/15 px-2 py-0.5 text-xs font-medium text-[var(--danger)]">
                         travel flag
                       </span>
                     )}
@@ -507,6 +507,7 @@ function LiveSubmit({
       <button
         data-testid="checkin-submit"
         data-loading={busy}
+        aria-busy={busy}
         onClick={checkIn}
         disabled={busy}
         className={`btn-surgical h-16 rounded-xl text-lg font-bold transition disabled:opacity-50 ${
@@ -515,11 +516,12 @@ function LiveSubmit({
             : "btn-surgical-mint"
         }`}
       >
-        {busy ? "Logging…" : label}
+        <span className="btn-label">{label}</span>
+        <span className="btn-spinner" aria-hidden="true" />
       </button>
-      {lastError && <p className="text-center text-sm text-red-400">{lastError}</p>}
+      {lastError && <p className="text-center text-sm text-[var(--danger)]">{lastError}</p>}
       {count > 0 && (
-        <div className="card-subpanel flex items-center justify-between border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
+        <div className="card-subpanel flex items-center justify-between border-[var(--hivis)]/30 bg-[var(--hivis)]/10 px-4 py-2.5 text-sm text-[var(--hivis)]">
           <span className="tnum font-medium">
             {count} check-in{count === 1 ? "" : "s"} queued offline
           </span>
@@ -527,7 +529,7 @@ function LiveSubmit({
             data-testid="outbox-sync"
             onClick={() => void flush()}
             disabled={syncing}
-            className="btn-surgical min-h-[44px] px-3 py-1 text-xs border-amber-500/40 text-amber-300 hover:text-amber-200 disabled:opacity-50"
+            className="btn-surgical min-h-[44px] px-3 py-1 text-xs border-[var(--hivis)]/40 text-[var(--hivis)] hover:text-[var(--hivis)] disabled:opacity-50"
           >
             {syncing ? "Syncing…" : "Sync now"}
           </button>
@@ -598,6 +600,7 @@ function PersonaSubmit({
       type="button"
       data-testid="demo-checkin-button"
       data-loading={busy}
+      aria-busy={busy}
       onClick={() => void doCheckIn()}
       disabled={busy}
       className={`btn-surgical h-14 rounded-xl text-base font-bold transition disabled:opacity-50 ${
@@ -606,7 +609,8 @@ function PersonaSubmit({
           : "btn-surgical-mint"
       }`}
     >
-      {busy ? "Logging…" : `${label} (as persona)`}
+      <span className="btn-label">{`${label} (as persona)`}</span>
+      <span className="btn-spinner" aria-hidden="true" />
     </button>
   );
 }

@@ -91,7 +91,7 @@ export function ForcedPasswordChange() {
   }, [saved]);
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/90 backdrop-blur-sm p-6"
+      className="fixed inset-0 z-[100] grid place-items-center bg-[var(--ink)]/90 backdrop-blur-sm p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="forced-pw-title"

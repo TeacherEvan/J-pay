@@ -65,7 +65,7 @@ export function ShiftTimer({
 
   return (
     <div
-      className={`card-surgical telemetry-chassis tnum relative overflow-hidden p-5 transition-all duration-300 [font-variant-numeric:tabular-nums] ${
+      className={`card-surgical telemetry-chassis tnum relative overflow-hidden p-5 transition-colors duration-300 [font-variant-numeric:tabular-nums] ${
         phase === "on"
           ? "border-[var(--hivis)]/60 bg-[var(--hivis)]/[0.08]"
           : phase === "break"

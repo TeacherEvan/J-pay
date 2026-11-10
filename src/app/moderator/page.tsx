@@ -56,9 +56,9 @@ export default function ModeratorPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6">
       <KpiBanner />
-      <header className="flex items-baseline justify-between border-b border-[var(--line)] pb-4">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-b border-[var(--line)] pb-4">
         <h1 className="text-xl font-bold tracking-tight text-[var(--paper)]">Moderator console</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <Link href="/dashboard" className="btn-surgical min-h-[44px] inline-flex items-center px-3.5 py-2 text-xs font-semibold text-[var(--mint)] border-[var(--mint)]/40 hover:bg-[var(--mint)]/10">
             Logging dashboard →
           </Link>
@@ -111,7 +111,7 @@ export default function ModeratorPage() {
                       .map((s: any) => s.name)
                       .join(", ") || "—"}
                   </td>
-                  <td className={`p-3 font-semibold ${e.archivedAt ? "text-red-400" : "text-[var(--mint)]"}`}>
+                  <td className={`p-3 font-semibold ${e.archivedAt ? "text-[var(--danger)]" : "text-[var(--mint)]"}`}>
                     {e.archivedAt ? "deactivated" : "active"}
                   </td>
                   <td className="p-3">
@@ -142,7 +142,7 @@ export default function ModeratorPage() {
             <span
               role="status"
               aria-live="polite"
-              className="rounded-full bg-red-500/20 px-2.5 py-0.5 text-xs font-semibold normal-case text-red-300"
+              className="rounded-full bg-[var(--danger)]/20 px-2.5 py-0.5 text-xs font-semibold normal-case text-[var(--danger)]"
             >
               {review!.length} shift{review!.length === 1 ? "" : "s"} need review
             </span>
@@ -173,8 +173,8 @@ export default function ModeratorPage() {
                     {Math.round(l.clockSkewMs / 1000)}s
                   </td>
                   <td className="p-3">
-                    {!l.isWithinGeofence && <span className="mr-1.5 font-semibold text-red-400">geofence✗</span>}
-                    {l.impossibleTravelFlag && <span className="font-semibold text-red-400">travel!</span>}
+                    {!l.isWithinGeofence && <span className="mr-1.5 font-semibold text-[var(--danger)]">geofence✗</span>}
+                    {l.impossibleTravelFlag && <span className="font-semibold text-[var(--danger)]">travel!</span>}
                     {l.siteLat !== undefined && l.siteLng !== undefined && (
                       <button
                         onClick={() =>
@@ -193,7 +193,7 @@ export default function ModeratorPage() {
                           })
                         }
                         aria-label={`Open geofence map for ${l.employeeName} at ${l.siteName}`}
-                        className="btn-surgical ml-2 rounded px-3 py-1 text-xs font-semibold text-sky-300 border-sky-500/40 hover:bg-sky-500/10"
+                        className="btn-surgical ml-2 rounded px-3 py-1 text-xs font-semibold text-[var(--cyan)] border-[var(--cyan)]/40 hover:bg-[var(--cyan)]/10"
                       >
                         map
                       </button>
@@ -267,7 +267,7 @@ function ProvisionPanel() {
         >
           Create account + ID code ({role})
         </button>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         {code && (
           <div className="card-subpanel border-[var(--mint)]/60 bg-[var(--mint)]/10 p-3.5 text-sm text-[var(--paper)]">
             <p className="mb-1 text-xs text-[var(--mint)] font-semibold uppercase tracking-wider">Give these to the employee NOW — shown once:</p>
@@ -436,7 +436,7 @@ function DeactivateButton({ userId }: { userId: string }) {
     <span className="inline-flex gap-1">
       <button
         onClick={() => void deactivate({ userId: userId as Id<"users"> }).catch(() => {})}
-        className="btn-surgical rounded px-2.5 py-1 text-xs text-red-400 border-red-500/40"
+        className="btn-surgical rounded px-2.5 py-1 text-xs text-[var(--danger)] border-[var(--danger)]/40"
       >
         confirm
       </button>
@@ -445,7 +445,7 @@ function DeactivateButton({ userId }: { userId: string }) {
       </button>
     </span>
   ) : (
-    <button onClick={() => setConfirming(true)} className="btn-surgical rounded px-2.5 py-1 text-xs text-[var(--fog)] hover:text-red-400">
+    <button onClick={() => setConfirming(true)} className="btn-surgical rounded px-2.5 py-1 text-xs text-[var(--fog)] hover:text-[var(--danger)]">
       deactivate
     </button>
   );

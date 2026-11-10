@@ -85,7 +85,7 @@ export default function Home() {
         />
       )}
       <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 p-6">
-        <header className="flex items-baseline justify-between">
+        <header className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-xl font-bold tracking-tight text-[var(--paper)]">J-Pay</h1>
           <div className="flex items-center gap-2">
             {showInstall && (
@@ -160,7 +160,7 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
   }, []);
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/80 backdrop-blur-sm p-6"
+      className="fixed inset-0 z-50 grid place-items-center bg-[var(--ink)]/80 backdrop-blur-sm p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="consent-title"

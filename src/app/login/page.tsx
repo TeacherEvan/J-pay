@@ -23,9 +23,9 @@ export default function LoginPage() {
   if (auth.isLoading) {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
-        <div className="text-center text-sm animate-pulse">
-          <div className="h-8 bg-neutral-800 w-48 mx-auto rounded mb-4" />
-          <div className="h-4 bg-neutral-800 w-64 mx-auto rounded" />
+        <div className="text-center text-sm pulse-soft">
+          <div className="h-8 bg-[var(--panel-2)] w-48 mx-auto rounded mb-4" />
+          <div className="h-4 bg-[var(--panel-2)] w-64 mx-auto rounded" />
         </div>
       </main>
     );
@@ -35,7 +35,7 @@ export default function LoginPage() {
     return (
       <main className="min-h-dvh grid place-items-center p-6">
         <div className="text-center text-sm">
-          <p className="text-green-400 mb-4">Signed in. Redirecting…</p>
+          <p className="text-[var(--mint)] mb-4">Signed in. Redirecting…</p>
         </div>
       </main>
     );
@@ -68,12 +68,12 @@ export default function LoginPage() {
         <h1 className="text-xl font-bold mb-6 text-center tracking-tight text-[var(--paper)]">Employee Sign In</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="text-xs font-mono text-red-400 bg-red-950/20 border border-red-500/30 rounded p-3" role="alert">
+            <div className="text-xs font-mono text-[var(--danger)] bg-[var(--danger)]/10 border border-[var(--danger)]/30 rounded p-3" role="alert">
               {error}
             </div>
           )}
           <div>
-            <label htmlFor="employee" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
+            <label htmlFor="employee" className="block text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)] mb-1">
               Your Name
             </label>
             <select
@@ -95,7 +95,7 @@ export default function LoginPage() {
           </div>
           {employees.length === 0 && (
             <div>
-              <label htmlFor="manualEmail" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
+              <label htmlFor="manualEmail" className="block text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)] mb-1">
                 Email Address
               </label>
               <input
@@ -110,7 +110,7 @@ export default function LoginPage() {
             </div>
           )}
           <div>
-            <label htmlFor="signInId" className="block text-xs font-mono uppercase tracking-wider text-[var(--paper-dim)] mb-1">
+            <label htmlFor="signInId" className="block text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)] mb-1">
               Sign-In ID (Mod-assigned)
             </label>
             <input
@@ -132,7 +132,7 @@ export default function LoginPage() {
             {isSubmitting ? "Signing in…" : "Sign In"}
           </button>
         </form>
-        <p className="text-xs font-mono text-[var(--paper-dimmer)] text-center mt-6">
+        <p className="text-xs font-mono text-[var(--fog)] text-center mt-6">
           Don&apos;t have a sign-in ID? Contact your moderator.
         </p>
       </div>

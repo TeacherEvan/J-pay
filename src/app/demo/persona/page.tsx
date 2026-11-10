@@ -56,7 +56,7 @@ export default function PersonaSwitcher() {
   return (
     <div className="flex flex-col gap-4" data-testid="persona-switcher">
       <header className="flex items-baseline justify-between border-b border-[var(--line)] pb-3">
-        <h1 className="text-lg font-bold tracking-tight text-emerald-400">Switch persona</h1>
+        <h1 className="text-lg font-bold tracking-tight text-[var(--mint)]">Switch persona</h1>
         <button
           type="button"
           onClick={() => router.push("/demo")}
@@ -65,7 +65,7 @@ export default function PersonaSwitcher() {
           ← Back to dashboard
         </button>
       </header>
-      <p className="text-xs text-[var(--paper-dim)]">
+      <p className="text-xs text-[var(--text-secondary)]">
         Currently acting as <span className="text-[var(--paper)] font-medium">{binding?.personaName ?? "—"}</span>. Pick a persona below — your demo console will update in real time.
       </p>
       <ul className="flex flex-col gap-3">
@@ -74,17 +74,17 @@ export default function PersonaSwitcher() {
           return (
             <li
               key={p.email}
-              className={`card-surgical flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between transition-all ${
+              className={`card-surgical flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors ${
                 isCurrent
-                  ? "border-emerald-500/50 bg-emerald-950/20"
+                  ? "border-[var(--mint)]/50 bg-[var(--mint)]/10"
                   : ""
               }`}
               data-testid="persona-row"
             >
               <div>
                 <p className="text-sm font-semibold text-[var(--paper)]">{p.name}</p>
-                <p className="text-xs font-mono text-[var(--paper-dim)]">{p.email}</p>
-                <p className="mt-1 text-xs text-[var(--paper-dimmer)]">{p.narrative}</p>
+                <p className="text-xs font-mono text-[var(--text-secondary)]">{p.email}</p>
+                <p className="mt-1 text-xs text-[var(--fog)]">{p.narrative}</p>
               </div>
               <button
                 type="button"
@@ -103,7 +103,7 @@ export default function PersonaSwitcher() {
           );
         })}
       </ul>
-      {message && <p className="text-xs font-mono text-red-400">{message}</p>}
+      {message && <p className="text-xs font-mono text-[var(--danger)]">{message}</p>}
     </div>
   );
 }

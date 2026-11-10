@@ -23,10 +23,10 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
 
   if (isLoading || me === undefined || binding === undefined) {
     return (
-      <main className="grid min-h-dvh place-items-center text-sm text-[var(--paper-dim)]">
+      <main className="grid min-h-dvh place-items-center text-sm text-[var(--text-secondary)]">
         <div className="flex flex-col items-center gap-4">
           <svg
-            className="jpay-loader-emblem h-8 w-8 text-emerald-400"
+            className="jpay-loader-emblem h-8 w-8 text-[var(--mint)]"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -44,7 +44,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
   if (!isAuthenticated || me === null || me.isAnonymous !== true || binding === null) {
     return (
       <main className="grid min-h-dvh place-items-center p-6">
-        <div className="card-surgical max-w-sm p-6 text-center text-sm text-[var(--paper-dim)]">
+        <div className="card-surgical max-w-sm p-6 text-center text-sm text-[var(--text-secondary)]">
           <p className="mb-4 text-[var(--paper)]">Demo session is not active.</p>
           <Link href="/" className="btn-surgical-mint inline-flex px-4 py-2 text-xs font-semibold uppercase tracking-wider">
             Back to sign-in
@@ -58,18 +58,18 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 p-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--line)] pb-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-emerald-400">J-Pay · Demo console</h1>
-          <p className="text-xs text-[var(--paper-dim)]">
+          <h1 className="text-xl font-bold tracking-tight text-[var(--mint)]">J-Pay · Demo console</h1>
+          <p className="text-xs text-[var(--text-secondary)]">
             Reviewer <span className="text-[var(--paper)] font-medium">{binding.reviewerName}</span> · playing as{" "}
-            <span className="text-emerald-300 font-medium" data-testid="demo-persona-name">{binding.personaName}</span>
+            <span className="text-[var(--mint)] font-medium" data-testid="demo-persona-name">{binding.personaName}</span>
             {recentCount !== undefined && (
               <span className="tnum"> · {recentCount.length} log rows on file</span>
             )}
           </p>
         </div>
         <nav className="flex items-center gap-3 text-xs font-mono uppercase tracking-wider">
-          <Link href="/demo/persona" className="text-emerald-400 hover:text-emerald-300 underline">Switch persona</Link>
-          <Link href="/demo/about" className="text-[var(--paper-dim)] hover:text-[var(--paper)] underline">About</Link>
+          <Link href="/demo/persona" className="text-[var(--mint)] hover:text-[var(--mint)] underline">Switch persona</Link>
+          <Link href="/demo/about" className="text-[var(--text-secondary)] hover:text-[var(--paper)] underline">About</Link>
           <button
             type="button"
             onClick={() => void signOut().then(() => router.replace("/"))}
@@ -80,7 +80,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
         </nav>
       </header>
       {children}
-      <footer className="mt-auto border-t border-[var(--line)] pt-4 text-xs font-mono text-[var(--paper-dimmer)]">
+      <footer className="mt-auto border-t border-[var(--line)] pt-4 text-xs font-mono text-[var(--fog)]">
         This is a demo. Seeded data; auto-purged after 7 days. The real product is unaffected.
       </footer>
     </div>
