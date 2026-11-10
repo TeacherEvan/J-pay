@@ -251,7 +251,7 @@ export function ManagerMap() {
           <button
             onClick={() => bump({ tables: [...MAP_TABLES] })}
             aria-label="Refresh manager map"
-            className="btn-surgical min-h-[40px] min-w-[40px] px-3 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
+            className="btn-surgical min-h-[44px] min-w-[44px] px-3 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
           >
             refresh
           </button>

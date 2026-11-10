@@ -1,10 +1,14 @@
 "use client";
 
+import { useRef } from "react";
+
 export type ConsoleTab = { id: string; label: string; badge?: number };
 
 /**
- * Console view switcher. ≥md: pill tab bar (role=tablist). <md: native select
- * (role=tablist is meaningless at 390px for 7 tabs; one 44px row, zero scroll).
+ * Console view switcher. ≥md: pill tab bar (role=tablist with roving
+ * tabindex + arrow-key navigation per WAI-ARIA tabs pattern). <md: native
+ * select (role=tablist is meaningless at 390px for 7 tabs; one 44px row,
+ * zero scroll).
  */
 export function ConsoleTabs({
   tabs,
@@ -17,6 +21,23 @@ export function ConsoleTabs({
   onChange: (id: string) => void;
   ariaLabel: string;
 }) {
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.findIndex((t) => t.id === active);
+    if (index === -1) return;
+    let next: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % tabs.length;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = tabs.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    const target = tabs[next];
+    onChange(target.id);
+    tabRefs.current[next]?.focus();
+  };
+
   return (
     <>
       {/* Mobile: dropdown window switcher */}
@@ -45,15 +66,22 @@ export function ConsoleTabs({
       <div
         role="tablist"
         aria-label={ariaLabel}
+        onKeyDown={onKeyDown}
         className="hidden items-center gap-1.5 overflow-hidden border-b border-[var(--line)] bg-[var(--panel-2)] px-3 py-2 md:flex"
       >
-        {tabs.map((t) => {
+        {tabs.map((t, i) => {
           const selected = t.id === active;
           return (
             <button
               key={t.id}
+              ref={(el) => {
+                tabRefs.current[i] = el;
+              }}
               role="tab"
+              id={`tab-${t.id}`}
               aria-selected={selected}
+              aria-controls={`tabpanel-${t.id}`}
+              tabIndex={selected ? 0 : -1}
               data-testid={`console-tab-${t.id}`}
               onClick={() => onChange(t.id)}
               className={`console-pill ${selected ? "console-pill-active" : ""}`}

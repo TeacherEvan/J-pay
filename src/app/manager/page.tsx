@@ -121,7 +121,7 @@ export default function ManagerPage() {
 
       <div className="p-2 sm:p-3 md:min-h-0 md:flex-1">
         {view === "live" && (
-          <div role="tabpanel" aria-label="Live map and travel log" className="flex h-full min-h-0 flex-col gap-2">
+          <div role="tabpanel" id="tabpanel-live" aria-labelledby="tab-live" aria-label="Live map and travel log" className="flex h-full min-h-0 flex-col gap-2">
             <ManagerMap />
             <ConsoleWindow
               title="Travel log · 25 newest legs"
@@ -166,7 +166,7 @@ export default function ManagerPage() {
         )}
 
         {view === "crew" && (
-          <div role="tabpanel" aria-label="Sites and crew" className="flex h-full min-h-0 flex-col gap-2">
+          <div role="tabpanel" id="tabpanel-crew" aria-labelledby="tab-crew" aria-label="Sites and crew" className="flex h-full min-h-0 flex-col gap-2">
             <ConsoleWindow
               title={`My sites (${(managedSites ?? []).length}) · crew of ${(crew ?? []).length} · ${onShiftCount} on shift`}
               className="flex-none"
@@ -265,7 +265,7 @@ export default function ManagerPage() {
         )}
 
         {view === "messages" && (
-          <div role="tabpanel" aria-label="Messages" className="h-full min-h-0">
+          <div role="tabpanel" id="tabpanel-messages" aria-labelledby="tab-messages" aria-label="Messages" className="h-full min-h-0">
             <ManagerMessagesPanel />
           </div>
         )}

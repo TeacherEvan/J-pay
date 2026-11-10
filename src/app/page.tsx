@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/backend/api";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
+import { FocusTrapModal } from "@/components/console/focus-trap-modal";
 import { EnableNotifications } from "./notifications";
 import { ChangePassword, ForcedPasswordChange, PW_CHANGED_KEY } from "./change-password";
 import { useAuthActions } from "@/lib/backend/react";
@@ -38,7 +39,9 @@ export default function Home() {
       void signOut().then(() => window.location.reload());
     }
   }, [isLoading, isAuthenticated, me, signOut]);
-  const [consented, setConsented] = useState(true);
+  // Tri-state: null = localStorage not read yet — never flash gated content
+  // for an unconsented user, never flash the gate for a consented one.
+  const [consented, setConsented] = useState<boolean | null>(null);
   const [iosDismissed, setIosDismissed] = useState(false);
   const [installAsked, setInstallAsked] = useState(false);
   const [travelSnoozed, setTravelSnoozed] = useState(false);
@@ -76,6 +79,14 @@ export default function Home() {
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  if (consented === null) {
+    return (
+      <main className="grid min-h-dvh place-items-center text-sm text-[var(--fog)]">
+        <span>Loading…</span>
+      </main>
+    );
+  }
 
   if (isLoading || (isAuthenticated && me === undefined)) {
     return (
@@ -222,17 +233,8 @@ export default function Home() {
 }
 
 function ConsentGate({ onAccept }: { onAccept: () => void }) {
-  const acceptRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    acceptRef.current?.focus();
-  }, []);
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-[var(--ink)]/80 backdrop-blur-sm p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="consent-title"
-    >
+    <FocusTrapModal labelledBy="consent-title" overlayClassName="fixed inset-0 z-50 grid place-items-center bg-[var(--ink)]/80 backdrop-blur-sm p-6">
       <div className="card-surgical max-w-sm p-6">
         <h2 id="consent-title" className="mb-3 text-lg font-bold text-[var(--paper)]">All work, no ads!</h2>
         <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
@@ -248,7 +250,6 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
           <a href="/privacy" className="text-[var(--mint)] underline hover:brightness-110">Privacy Policy</a>.
         </p>
         <button
-          ref={acceptRef}
           data-testid="consent-acknowledge"
           onClick={onAccept}
           className="btn-surgical btn-surgical-mint w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold"
@@ -256,7 +257,7 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
           I understand
         </button>
       </div>
-    </div>
+    </FocusTrapModal>
   );
 }
 
@@ -271,14 +272,10 @@ function InstallRequestModal({
   onInstall: () => void;
   onDone: () => void;
 }) {
-  const headingRef = useRef<HTMLHeadingElement | null>(null);
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6" role="dialog" aria-modal="true" aria-labelledby="install-title">
+    <FocusTrapModal labelledBy="install-title" overlayClassName="fixed inset-0 z-[90] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6">
       <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40">
-        <h2 id="install-title" ref={headingRef} tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Install J-Pay</h2>
+        <h2 id="install-title" tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Install J-Pay</h2>
         {isIos ? (
           <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
             Add J-Pay to your Home Screen: tap the Share button in Safari, then
@@ -306,7 +303,7 @@ function InstallRequestModal({
           </button>
         </div>
       </div>
-    </div>
+    </FocusTrapModal>
   );
 }
 
@@ -321,14 +318,10 @@ function TravelDisclaimerModal({
   onAck: () => void;
   onDefer: () => void;
 }) {
-  const headingRef = useRef<HTMLHeadingElement | null>(null);
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
   return (
-    <div className="fixed inset-0 z-[85] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6" role="dialog" aria-modal="true" aria-labelledby="travel-disclaimer-title">
+    <FocusTrapModal labelledBy="travel-disclaimer-title" overlayClassName="fixed inset-0 z-[85] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6">
       <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40">
-        <h2 id="travel-disclaimer-title" ref={headingRef} tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Location while you travel</h2>
+        <h2 id="travel-disclaimer-title" tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Location while you travel</h2>
         <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
           While your shift clock is running, J-Pay records coarse GPS positions so your
           manager can see you travelling between sites. It is automatic — you don&apos;t
@@ -348,7 +341,7 @@ function TravelDisclaimerModal({
           Not now — don&apos;t track me (re-asked in 7 days; travel stays off)
         </button>
       </div>
-    </div>
+    </FocusTrapModal>
   );
 }
 

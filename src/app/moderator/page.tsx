@@ -119,7 +119,7 @@ function ModeratorConsole() {
 
       <div className="p-2 sm:p-3 md:min-h-0 md:flex-1">
         {view === "live" && (
-          <div role="tabpanel" aria-label="Live" className="flex h-full min-h-0 flex-col gap-2">
+          <div role="tabpanel" id="tabpanel-live" aria-labelledby="tab-live" aria-label="Live" className="flex h-full min-h-0 flex-col gap-2">
             <KpiBanner />
             <ActiveShiftsMap />
           </div>
@@ -134,14 +134,14 @@ function ModeratorConsole() {
         )}
 
         {view === "payroll" && (
-          <div role="tabpanel" aria-label="Payroll" className="grid h-full min-h-0 gap-2 md:grid-cols-5">
+          <div role="tabpanel" id="tabpanel-payroll" aria-labelledby="tab-payroll" aria-label="Payroll" className="grid h-full min-h-0 gap-2 md:grid-cols-5">
             <PayrollPanel employees={(employees ?? []) as never} role="moderator" className="md:col-span-3" />
             <ReviewPanel className="md:col-span-2" />
           </div>
         )}
 
         {view === "overrides" && (
-          <div role="tabpanel" aria-label="Shift overrides" className="h-full min-h-0">
+          <div role="tabpanel" id="tabpanel-overrides" aria-labelledby="tab-overrides" aria-label="Shift overrides" className="h-full min-h-0">
             <ShiftOverridePanel />
           </div>
         )}
@@ -156,7 +156,7 @@ function ModeratorConsole() {
         )}
 
         {view === "messages" && (
-          <div role="tabpanel" aria-label="Messages" className="h-full min-h-0">
+          <div role="tabpanel" id="tabpanel-messages" aria-labelledby="tab-messages" aria-label="Messages" className="h-full min-h-0">
             <MessagesPanel role="moderator" />
           </div>
         )}
@@ -182,7 +182,7 @@ function CrewView({
     sites.filter((s) => e.assignedSiteIds?.includes(s._id)).map((s) => s.name).join(", ") || "—";
 
   return (
-    <div role="tabpanel" aria-label="Crew" className="h-full min-h-0">
+    <div role="tabpanel" id="tabpanel-crew" aria-labelledby="tab-crew" aria-label="Crew" className="h-full min-h-0">
       <ConsoleWindow
         title={`Employees (${employees.length})`}
         className="h-full"
@@ -293,7 +293,7 @@ function AccessView({
     `min-h-0 h-full ${task === id ? "block" : "hidden"} md:block`;
 
   return (
-    <div role="tabpanel" aria-label="Access" className="flex h-full min-h-0 flex-col">
+    <div role="tabpanel" id="tabpanel-access" aria-labelledby="tab-access" aria-label="Access" className="flex h-full min-h-0 flex-col">
       {/* Mobile: dropdown to pick which window to show */}
       <div className="mb-2 flex-none md:hidden">
         <label className="sr-only" htmlFor="access-task-select">Access task</label>
@@ -381,7 +381,7 @@ function AuditView({
   );
 
   return (
-    <div role="tabpanel" aria-label="Audit log" className="h-full min-h-0">
+    <div role="tabpanel" id="tabpanel-audit" aria-labelledby="tab-audit" aria-label="Audit log" className="h-full min-h-0">
       <ConsoleWindow
         title="Audit log · 7 days"
         className="h-full"
@@ -708,7 +708,7 @@ function ManagersPanel({
               <span className="inline-flex flex-none gap-1.5">
                 <button
                   onClick={() => (openId === m._id ? setOpenId(null) : openEditor(m))}
-                  className="btn-surgical min-h-[40px] px-2.5 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
+                  className="btn-surgical min-h-[44px] px-2.5 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
                 >
                   {openId === m._id ? "Close" : "Sites"}
                 </button>
@@ -722,7 +722,7 @@ function ManagersPanel({
                       setMsg(errMsg(e));
                     }
                   }}
-                  className="btn-surgical min-h-[40px] px-2.5 py-1.5 text-xs font-semibold border-[var(--danger)]/40 text-[var(--danger)] hover:bg-[var(--danger)]/10"
+                  className="btn-surgical min-h-[44px] px-2.5 py-1.5 text-xs font-semibold border-[var(--danger)]/40 text-[var(--danger)] hover:bg-[var(--danger)]/10"
                 >
                   Demote
                 </button>
@@ -734,7 +734,7 @@ function ManagersPanel({
                   {sitePage.pageItems.map((s) => {
                     const on = checked.has(s._id);
                     return (
-                      <label key={s._id} className="flex min-h-[40px] cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-[var(--paper)] hover:bg-[var(--panel-elevated)]/50">
+                      <label key={s._id} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-[var(--paper)] hover:bg-[var(--panel-elevated)]/50">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-[var(--mint)]"
@@ -933,7 +933,7 @@ function ShiftOverridePanel() {
               </div>
               <button
                 onClick={() => (openId === row._id ? setOpenId(null) : openEditor(row))}
-                className="btn-surgical min-h-[40px] flex-none px-2.5 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
+                className="btn-surgical min-h-[44px] flex-none px-2.5 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
               >
                 {openId === row._id ? "Close" : "Override end"}
               </button>
@@ -978,7 +978,7 @@ function ShiftOverridePanel() {
                         setBusy(false);
                       }
                     }}
-                    className="btn-surgical btn-surgical-mint min-h-[40px] px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
                   >
                     {busy ? "Saving…" : "Save override"}
                   </button>

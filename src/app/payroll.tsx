@@ -201,14 +201,14 @@ export function ReviewPanel({ className }: { className?: string }) {
             <button
               data-testid="review-recompute"
               onClick={() => void recompute({ userId: s.userId })}
-              className="btn-surgical min-h-[40px] px-3 py-1.5 text-xs font-medium"
+              className="btn-surgical min-h-[44px] px-3 py-1.5 text-xs font-medium"
             >
               Recompute
             </button>
             <button
               data-testid="review-resolve"
               onClick={() => void resolveShift({ shiftId: s._id })}
-              className="btn-surgical btn-surgical-mint min-h-[40px] px-3 py-1.5 text-xs font-semibold"
+              className="btn-surgical btn-surgical-mint min-h-[44px] px-3 py-1.5 text-xs font-semibold"
             >
               Resolve
             </button>
