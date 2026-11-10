@@ -189,6 +189,13 @@ export const recordFix = mutation({
       : 0;
     const legMs = last ? t - last.t : Number.POSITIVE_INFINITY;
 
+    // B4 fix: reject out-of-order or replayed fixes (t <= last.t) to prevent
+    // negative legMs -> legSeconds=1 -> huge speedMps -> impossible_travel,
+    // and duplicate distance accumulation.
+    if (last && t <= last.t) {
+      return { status: "duplicate" as const };
+    }
+
     // Nothing meaningful moved or too soon — acknowledge without storing.
     if (last && legMs < SAMPLE_MIN_INTERVAL_MS && legMeters < SAMPLE_MIN_LEG_METERS) {
       return {
