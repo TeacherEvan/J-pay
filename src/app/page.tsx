@@ -1,15 +1,16 @@
 "use client";
 
-import { useConvexAuth, useQuery } from "@/lib/backend/react";
+import { useConvexAuth, useQuery, useMutation } from "@/lib/backend/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/backend/api";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
 import { EnableNotifications } from "./notifications";
-import { ChangePassword, ForcedPasswordChange } from "./change-password";
+import { ChangePassword, ForcedPasswordChange, PW_CHANGED_KEY } from "./change-password";
 import { useAuthActions } from "@/lib/backend/react";
 import { useConvex } from "@/lib/backend/react";
 import { CheckInCard } from "./check-in-card";
+import { errMsg } from "@/lib/errors";
 
 const CONSENT_KEY = "jpay.consent";
 const IOS_DISMISS_KEY = "jpay.iosInstallDismissed";
@@ -37,8 +38,22 @@ export default function Home() {
   }, [isLoading, isAuthenticated, me, signOut]);
   const [consented, setConsented] = useState(true);
   const [iosDismissed, setIosDismissed] = useState(false);
+  const [installAsked, setInstallAsked] = useState(false);
+  const [ackBusy, setAckBusy] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
   const installEvent = useRef<{ prompt: () => Promise<void> } | null>(null);
   const [showInstall, setShowInstall] = useState(false);
+  const ackTravel = useMutation(api.travel.setConsent);
+
+  // One-time install request right after a forced first-login password change.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(PW_CHANGED_KEY)) {
+        sessionStorage.removeItem(PW_CHANGED_KEY);
+        setInstallAsked(true);
+      }
+    } catch { /* sessionStorage unavailable */ }
+  }, []);
 
   useEffect(() => {
     setConsented(localStorage.getItem(CONSENT_KEY) === "1");
@@ -74,11 +89,38 @@ export default function Home() {
   }
 
   const mustChangePassword = me.passwordChangedAt === undefined;
+  const travelConsentAt = (me as unknown as { travelConsentAt?: number | null }).travelConsentAt;
+  const travelAckNeeded =
+    me.role !== "moderator" && me.passwordChangedAt !== undefined && (travelConsentAt == null);
 
   return (
     <>
       {mustChangePassword && (
         <ForcedPasswordChange />
+      )}
+      {!mustChangePassword && consented && installAsked && (
+        <InstallRequestModal
+          isIos={isIos()}
+          canInstall={showInstall}
+          onInstall={() => {
+            void installEvent.current?.prompt();
+            setInstallAsked(false);
+          }}
+          onDone={() => setInstallAsked(false)}
+        />
+      )}
+      {!mustChangePassword && consented && !installAsked && travelAckNeeded && (
+        <TravelDisclaimerModal
+          busy={ackBusy}
+          error={ackError}
+          onAck={() => {
+            setAckBusy(true);
+            setAckError(null);
+            ackTravel({ consent: true })
+              .catch((e: unknown) => setAckError(errMsg(e)))
+              .finally(() => setAckBusy(false));
+          }}
+        />
       )}
       {!consented && (
         <ConsentGate
@@ -150,9 +192,10 @@ export default function Home() {
           </>
         ))}
         <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-[var(--fog)]">
-          Location is recorded when you press CHECK IN, and — only with your consent — while
-          you travel off-site on shift. Raw coordinates are anonymized after the payroll
-          dispute window. No ads, no trackers.
+          Location is recorded when you press CHECK IN, and automatically while your shift clock
+          is running (never off shift, never during lunch or side missions) so your manager can
+          see travel between sites. Raw coordinates are anonymized after the payroll dispute
+          window. No ads, no trackers.
         </footer>
       </main>
     </>
@@ -175,10 +218,11 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
         <h2 id="consent-title" className="mb-3 text-lg font-bold text-[var(--paper)]">All work, no ads!</h2>
         <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
           J-Pay records your GPS location and time at your check-ins so your employer can run
-          payroll accurately. With your consent (a separate toggle in the app, off by default),
-          J-Pay also records coarse fixes while you are off-site on shift, so your manager can
-          see travel between sites. Retention follows your local labor statute; raw coordinates
-          are zeroed after the dispute window. Your data is never sold or used for advertising.
+          payroll accurately. While your shift clock is running it also records coarse fixes
+          so your manager can see travel between sites — never off shift, never during lunch
+          or side missions. A one-time disclaimer explains this the first time you open the app.
+          Raw coordinates are zeroed after the dispute window. Your data is never sold or used
+          for advertising.
         </p>
         <p className="mb-4 text-xs leading-relaxed text-[var(--fog)]">
           See full details in our{" "}
@@ -191,6 +235,93 @@ function ConsentGate({ onAccept }: { onAccept: () => void }) {
           className="btn-surgical btn-surgical-mint w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold"
         >
           I understand
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InstallRequestModal({
+  isIos,
+  canInstall,
+  onInstall,
+  onDone,
+}: {
+  isIos: boolean;
+  canInstall: boolean;
+  onInstall: () => void;
+  onDone: () => void;
+}) {
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6" role="dialog" aria-modal="true" aria-labelledby="install-title">
+      <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40">
+        <h2 id="install-title" ref={headingRef} tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Install J-Pay</h2>
+        {isIos ? (
+          <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
+            Add J-Pay to your Home Screen: tap the Share button in Safari, then
+            “Add to Home Screen”. You get one-tap check-ins and offline support.
+          </p>
+        ) : canInstall ? (
+          <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
+            Install J-Pay for one-tap check-ins, offline support and shift alerts.
+            No app store required.
+          </p>
+        ) : (
+          <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
+            Add J-Pay to your Home Screen from your browser menu (“Install app” /
+            “Add to Home Screen”) for one-tap check-ins and offline support.
+          </p>
+        )}
+        <div className="flex flex-col gap-2">
+          {canInstall && !isIos && (
+            <button onClick={onInstall} className="btn-surgical btn-surgical-mint min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold">
+              Install
+            </button>
+          )}
+          <button onClick={onDone} autoFocus={!canInstall || isIos} className="btn-surgical min-h-[44px] rounded-lg px-4 py-2.5 text-sm text-[var(--text-secondary)]">
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TravelDisclaimerModal({
+  busy,
+  error,
+  onAck,
+}: {
+  busy: boolean;
+  error: string | null;
+  onAck: () => void;
+}) {
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[85] grid place-items-center bg-[var(--ink)]/85 backdrop-blur-sm p-6" role="dialog" aria-modal="true" aria-labelledby="travel-disclaimer-title">
+      <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40">
+        <h2 id="travel-disclaimer-title" ref={headingRef} tabIndex={-1} className="mb-2 text-lg font-bold tracking-tight text-[var(--paper)] outline-none">Location while you travel</h2>
+        <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+          While your shift clock is running, J-Pay records coarse GPS positions so your
+          manager can see you travelling between sites. It is automatic — you don&apos;t
+          need to do anything.
+        </p>
+        <ul className="mb-4 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[var(--text-secondary)]">
+          <li>Only while your shift clock is running. Shift ended → no tracking.</li>
+          <li>Not during lunch, side missions or sick leave.</li>
+          <li>Only until you arrive at a site — inside a geofence nothing is recorded.</li>
+          <li>Raw route data is deleted after 90 days; distance and duration are kept for payroll evidence.</li>
+        </ul>
+        {error && <p role="alert" className="mb-2 text-sm text-[var(--danger)]">{error}</p>}
+        <button onClick={onAck} disabled={busy} autoFocus className="btn-surgical btn-surgical-mint min-h-[44px] w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
+          {busy ? "Saving…" : "Got it — I understand"}
         </button>
       </div>
     </div>

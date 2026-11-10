@@ -6,6 +6,10 @@ import type { RefObject } from "react";
 import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 
+/** Set when a forced first-login password change is saved; page.tsx reads it
+ * to request the one-time install popup. */
+export const PW_CHANGED_KEY = "jpay.pwJustChanged";
+
 type PasswordFormProps = {
   onSaved?: () => void;
   compact?: boolean;
@@ -105,7 +109,15 @@ export function ForcedPasswordChange() {
               You are signed in with a one-time code from your moderator. Choose a personal
               password to continue — you will only be asked once.
             </p>
-            <PasswordFields submitRef={submitRef} onSaved={() => setSaved(true)} />
+            <PasswordFields
+          submitRef={submitRef}
+          onSaved={() => {
+            try {
+              sessionStorage.setItem(PW_CHANGED_KEY, String(Date.now()));
+            } catch { /* sessionStorage unavailable — install popup simply won't arm */ }
+            setSaved(true);
+          }}
+        />
           </>
         ) : (
           <>

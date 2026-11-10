@@ -2,7 +2,7 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** This workspace (`J-pay`) — one fork per client per ADR-002
-**Version:** 1.5.0 (manager role + travel tracking — see R39–R42)
+**Version:** 1.6.0 (travel disclaimer + install-request flows — see R43)
 **Status:** Implemented — live in production (Supabase-authoritative; see ADR-004)
 
 ### Runtime Supersession (2026-11-10, ADR-004)
@@ -77,6 +77,7 @@ Read every runtime-specific clause as superseded:
 | R40 | §6/§10.2/§5.1/§9 | Travel tracking (owner 2026-11-10): on-shift, off-site-only, consent-gated `travelSegments` (server-decided geofence resolution in `travel.recordFix` — device-token verified, idempotency-deduped, sample-capped, impossible-travel/gps-gap flagged); raw `pathSamples` anonymised after `retentionDays` by the purge job; payroll unchanged (shift span already contains in-shift travel); manager + moderator visibility via `travel.forUser` / `manager.recentForCrew`; migration `0006_travel_tracking.sql` |
 | R41 | §6/§6.1/§10.2 | Moderator end-of-shift override (owner 2026-11-10 bonus): `shiftOverrides` table feeds shift derivation (latest row per `shiftKey`); mandatory ≥10-char reason; before-state preserved (`previousEndedAt`, `previousTotalMinutes`); sealed/payroll-finalized shifts REFUSE overrides; needsReview cleared via `moderator_override`; payroll reflects live (calcForEmployee reads shifts); migration `0007_shift_overrides.sql` |
 | R42 | §7/§5 | Role field-staff semantics (owner 2026-11-10): managers (promoted field staff) count as `employee|manager` for deactivation, device-token issuance, messaging recipients/broadcast, KPI crew, `users_queries.listEmployees`, and `logs.listMine` — a logging manager can now check in and see own logs. Demo personas unchanged |
+| R43 | §5.1/§9/§11 | Travel tracking consent model simplified (owner 2026-11-10): standing consent toggle REMOVED; automatic tracking while the shift clock is running, server-enforced phase pause (lunch / `quick side mission` / `feeling sick`) and no off-shift or post-shift fixes; one-time acknowledgment modal stands alone (`travelConsentAt`); new registrations see it right after forced first-login password change; one-time PWA install request follows the password change (iOS: Add-to-Home-Screen instructions). R40's toggle superseded (R40→R43); fix storage still requires `users.travelConsentAt` |
 
 ---
 
@@ -138,7 +139,7 @@ The architecture is designed around these limits explicitly:
 - One-way messaging to Moderator queue.
 - Web Push reminders + approval alerts.
 - **Offline mode (foreground-primary):** failed check-ins enqueue to an IndexedDB outbox. Foreground reconciliation — `visibilitychange`, the window `online` event, and the next successful mutation — flushes the outbox on ALL platforms (primary path, see §8); Background Sync is a Chromium-only bonus. Original client timestamps are preserved and flagged through `clientReportedTime` delta.
-- **Travel tracking (v1.5.0, owner 2026-11-10):** opt-in toggle in the check-in card — consent stored as `users.travelConsentAt`; without it nothing is recorded. While an employee has an **open shift and is outside every assigned geofence**, the app posts coarse GPS fixes (~15s, `watchPosition`) to `travel.recordFix`, which verifies the device token and decides **server-side** whether the employee is on-site (fix dropped) or travelling (fix appended to the open `travelSegments` leg). Inside 15s/25m of the previous fix nothing is stored. A visible live indicator shows while sharing. Fixes are evidence for managers/moderators and payroll disputes — they never add pay (the shift span already contains in-shift travel).
+- **Travel tracking (v1.6.0, owner 2026-11-10):** automatic while the shift clock is running — never off shift, never during lunch / quick side missions / sick leave. A **one-time disclaimer** (fixed modal, shown on first app open for any shift-working user without `users.travelConsentAt`) is acknowledged to enable recording; newly registered employees see it right after the forced first-login password change. The server enforces the phase gate too (latest log in `lunch`/`quick side mission`/`feeling sick` → fixes refused). While on-shift off-site, the app posts coarse GPS fixes (~15s, `watchPosition`) to `travel.recordFix`, which verifies the device token and decides **server-side** whether the employee is on-site (fix dropped) or travelling (fix appended to the open `travelSegments` leg). Inside 15s/25m of the previous fix nothing is stored. Fixes are evidence for managers/moderators and payroll disputes — they never add pay (the shift span already contains in-shift travel). No standing UI in the check-in card.
 
 ### 5.2 Moderator Interface (Desktop-Optimized)
 
@@ -401,7 +402,7 @@ Derivation rules (v1.1):
   - Messages: archived rows honor an optional per-row `messages.retentionDays` override; absent it, message retention defaults follow Open Questions 1–2.
 - **Retention enforcement mechanism (v1.2):** retention is executed, not aspirational — a **native Convex cron** (`convex/crons.ts` → internal purge mutation) runs daily, zeroes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
 - **Worker rights:** access/export request procedure defined (self-serve CSV of own logs; includes their push subscription endpoints — these are personal data under Art. 4(1)).
-- **Minimization:** no third-party ad/analytics trackers; location recorded at explicit badge events, plus — only with the employee's explicit opt-in (`travelConsentAt`) — on-shift off-site travel fixes. **Travel tracking cannot run while the app is closed.** A PWA/service worker cannot receive continuous OS-level background geolocation; guaranteed background tracking requires a native wrapper and is out of scope. Fixes while inside an assigned geofence are discarded server-side.
+- **Minimization:** no third-party ad/analytics trackers; location recorded at explicit badge events, plus automatic on-shift fixes once the employee acknowledges the one-time disclaimer (`travelConsentAt`) — never off shift, never during lunch / quick side missions / sick leave (enforced client- and server-side). **Travel tracking cannot run while the app is closed.** A PWA/service worker cannot receive continuous OS-level background geolocation; guaranteed background tracking requires a native wrapper and is out of scope. Fixes while inside an assigned geofence are discarded server-side. First-login UX additions: forced password change → one-time install request popup (or iOS Add-to-Home-Screen instructions) → then the travel disclaimer. Both are one-time and dismissible.
 
 ---
 

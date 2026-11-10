@@ -23,6 +23,12 @@ const MAX_SAMPLES_PER_SEGMENT = 300;
 const GPS_GAP_MS = 5 * 60 * 1000;
 const GPS_GAP_METERS = 500;
 
+// Statuses in which the employee is not working/travelling (substates to the
+// open shift). The server — like the shift engine — treats the LATEST log as
+// the truth for phase; holding one of these pauses travel tracking even if a
+// client keeps streaming fixes.
+const PAUSED_STATUSES = new Set(["lunch", "quick side mission", "feeling sick"]);
+
 type PathSample = { lat: number; lng: number; t: number; s?: number };
 
 /**
@@ -101,6 +107,17 @@ export const recordFix = mutation({
     // Consent gate — nothing is written without it.
     if (!user.travelConsentAt) {
       return { status: "consent_required" as const };
+    }
+
+    // Phase gate — lunch / side mission / sick leave are never tracked.
+    const lastLogs = await ctx.db
+      .query("logs")
+      .withIndex("by_user_time", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(1);
+    const lastStatus = lastLogs[0]?.status;
+    if (lastStatus && PAUSED_STATUSES.has(lastStatus)) {
+      return { status: "shift_break" as const };
     }
 
     const skewMs = serverClockSkewMs(args.clientReportedTime, undefined, Date.now());

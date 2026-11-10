@@ -19,17 +19,19 @@ export default function PrivacyPage() {
           check-in.
         </p>
         <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
-          <strong>Optional travel tracking (off by default).</strong> With your
-          explicit consent — a toggle in the check-in screen, stored as
-          users.travelConsentAt — J-Pay records coarse GPS fixes while you have
-          an open shift and are <em>outside every site you are assigned to</em>.
-          Your manager sees your position and travel status only for those
-          shifts and sites. No fixes are recorded inside a geofence, outside a
-          shift, or without your consent; you can revoke it at any time in the
-          check-in screen. Raw route data (path samples) is deleted after the
-          retention window; aggregate distance and duration are kept for
-          payroll evidence. Tracking runs only while the app is open — J-Pay
-          cannot track you with the app closed.
+          <strong>Travel tracking (automatic on shift).</strong> A one-time
+          disclaimer is shown the first time you use the app after your
+          password is set up; acknowledging it (stored as
+          users.travelConsentAt) is what enables this feature. While your shift
+          clock is running J-Pay records coarse GPS fixes so your manager can
+          see you travelling between sites. Tracking stops entirely
+          <strong> when your shift ends</strong> and is never active during
+          <strong> lunch, side missions or sick leave</strong>. Fixes are
+          dropped server-side inside any assigned geofence; fix storage requires
+          the disclaimer acknowledgment. Raw route data (path samples) is deleted
+          after the retention window; aggregate distance and duration are kept
+          for payroll evidence. Tracking runs only while the app is open on
+          shift — J-Pay cannot track you with the app closed.
         </p>
         <h2 className="mt-6 mb-2 text-sm font-mono uppercase tracking-wider text-[var(--fog)]">Retention</h2>
         <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">

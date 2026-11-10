@@ -79,12 +79,9 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [userPickedSite, setUserPickedSite] = useState(false);
   const me = useQuery(api.users_queries.me, isLive ? {} : "skip");
   const recordFix = useMutation(api.travel.recordFix);
-  const setTravelConsent = useMutation(api.travel.setConsent);
-  const [fixLive, setFixLive] = useState(false);
   const lastFixSentRef = useRef(0);
   const serverModeRef = useRef<"on_site" | "traveling">("on_site");
   const consentAt = (me as { travelConsentAt?: number | null } | null | undefined)?.travelConsentAt ?? undefined;
-  const onShift = phase !== "off";
 
   // Live clock for the elapsed timer.
   useEffect(() => {
@@ -139,7 +136,10 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   // streams high-frequency fixes while off-site. Stops with the shift/consent.
   useEffect(() => {
     if (!isLive) return;
-    if (!onShift || consentAt === undefined || consentAt === null) return;
+    // Track ONLY while the shift clock is running (arrived/checkpoint).
+    // Lunch, quick side missions and sick leave (PAUSED) never stream fixes;
+    // shift end (TERMINAL) never does either. Server enforces the same rule.
+    if (phase !== "on" || consentAt === undefined || consentAt === null) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
     const send = (position: GeolocationPosition) => {
@@ -178,12 +178,10 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
       maximumAge: 10_000,
       timeout: 15_000,
     });
-    setFixLive(true);
     return () => {
       navigator.geolocation.clearWatch(id);
-      setFixLive(false);
     };
-  }, [isLive, onShift, consentAt, recordFix]);
+  }, [isLive, phase, consentAt, recordFix]);
 
   const chips: Status[] = useMemo(() => {
     if (phase === "on") return ["lunch", "quick side mission", "checkpoint", "feeling sick"];
@@ -231,18 +229,10 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         siteName={siteNameOf(last?.siteId)}
       />
 
-      {/* ── Travel tracking consent + live indicator (on-shift, off-site, opt-in) ── */}
-      {isLive && (
-        <TravelConsentRow
-          loaded={me !== undefined}
-          onShift={onShift}
-          consented={consentAt !== undefined && consentAt !== null}
-          fixLive={fixLive}
-          onConsent={(consent) => {
-            void setTravelConsent({ consent }).catch(() => {});
-          }}
-        />
-      )}
+      {/* Travel tracking: no standing UI. Fixes stream automatically while the
+          shift clock is running (phase === "on") once the one-time disclaimer
+          (see page.tsx) is acknowledged; server drops them in lunch / side
+          missions / sick leave and when the clock is off. */}
 
       {/* ── Site picker (recessed bay) ────────────────────────────── */}
       <SiteSelector
@@ -687,65 +677,5 @@ function PersonaSubmit({
       <span className="btn-label">{`${label} (as persona)`}</span>
       <span className="btn-spinner" aria-hidden="true" />
     </button>
-  );
-}
-
-
-function TravelConsentRow({
-  loaded,
-  onShift,
-  consented,
-  fixLive,
-  onConsent,
-}: {
-  loaded: boolean;
-  onShift: boolean;
-  consented: boolean;
-  fixLive: boolean;
-  onConsent: (consent: boolean) => void;
-}) {
-  if (!loaded) {
-    return (
-      <div className="h-11 animate-pulse rounded-lg border border-[var(--line)] bg-[var(--panel-2)]" aria-hidden="true" />
-    );
-  }
-  if (!consented) {
-    return (
-      <div className="card-subpanel flex flex-wrap items-center justify-between gap-2 p-3" role="group" aria-label="Travel tracking consent">
-        <p className="max-w-xs text-xs leading-snug text-[var(--text-secondary)]">
-          Share your live location <strong>only while on shift and off-site</strong>? Your manager
-          sees you travelling between sites. Raw route data is anonymised after 90 days.
-        </p>
-        <button
-          type="button"
-          onClick={() => onConsent(true)}
-          className="btn-surgical btn-surgical-mint min-h-[44px] rounded-lg px-3.5 py-2 text-xs font-semibold"
-        >
-          Enable travel tracking
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--mint)]/30 bg-[var(--mint)]/5 px-3 py-2" role="status">
-      <p className="flex items-center gap-2 text-xs font-medium text-[var(--paper)]">
-        <span
-          aria-hidden="true"
-          className={`inline-block h-2.5 w-2.5 rounded-full ${fixLive ? "animate-pulse bg-[var(--mint)]" : "bg-[var(--fog)]"}`}
-        />
-        {fixLive
-          ? "Live — sharing travel with your manager (on-shift, off-site only)"
-          : onShift
-            ? "Travel tracking armed — shares when you leave a site"
-            : "Travel tracking consented — resumes when your shift starts"}
-      </p>
-      <button
-        type="button"
-        onClick={() => onConsent(false)}
-        className="min-h-[44px] px-2 text-xs text-[var(--fog)] underline hover:text-[var(--paper)]"
-      >
-        Stop
-      </button>
-    </div>
   );
 }

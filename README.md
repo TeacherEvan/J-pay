@@ -6,7 +6,7 @@ ID codes, manage site geofences, and derive shifts for payroll. Built on Next.js
 Supabase (Postgres + Auth — no third-party auth vendor) + a Node runtime that executes
 the Convex-shaped handlers in `convex/*.ts` (see [ADR-004](docs/adr/ADR-004-supabase-authoritative-backend.md)) + Serwist.
 
-The TRD (`j-pay.md`, **v1.5.0**) is the contract; its §6 schema is the source of truth. Docs index: [`docs/index.md`](docs/index.md).
+The TRD (`j-pay.md`, **v1.6.0**) is the contract; its §6 schema is the source of truth. Docs index: [`docs/index.md`](docs/index.md).
 
 ## Quick start (local)
 
