@@ -2,33 +2,40 @@
 
 Field-workforce time tracking: employees check in with GPS-verified, server-stamped
 timestamps; moderators audit locations live, provision employee accounts with one-time
-ID codes, manage site geofences, and derive shifts for payroll. Built on Next.js 15 +
-Convex + Convex Auth (password provider — no third-party auth vendor) + Serwist.
+ID codes, manage site geofences, and derive shifts for payroll. Built on Next.js 16 +
+Supabase (Postgres + Auth — no third-party auth vendor) + a Node runtime that executes
+the Convex-shaped handlers in `convex/*.ts` (see [ADR-004](docs/adr/ADR-004-supabase-authoritative-backend.md)) + Serwist.
 
-The TRD (`j-pay.md`, **v1.3.0**) is the contract; its §6 schema is the source of truth. Docs index: [`docs/index.md`](docs/index.md).
+The TRD (`j-pay.md`, **v1.4.0**) is the contract; its §6 schema is the source of truth. Docs index: [`docs/index.md`](docs/index.md).
 
 ## Quick start (local)
 
 ```bash
 npm install
-npx convex dev        # login, create a project; regenerates convex/_generated
-npx convex env set DEVICE_TOKEN_SECRET "$(openssl rand -hex 32)"
-# dashboard → env vars: JWT_PRIVATE_KEY / JWKS via `node generateKeys.mjs` pattern (see .env.example)
+# .env.local — required (copy from the deployment or create a project):
+#   NEXT_PUBLIC_SUPABASE_URL=...
+#   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...        (or *_ANON_KEY)
+#   SUPABASE_SERVICE_ROLE_KEY=...                   # server-only, RLS bypass
+#   DEVICE_TOKEN_SECRET=$(openssl rand -hex 32)
 npm run dev           # http://localhost:3000
 ```
 
-Bootstrap the first moderator (one-time):
+The database schema lives in `supabase/migrations/` (`0001_init.sql` is the baseline,
+`0002` the logs-idempotency unique index, `0003` the pg_cron retention jobs). Apply with
+`supabase db push` or the dashboard. The Convex deployment is retired — there is nothing
+to `npx convex dev` against.
+
+Bootstrap the first moderator (one-time, uses the service-role key on this machine):
 
 ```bash
-npx convex env set BOOTSTRAP_KEY "<random>"
-npx convex run users:bootstrapFirstModerator '{"key":"<random>","email":"you@example.com"}'
+node --env-file=.env.local scripts/create-moderator.mjs --email you@example.com --name "Your Name"
 ```
 
-Sign in as moderator at `/moderator` → create sites, provision employees (one-time
-`JP-XXXXXXXXXX` ID code), assign employee↔site. Employees sign in with email + ID code,
-then CHECK IN. When `DEMO_MODE=1` is set on the Convex deployment, the login screen also
-offers **"Enter demo preview"** — a throwaway anonymous employee session with demo sites
-(purged after 7 days); real sign-in is unaffected.
+The script prints a one-time password exactly once; the app forces a password change on
+first sign-in. Sign in as moderator at `/moderator` → create sites, provision employees
+(one-time `JP-XXXXXXXXXX` ID code), assign employee↔site. Employees sign in with email +
+ID code, then CHECK IN. When `DEMO_MODE=1` in the deployment env, the login screen also
+offers **"Enter demo preview"**.
 
 > **Port note:** `npm run dev` guards its port — if :3000 is already taken by another
 > app (e.g. a sibling project), J-pay **refuses to start** instead of silently drifting
@@ -37,13 +44,16 @@ offers **"Enter demo preview"** — a throwaway anonymous employee session with 
 
 ## Fork model — one client per deployment (`jpay-<client>`)
 
-Each client company gets an isolated fork + Convex deployment:
+Each client company gets an isolated fork + Supabase project:
 
 1. Fork/copy this repo → `jpay-<client>`. Update `name` in `package.json` and `manifest.webmanifest`.
-2. Create a NEW Convex project during that fork's `npx convex dev` (never share deployments).
-3. Set env vars (DEVICE_TOKEN_SECRET, BOOTSTRAP_KEY, JWT keys) per deployment.
-4. Bootstrap that company's moderator, create their sites, provision their employees.
-5. Deploy frontend to Vercel (`vercel`), env `NEXT_PUBLIC_CONVEX_URL` = the fork's Convex URL.
+2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/0001..0003`.
+3. Set env vars per deployment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `DEVICE_TOKEN_SECRET`, `CRON_SECRET` (+ `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`,
+   `MASTER_PASSWORD`, vapid keys if push is wanted).
+4. Create that company's moderator with `scripts/create-moderator.mjs` (forced password change on first sign-in).
+5. Verify `0003` retention jobs registered (`select jobname, schedule from cron.job;`) and dry-run each once.
+6. Deploy frontend to Vercel (`vercel`) — same secrets in the project's env settings.
 
 ## Gates
 
@@ -51,7 +61,7 @@ Each client company gets an isolated fork + Convex deployment:
 npm test                               # shift-engine grammar (§6.1 rules 1–9) + CSV guard
 python3 scripts/check_consistency.py   # TRD internal consistency
 python3 scripts/check_diagrams.py      # mermaid structural gate
-npm run typecheck                      # tsc --strict over app + convex
+npm run typecheck                      # tsc --strict over app + convex (handlers)
 ```
 
 ## Included features
@@ -65,8 +75,10 @@ npm run typecheck                      # tsc --strict over app + convex
   skew/geofence/travel flags, needs-review queue (resolve/recompute), payroll
   by day with flagged-shift exclusion, hourly-rate override, CSV log export
   (formula-injection sanitized), direct reply + broadcast messaging.
-- Backend: §6 schema verbatim, row-scoped authz everywhere, HMAC device tokens,
-  idempotency dedupe, impossible-travel flag, daily coordinate-purge cron.
+- Backend: §6 shapes verbatim (schema-parity gate across `convex/schema.ts`,
+  `supabase/migrations/`, and the adapter), row-scoped authz everywhere, HMAC device
+  tokens, idempotency dedupe + unique index, impossible-travel flag, daily
+  coordinate-purge via pg_cron → `/api/internal/cron`.
 
 ## Known preview limitations (polish phase pending)
 

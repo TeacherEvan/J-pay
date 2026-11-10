@@ -2,8 +2,34 @@
 
 **Project:** PWA Payroll & Geolocation Logger
 **Repository:** This workspace (`J-pay`) — one fork per client per ADR-002
-**Version:** 1.3.0 (Next 16.3.2 + Serwist 10-preview upgrade — D2 closed)
-**Status:** Implemented — working preview (see docs/notes/)
+**Version:** 1.4.0 (runtime supersession — see ADR-004)
+**Status:** Implemented — live in production (Supabase-authoritative; see ADR-004)
+
+### Runtime Supersession (2026-11-10, ADR-004)
+
+The execution backend described throughout this TRD — Convex BaaS with client-direct
+`ConvexReactClient`, Convex Auth, and native `convex/crons.ts` for retention — was
+**superseded on 2026-10-28** by Supabase Postgres + Supabase Auth executing this TRD's
+§6 schema and `convex/*.ts` business logic verbatim in Node
+(`src/lib/backend/runtime.ts`). See `docs/adr/ADR-004-supabase-authoritative-backend.md`
+and `docs/audits/surgical-audit-2026-11-10.md`.
+
+Read every runtime-specific clause as superseded:
+
+- **R9 / R18 / §9 retention:** runs via `pg_cron` → `POST /api/internal/cron?job=<name>` →
+  the same purge handlers. Execution is now independent of any Convex deployment
+  (migration `supabase/migrations/0003_retention_crons.sql`).
+- **R16 / R20 / R22 / §3 stack rows:** authentication is Supabase Auth (email + password).
+  Convex Auth (removed 2026-08-23 — this TRD's own decision) and the earlier
+  third-party-vendor integration are both gone. The only server-side door to data is
+  `POST /api/backend/call`; RLS is default-deny with zero policies. Clients never
+  connect directly to any BaaS.
+- **§6 schema shapes, §6.1 grammar, ADR-003's pure module, and all behavioral semantics
+  are UNCHANGED and binding.** `scripts/test-schema-parity.mjs` (npm test) enforces
+  shape parity across the §6 block, `supabase/migrations/`, and
+  `src/lib/backend/db.ts` (`INDEX_FIELDS`).
+- **§10.2 ERD unchanged.** Deployment row: Vercel; env per README (no
+  `NEXT_PUBLIC_CONVEX_URL`); fork model is one Supabase project per client (ADR-002).
 
 ### Revision Log (v1.1 → v1.2)
 
