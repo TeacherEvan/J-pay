@@ -222,7 +222,7 @@ export const overridableShifts = query({
         totalMinutes: shift.totalMinutes,
         needsReview: shift.needsReview,
         reviewReason: shift.reviewReason,
-        hasOverride: shift.reviewReason === "moderator_override",
+        hasOverride: (shift.reviewReason ?? "").startsWith("moderator_override"),
       });
     }
     out.sort((a, b) => b.startedAt - a.startedAt);

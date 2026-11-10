@@ -19,16 +19,32 @@ function formatElapsed(ms: number): string {
 /** Today's cleared minutes + pay, for the shift-card corner (live only). */
 function TodayStrip() {
   const me = useQuery(api.users_queries.me);
+  // Re-anchor at local midnight so "Today" never means yesterday after a day rollover.
+  const [dayKey, setDayKey] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const t = setInterval(() => {
+      setDayKey((prev) => {
+        const next = new Date().toDateString();
+        return next !== prev ? next : prev;
+      });
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
   const range = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    return { fromMs: d.getTime(), toMs: d.getTime() + 36 * 3600 * 1000 };
-  }, []);
+    return { fromMs: d.getTime(), toMs: d.getTime() + 24 * 3600 * 1000 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
   const pay = useQuery(
     api.payroll.calcForEmployee,
     me ? { userId: me._id, fromMs: range.fromMs, toMs: range.toMs } : "skip"
   );
-  if (!pay || pay.totals.payableMinutes === 0) return null;
+  if (pay === undefined) {
+    // Reserve the line so the card doesn't jump when pay arrives (CLS).
+    return <p className="tnum min-h-[1.25rem] text-xs text-[var(--fog)]" aria-hidden="true">&nbsp;</p>;
+  }
+  if (pay.totals.payableMinutes === 0) return <p className="tnum min-h-[1.25rem] text-xs text-[var(--fog)]">Today 0h · <span className="text-[var(--paper)] font-medium">{formatCurrency(0, pay.currency, pay.locale)}</span></p>;
   return (
     <p className="tnum text-xs text-[var(--fog)]">
       Today {formatMinutesShort(pay.totals.payableMinutes)} ·{" "}

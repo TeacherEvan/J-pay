@@ -254,7 +254,7 @@ export const myCrew = query({
 export const listManagers = query({
   args: {},
   handler: async (ctx) => {
-    const modId = await maybeCurrentUserId(ctx as never);
+    const modId = await maybeCurrentUserId(ctx);
     if (!modId) return [];
     const mod = await ctx.db.get(modId);
     if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];

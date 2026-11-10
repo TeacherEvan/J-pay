@@ -17,5 +17,11 @@ export function usePagination<T>(items: T[], pageSize: number) {
     [items, clamped, pageSize],
   );
 
-  return { page: clamped, pageCount, pageItems, setPage, total: items.length };
+  const setPageClamped = (p: number | ((prev: number) => number)) =>
+    setPage((prev) => {
+      const target = typeof p === "function" ? p(prev) : p;
+      return Math.max(0, Math.min(target, pageCount - 1));
+    });
+
+  return { page: clamped, pageCount, pageItems, setPage: setPageClamped, total: items.length };
 }

@@ -33,11 +33,23 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
+  // Re-anchor at local midnight so an open panel never drifts stale across days.
+  const dayKey = new Date().toDateString();
   const fromMs = useMemo(
-    () => Date.now() - range * 24 * 3600 * 1000,
-    [range],
+    () => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() - (range - 1) * 24 * 3600 * 1000;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [range, dayKey],
   );
-  const toMs = useMemo(() => Date.now() + 3600_000, [range]);
+  const toMs = useMemo(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
   const payrollArgs = useMemo(
     () => (userId ? { userId, fromMs, toMs } : "skip"),
     [userId, fromMs, toMs],
@@ -62,7 +74,8 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Defer revocation — revoking synchronously can cancel the download before it starts.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   return (

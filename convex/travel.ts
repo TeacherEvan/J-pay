@@ -133,7 +133,7 @@ export const recordFix = mutation({
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(1);
+      .take(6);
     const lastStatus = lastLogs[0]?.status;
     if (lastStatus && PAUSED_STATUSES.has(lastStatus)) {
       return { status: "shift_break" as const };
@@ -241,8 +241,15 @@ export const recordFix = mutation({
     const legSeconds = Math.max(1, legMs / 1000);
     const speedMps = legMeters / legSeconds;
     const impossible = speedMps > (IMPOSSIBLE_TRAVEL_KMH * 1000) / 3600;
+    // P3: a pause logged since the last stored sample explains the silence —
+    // don't flag gps_gap for an hour spent on lunch.
+    const pausedSinceLastSample =
+      last !== undefined &&
+      lastLogs.some(
+        (l) => PAUSED_STATUSES.has(l.status) && (l.clientReportedTime ?? l._creationTime) > last.t,
+      );
     const gpsGap = Boolean(
-      last && legMs > GPS_GAP_MS && legMeters > GPS_GAP_METERS
+      last && legMs > GPS_GAP_MS && legMeters > GPS_GAP_METERS && !pausedSinceLastSample
     );
 
     let needsReview = openSegment.needsReview;

@@ -45,6 +45,8 @@ export default function ManagerPage() {
   const managedSites = useQuery(api.manager.listManagedSites, {}) as SiteRow[] | undefined;
   const travel = useQuery(api.travel.recentForCrew, { limit: 25 }) as TravelRow[] | undefined;
   const userLocale = useUserLocale();
+  // Mount-stable clock for elapsed-time displays (never re-reads Date.now() mid-render).
+  const [nowMs] = useState(() => Date.now());
   const [view, setView] = useState<ViewId>("live");
   const travelPages = usePagination(travel ?? [], 3);
   const crewTable = usePagination(crew ?? [], 6);
@@ -133,7 +135,7 @@ export default function ManagerPage() {
               )}
               <ul className="flex flex-col divide-y divide-[var(--line)]">
                 {travelPages.pageItems.map((leg) => {
-                  const end = leg.arrivedAt ?? Date.now();
+                  const end = leg.arrivedAt ?? nowMs;
                   const mins = Math.max(0, Math.round((end - leg.departedAt) / 60000));
                   const km = (leg.distanceMeters / 1000).toFixed(1);
                   const open = leg.arrivedAt === undefined;
@@ -151,7 +153,7 @@ export default function ManagerPage() {
                         )}
                       </div>
                       <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-[var(--text-secondary)]">
-                        {open && <span className="font-semibold text-[var(--amber,#fbbf24)]">in transit</span>}
+                        {open && <span className="font-semibold text-[var(--hivis)]">in transit</span>}
                         <span>{formatDateTime(leg.departedAt, userLocale)}{leg.arrivedAt ? ` → ${formatDateTime(leg.arrivedAt, userLocale)}` : ""}</span>
                         <span>{mins} min</span>
                         <span>{km} km</span>

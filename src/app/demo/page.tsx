@@ -159,7 +159,11 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
                   aria-busy={busyId === s._id}
                   onClick={() => {
                     setBusyId(s._id);
-                    if (s.userId) recompute({ userId: s.userId }).finally(() => setBusyId(null));
+                    if (s.userId) {
+                      recompute({ userId: s.userId }).finally(() => setBusyId(null));
+                    } else {
+                      setBusyId(null); // P3: never leave the busy state stuck on a falsy userId
+                    }
                   }}
                   disabled={busyId === s._id}
                   className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-[var(--paper)]"
@@ -302,7 +306,7 @@ function ExportPanel() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
       setMessage(`Exported ${out.filename}.`);
     } catch (e) {
       setMessage(errMsg(e));

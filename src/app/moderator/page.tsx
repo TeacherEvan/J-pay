@@ -126,7 +126,7 @@ function ModeratorConsole() {
         )}
 
         {view === "crew" && (
-          <CrewView employees={employees ?? []} sites={sites ?? []} />
+          <CrewView employees={employees ?? []} loading={employees === undefined} sites={sites ?? []} />
         )}
 
         {view === "access" && (
@@ -170,9 +170,11 @@ function ModeratorConsole() {
 
 function CrewView({
   employees,
+  loading,
   sites,
 }: {
   employees: any[];
+  loading?: boolean;
   sites: { _id: string; name: string }[];
 }) {
   const userLocale = useUserLocale();
@@ -184,7 +186,7 @@ function CrewView({
   return (
     <div role="tabpanel" id="tabpanel-crew" aria-labelledby="tab-crew" aria-label="Crew" className="h-full min-h-0">
       <ConsoleWindow
-        title={`Employees (${employees.length})`}
+        title={loading ? "Employees (…)" : `Employees (${employees.length})`}
         className="h-full"
         bodyClassName="flex h-full min-h-0 flex-col p-2 sm:p-3"
       >
@@ -505,9 +507,6 @@ function ProvisionPanel() {
                 ? await fn({ name, email, orgId: orgId ?? undefined } as { name: string; email: string })
                 : await fn({ name, email })
             );
-            if (role === "employee" && typeof window !== "undefined") {
-              (window as unknown as { __JPAY_LAST_EMPLOYEE_EMAIL?: string }).__JPAY_LAST_EMPLOYEE_EMAIL = email;
-            }
             setName("");
             setEmail("");
           } catch (e) {
@@ -672,7 +671,7 @@ function ManagersPanel({
           className="input-surgical min-w-0 flex-1 px-3 py-2 text-xs">
           <option value="">Employee to promote…</option>
           {promotable.map((e) => (
-            <option key={e._id} value={e._id}>{e.name ?? e.email}{e.role === "manager" ? " (manager)" : ""}</option>
+            <option key={e._id} value={e._id}>{e.name ?? e.email}</option>
           ))}
         </select>
         <button
@@ -923,7 +922,7 @@ function ShiftOverridePanel() {
                   {row.endedAt ? formatDateTime(row.endedAt, userLocale) : "open"}
                 </span>
                 {row.needsReview && (
-                  <span className="ml-2 rounded-full border border-[var(--amber,#fbbf24)]/40 px-1.5 py-0.5 text-xs text-[var(--amber,#fbbf24)]">
+                  <span className="ml-2 rounded-full border border-[var(--hivis)]/40 px-1.5 py-0.5 text-xs text-[var(--hivis)]">
                     {row.hasOverride ? "overridden" : "needs review"}
                   </span>
                 )}
@@ -1036,7 +1035,7 @@ function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: string 
           (err) => setLocaleError(errMsg(err))
         )
       }
-      aria-label={localeError ? `Locale for ${userId} — ${localeError}` : `Locale for ${userId}`}
+      aria-label={localeError ? `Set locale (current saved — ${localeError})` : "Set locale"}
       title={localeError ?? undefined}
       className="input-surgical px-2 py-1.5 text-xs"
     >
