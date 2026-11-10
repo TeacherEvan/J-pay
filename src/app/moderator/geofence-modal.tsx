@@ -32,6 +32,7 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const [L, setL] = useState<typeof LType | null>(null);
+  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -83,9 +84,13 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
 
   useEffect(() => {
     let cancelled = false;
-    import("leaflet").then((mod) => {
-      if (!cancelled) setL((mod.default ?? mod) as typeof LType);
-    });
+    import("leaflet")
+      .then((mod) => {
+        if (!cancelled) setL((mod.default ?? mod) as typeof LType);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -147,12 +152,18 @@ export function GeofenceModal({ fix, onClose }: { fix: GeofenceFix; onClose: () 
             Close
           </button>
         </div>
-        <div
-          ref={containerRef}
-          className="h-64 w-full overflow-hidden rounded-md border border-[var(--line)] bg-[var(--panel-2)]"
-          data-focus-skip="true"
-          tabIndex={-1}
-        />
+        {mapError ? (
+          <div className="flex h-64 w-full items-center justify-center rounded-md border border-[var(--line)] bg-[var(--panel-2)] p-4 text-sm text-[var(--fog)]">
+            Map unavailable — check your connection.
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            className="h-64 w-full overflow-hidden rounded-md border border-[var(--line)] bg-[var(--panel-2)]"
+            data-focus-skip="true"
+            tabIndex={-1}
+          />
+        )}
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-[var(--text-secondary)]">
           <dt className="uppercase tracking-wider font-mono text-xs text-[var(--fog)]">Site</dt>
           <dd className="text-[var(--paper)]">{fix.siteName}</dd>

@@ -23,6 +23,7 @@ export function SiteMapPicker({
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
   const [L, setL] = useState<typeof LType | null>(null);
+  const [mapError, setMapError] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -31,9 +32,13 @@ export function SiteMapPicker({
 
   useEffect(() => {
     let cancelled = false;
-    import("leaflet").then((mod) => {
-      if (!cancelled) setL((mod.default ?? mod) as typeof LType);
-    });
+    import("leaflet")
+      .then((mod) => {
+        if (!cancelled) setL((mod.default ?? mod) as typeof LType);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError(true);
+      });
     return () => {
       cancelled = true;
       if (debounce.current) clearTimeout(debounce.current);
@@ -122,7 +127,13 @@ export function SiteMapPicker({
         )}
         {searching && <span className="absolute right-3.5 top-2.5 text-xs text-[var(--fog)]">…</span>}
       </div>
-      <div ref={containerRef} className="h-32 w-full flex-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)] md:h-full md:min-h-0 md:flex-1" />
+      {mapError ? (
+        <div className="flex h-32 w-full flex-none items-center justify-center overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)] p-4 text-sm text-[var(--fog)] md:h-full md:min-h-0 md:flex-1">
+          Map unavailable — check your connection.
+        </div>
+      ) : (
+        <div ref={containerRef} className="h-32 w-full flex-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)] md:h-full md:min-h-0 md:flex-1" />
+      )}
       <div className="flex flex-wrap items-center gap-2.5 text-xs">
         <button
           type="button"

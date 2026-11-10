@@ -81,6 +81,7 @@ export function ManagerMap() {
   const managedSites = useQuery(api.manager.listManagedSites, {}) as ManagedSite[] | undefined;
   const userLocale = useUserLocale();
   const [L, setL] = useState<typeof LType | null>(null);
+  const [mapError, setMapError] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const layerRef = useRef<LType.LayerGroup | null>(null);
@@ -90,9 +91,13 @@ export function ManagerMap() {
   // Leaflet is client-only; import after mount (same pattern as GeofenceModal).
   useEffect(() => {
     let cancelled = false;
-    import("leaflet").then((mod) => {
-      if (!cancelled) setL((mod.default ?? mod) as typeof LType);
-    });
+    import("leaflet")
+      .then((mod) => {
+        if (!cancelled) setL((mod.default ?? mod) as typeof LType);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -249,12 +254,18 @@ export function ManagerMap() {
         </>
       }
     >
-      <div
-        ref={containerRef}
-        role="application"
-        aria-label="Map of crew assigned to your sites currently on shift"
-        className="h-full min-h-[160px] w-full flex-1 overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--panel-2)]"
-      />
+      {mapError ? (
+        <div className="flex h-full min-h-[160px] w-full flex-1 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--panel-2)] p-4 text-sm text-[var(--fog)]">
+          Map unavailable — check your connection and refresh.
+        </div>
+      ) : (
+        <div
+          ref={containerRef}
+          role="application"
+          aria-label="Map of crew assigned to your sites currently on shift"
+          className="h-full min-h-[160px] w-full flex-1 overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--panel-2)]"
+        />
+      )}
 
       {rows !== undefined && rows.length === 0 && (
         <p className="flex-none text-xs text-[var(--fog)]">No crew on shift right now.</p>
