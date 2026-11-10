@@ -317,3 +317,19 @@ Gates on the tip: `npm test` green (95 + 6 + 4 new), `tsc --noEmit` clean, `chec
 - **[lead, unverified]** 1 Hz `ShiftTimer` coupling into `check-in-card.tsx` re-render churn on low-end devices — profile before refactoring.
 
 **Explicitly not done (in order):** R2 PostgREST predicate pushdown + unique `logs(userId, idempotencyKey)` index (migration `0002`); P1-2 transaction/`rpc` write-set for punch+derivation; **P1-4 retention via `pg_cron` in `0002_crons.sql`** (needs production `pg_cron` inventory to close — nothing in this repo can prove it done); R3-full needsReview-flagging on derivation failure (needs the integration lane, MVTH #3); **ADR-004** (Supabase-authoritative cutover) + README/TRD/AGENTS sync (docs still describe Convex+Convex Auth as live); **deploy verification** — `main` is 4 commits ahead of `origin/main`, nothing has shipped to production (`j-pay.vercel.app` still serves `9a11f35` with the dead gate); pushing is the owner's call, and the redeploy order is server-first (backend route changes ship in the same build, so a single redeploy suffices here), then one round-trip per role against prod.
+
+---
+
+## Phase 2 Addendum (same day, latest) — delivered and deployed
+
+Delivered on `main` after the Phase 1 push (all verified live in production at `https://j-pay.vercel.app`):
+
+| Commit | Finding | What landed | Proof |
+| :--- | :--- | :--- | :--- |
+| `ea1fc4c` | **P1-1** full-table `loadAll` per query | `eq/lt/lte/gt/gte` index constraints, `ORDER BY`, `LIMIT` now execute in Postgres; `unique()` uses `LIMIT 2`; 5k-entry LRU on the uuid→table cache; residual `neq`/predicates stay JS (documented divergence: NULLs survive `neq` in JS, excluded by SQL comparisons) | `scripts/test-db-adapter.mjs` (recording stub) — red pre-fix ("eq must reach SQL"), green post-fix; wired into `npm test` |
+| `f8554e2` | **P1-2** duplicate punch race | `0002_logs_idempotency_unique.sql` — `logs(userId, idempotencyKey)` **unique** index + pre-flight duplicate diagnostic; owner applies, not this session | SQL only; parity gate re-run green |
+| `0ba8eb4` | **P1-4** retention dead code | `POST /api/internal/cron?job=<name>` (Bearer `CRON_SECRET`, constant-time, fail-closed 401), `src/lib/cron-jobs.ts` (4 jobs → verified registered + internal), `0003_retention_crons.sql` (pg_cron `0 2/3/4/5` UTC) replacing `convex/crons.ts`'s dead wiring; `scripts/test-cron-jobs.mjs` | offline registry census; owner applies migration + sets `CRON_SECRET` |
+
+Still open by design: **R3-full** (needsReview flag on derivation failure — needs the integration lane), P1-2 write-set transaction (needs `rpc` or `serializable` discipline — separate change), **ADR-004** + README/TRD/AGENTS sync, **prod migration application + `CRON_SECRET`/`SMOKE_TEST_KEY` env** (owner's actions), npm audit advisories, e2e lane in CI.
+
+Deploy verification (production, after `9a11f35..21cd57c` → then the Phase 2 commits): `GET /api/backend/call` → **403**; unauthenticated internal refs (`payroll_data:logsForExport`, `users_queries:listByRole`, `logs:purgeExpiredCoords`, `demo:seedAll`) → **404 UNKNOWN_FUNCTION**; public ref `users_queries:me` → **200 null**; deployment `success` per GitHub Deployments API. No production data was read, written, or deleted by any of these checks.
