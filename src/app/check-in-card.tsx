@@ -520,7 +520,14 @@ function LiveSubmit({
 
   const { count, enqueue, flush, syncing, lastError } = useOutbox(flushOne);
 
+  const inflight = useRef(false);
+
   async function checkIn() {
+    // U1 fix: synchronous in-flight guard + busy set before ANY await, so a
+    // double-tap in the same frame cannot start two submissions.
+    if (inflight.current) return;
+    inflight.current = true;
+    setBusy(true);
     setMessage(null);
     let token: string;
     try {
@@ -535,7 +542,6 @@ function LiveSubmit({
       return;
     }
     try {
-      setBusy(true);
       const pos = await getPosition();
       const accuracy = Math.round(pos.coords.accuracy);
       if (accuracy > 50) {
@@ -611,6 +617,7 @@ function LiveSubmit({
       const msg = e instanceof Error ? e.message : String(e);
       setMessage(/denied|permission/i.test(msg) ? "Location permission denied." : msg);
     } finally {
+      inflight.current = false;
       setBusy(false);
     }
   }
@@ -676,15 +683,20 @@ function PersonaSubmit({
   setMessage: (m: string | null) => void;
 }) {
   const checkIn = useAction(api.demo.checkInAsPersona);
+  const inflight = useRef(false);
 
   async function doCheckIn() {
+    if (inflight.current) return;
+    inflight.current = true;
+    setBusy(true);
     setMessage(null);
     const chosen = sites.find((s) => s._id === siteId) ?? sites[0];
     if (!chosen) {
       setMessage("No sites available for this persona.");
+      inflight.current = false;
+      setBusy(false);
       return;
     }
-    setBusy(true);
     try {
       const result = await checkIn({
         siteId: chosen._id,
@@ -707,6 +719,7 @@ function PersonaSubmit({
     } catch (e) {
       setMessage(errMsg(e));
     } finally {
+      inflight.current = false;
       setBusy(false);
     }
   }
