@@ -5,7 +5,7 @@ import type { Status, Phase, CardLog } from "./types";
 import { LABEL } from "./types";
 import { useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/format";
 
 function formatElapsed(ms: number): string {
@@ -44,7 +44,6 @@ export interface ShiftClockProps {
   phase: Phase;
   last?: CardLog;
   loaded: boolean;
-  now: number;
   userLocale?: string;
   isLive: boolean;
   siteName?: string;
@@ -55,11 +54,17 @@ export function ShiftTimer({
   phase,
   last,
   loaded,
-  now,
   userLocale,
   isLive,
   siteName,
 }: ShiftClockProps) {
+  // U14: the 1 Hz tick lives HERE, not at the card root, so the timeline and
+  // everything else on the card doesn't re-render every second.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
   const clockAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
   const elapsed = phase !== "off" && clockAnchor ? now - clockAnchor : null;
 

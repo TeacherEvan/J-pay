@@ -74,7 +74,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [pickerOpen, setPickerOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [now, setNow] = useState<number>(() => Date.now());
   const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null);
   const [userPickedSite, setUserPickedSite] = useState(false);
   const me = useQuery(api.users_queries.me, isLive ? {} : "skip");
@@ -86,12 +85,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
   // Track whether the OS-level watch has errored (permission denied, etc.)
   const [locationError, setLocationError] = useState<string | null>(null);
-
-  // Live clock for the elapsed timer.
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   // Reset the pending action whenever the phase changes; collapse the site
   // picker once the worker is mid-shift.
@@ -241,7 +234,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         phase={phase}
         last={last}
         loaded={loaded}
-        now={now}
         userLocale={userLocale}
         isLive={isLive}
         siteName={siteNameOf(last?.siteId)}
