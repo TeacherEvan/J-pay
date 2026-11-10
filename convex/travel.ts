@@ -7,7 +7,7 @@ import { haversineMeters } from "./geo";
 import { serverClockSkewMs } from "../src/lib/shift-engine";
 import { jpayConfig } from "../src/config/jpay.config";
 import { isDemoUser } from "./demo/scope";
-import { managedSiteIds } from "./manager";
+import { managedSiteIds, userIdsForSites } from "./manager";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -358,11 +358,8 @@ export const recentForCrew = query({
     const siteIds = await managedSiteIds(ctx, viewerId);
     if (siteIds.size === 0) return [];
 
-    const assignments = await ctx.db.query("userSites").collect();
-    const crewIds = new Set<string>();
-    for (const a of assignments) {
-      if (siteIds.has(a.siteId)) crewIds.add(a.userId);
-    }
+    const crewSet = await userIdsForSites(ctx, siteIds);
+    const crewIds = new Set<string>(crewSet);
     if (crewIds.size === 0) return [];
 
     const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
@@ -380,11 +377,22 @@ export const recentForCrew = query({
       fromSiteId?: Id<"sites">;
       toSiteId?: Id<"sites">;
     }> = [];
+    // B8: bound the leg scan to the last 30 days via the by_departed index
+    // instead of collecting every leg ever recorded per crew member.
+    const legCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const recent = await ctx.db
+      .query("travelSegments")
+      .withIndex("by_departed", (q) => q.gte("departedAt", legCutoff))
+      .collect();
+    const segmentsByUser = new Map<string, typeof recent>();
+    for (const seg of recent) {
+      if (!crewIds.has(seg.userId)) continue;
+      const list = segmentsByUser.get(seg.userId) ?? [];
+      list.push(seg);
+      segmentsByUser.set(seg.userId, list);
+    }
     for (const crewId of crewIds) {
-      const segments = await ctx.db
-        .query("travelSegments")
-        .withIndex("by_user", (q) => q.eq("userId", crewId as Id<"users">))
-        .collect();
+      const segments = segmentsByUser.get(crewId) ?? [];
       const user = await ctx.db.get(crewId as Id<"users">);
       const employeeName = user?.name ?? user?.email ?? "unknown";
       for (const seg of segments) {

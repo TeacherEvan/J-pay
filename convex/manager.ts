@@ -49,6 +49,25 @@ async function managedSiteIdSet(
   return new Set<Id<"sites">>(rows.filter((r) => r.archivedAt === undefined).map((r) => r.siteId));
 }
 
+/**
+ * B8 (2026-11-10): crew lookup via the by_site index per managed site
+ * instead of a full-table collect() of userSites on every hot call.
+ */
+export async function userIdsForSites(
+  ctx: Ctx,
+  siteIds: Set<Id<"sites">>
+): Promise<Set<Id<"users">>> {
+  const crew = new Set<Id<"users">>();
+  for (const siteId of siteIds) {
+    const rows = await ctx.db
+      .query("userSites")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .collect();
+    for (const r of rows) crew.add(r.userId);
+  }
+  return crew;
+}
+
 async function requireManagerViewer(
   ctx: Ctx
 ): Promise<{ managerId: Id<"users">; siteIds: Set<Id<"sites">> } | null> {
@@ -95,11 +114,8 @@ export const managedActiveShifts = query({
     if (!scope) return [];
     if (scope.siteIds.size === 0) return [];
 
-    const assignments = await ctx.db.query("userSites").collect();
-    const crewIds = new Set<string>();
-    for (const a of assignments) {
-      if (scope.siteIds.has(a.siteId)) crewIds.add(a.userId);
-    }
+    const crewSet = await userIdsForSites(ctx, scope.siteIds);
+    const crewIds = new Set<string>(crewSet);
     if (crewIds.size === 0) return [];
 
     const active = await ctx.db
@@ -194,17 +210,19 @@ export const myCrew = query({
     const scope = await requireManagerViewer(ctx);
     if (!scope) return [];
 
-    const assignments = await ctx.db.query("userSites").collect();
-    const siteNames = new Map<string, string>();
     const userSiteNames = new Map<string, string[]>();
-    for (const a of assignments) {
-      if (!scope.siteIds.has(a.siteId)) continue;
-      const site = await ctx.db.get(a.siteId);
+    for (const siteId of scope.siteIds) {
+      const site = await ctx.db.get(siteId);
       if (!site || site.archivedAt !== undefined) continue;
-      siteNames.set(a.siteId, site.name);
+      const rows = await ctx.db
+        .query("userSites")
+        .withIndex("by_site", (q) => q.eq("siteId", siteId))
+        .collect();
+      for (const a of rows) {
       const list = userSiteNames.get(a.userId) ?? [];
       list.push(site.name);
       userSiteNames.set(a.userId, list);
+      }
     }
 
     const active = await ctx.db
