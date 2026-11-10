@@ -222,6 +222,7 @@ create table if not exists public."managerSites" (
   "_creationTime" bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
   "managerId"     uuid not null references public.users("_id") on delete cascade,
   "siteId"        uuid not null references public.sites("_id") on delete cascade,
+  "archivedAt"    bigint,
   unique ("managerId", "siteId")
 );
 create index if not exists manager_sites_manager_idx on public."managerSites" ("managerId");

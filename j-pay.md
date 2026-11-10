@@ -581,6 +581,7 @@ erDiagram
     managerSites {
         id managerId
         id siteId
+        number archivedAt "OPTIONAL demotion archive, never delete"
     }
     travelSegments {
         id userId

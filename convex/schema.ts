@@ -170,6 +170,7 @@ export default defineSchema({
   managerSites: defineTable({
     managerId: v.id("users"),
     siteId: v.id("sites"),
+    archivedAt: v.optional(v.number()),        // demotion archives, never deletes (B7, 2026-11-10)
   })
     .index("by_manager", ["managerId"])
     .index("by_site", ["siteId"]),

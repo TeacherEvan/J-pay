@@ -145,13 +145,21 @@ await run("manager:setManagerSites — moderator replaces set transactionally; n
   );
 });
 
-await run("manager:promoteToManager / demoteManager roundtrip; demotion drops managerSites", async () => {
+await run("manager:promoteToManager / demoteManager roundtrip; demotion archives managerSites + audits", async () => {
   await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
   assert.equal(__stub.store.users.find((u) => u._id === "emp-2").role, "manager");
   await call("manager", "setManagerSites", { managerId: "emp-2", siteIds: ["site-c"] }, asUser("mod-1"));
   await call("manager", "demoteManager", { userId: "emp-2" }, asUser("mod-1"));
   assert.equal(__stub.store.users.find((u) => u._id === "emp-2").role, "employee");
-  assert.equal(__stub.store.managerSites.filter((r) => r.managerId === "emp-2").length, 0);
+  // B7: rows archived, not deleted
+  const rows = __stub.store.managerSites.filter((r) => r.managerId === "emp-2");
+  assert.ok(rows.length > 0, "demotion must archive, not delete, managerSites rows");
+  assert.ok(rows.every((r) => r.archivedAt !== undefined), "archived rows must carry archivedAt");
+  // B7: audit ledger records promote / grant / demote
+  const audit = (__stub.store.systemEvents ?? []).map((e) => e.kind);
+  for (const kind of ["manager_promoted", "manager_sites_set", "manager_demoted"]) {
+    assert.ok(audit.includes(kind), `systemEvents audit must include ${kind}`);
+  }
 });
 
 await run("moderator:endShiftOverride — corrected end re-derives shift, payroll-payable, needsReview cleared", async () => {

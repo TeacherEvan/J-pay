@@ -9,6 +9,24 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 type Ctx = MutationCtx | QueryCtx;
 
 /**
+ * B7 (2026-11-10): every manager power-grant writes an audit row BEFORE the
+ * mutation commits. Budget rows go to `systemEvents` (kind manager_*), with a
+ * JSON detail payload {actorId, action, targetUserId, before, after}.
+ * Evidence survives even if a later step in the same mutation fails.
+ */
+async function auditManagerGrant(
+  ctx: MutationCtx,
+  entry: { actorId: Id<"users">; action: string; targetUserId: Id<"users">; before: string[]; after: string[] }
+): Promise<void> {
+  await ctx.db.insert("systemEvents", {
+    kind: entry.action,
+    userId: entry.targetUserId,
+    at: Date.now(),
+    detail: JSON.stringify(entry),
+  });
+}
+
+/**
  * Manager role (owner 2026-11-10). A manager is a promoted employee with a
  * scoped console: they see the crew assigned to the sites in their
  * `managerSites` rows — employees (and managers) whose `userSites` assignments
@@ -28,7 +46,7 @@ async function managedSiteIdSet(
     .query("managerSites")
     .withIndex("by_manager", (q) => q.eq("managerId", managerId))
     .collect();
-  return new Set<Id<"sites">>(rows.map((r) => r.siteId));
+  return new Set<Id<"sites">>(rows.filter((r) => r.archivedAt === undefined).map((r) => r.siteId));
 }
 
 async function requireManagerViewer(
@@ -230,10 +248,12 @@ export const listManagers = query({
     const out = [];
     for (const m of managers) {
       if (isDemoUser(m) || m.archivedAt !== undefined) continue;
-      const rows = await ctx.db
-        .query("managerSites")
-        .withIndex("by_manager", (q) => q.eq("managerId", m._id))
-        .collect();
+      const rows = (
+        await ctx.db
+          .query("managerSites")
+          .withIndex("by_manager", (q) => q.eq("managerId", m._id))
+          .collect()
+      ).filter((r) => r.archivedAt === undefined);
       const names: string[] = [];
       const siteIds: string[] = [];
       for (const r of rows) {
@@ -264,7 +284,7 @@ export const setManagerSites = mutation({
     siteIds: v.array(v.id("sites")),
   },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
+    const actorId = await requireModerator(ctx);
     const manager = await ctx.db.get(args.managerId);
     if (!manager || manager.role !== "manager") throw new ConvexError("NOT_A_MANAGER");
     if (manager.archivedAt !== undefined || !manager.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
@@ -278,27 +298,43 @@ export const setManagerSites = mutation({
       if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
       wanted.add(siteId);
     }
-    const existing = await ctx.db
+    const allRows = await ctx.db
       .query("managerSites")
       .withIndex("by_manager", (q) => q.eq("managerId", args.managerId))
       .collect();
+    const existing = allRows.filter((r) => r.archivedAt === undefined);
+    const archived = allRows.filter((r) => r.archivedAt !== undefined);
+    // B7: audit the grant BEFORE any write so evidence survives a mid-mutation failure.
+    await auditManagerGrant(ctx, {
+      actorId,
+      action: "manager_sites_set",
+      targetUserId: args.managerId,
+      before: existing.map((r) => String(r.siteId)),
+      after: [...wanted].map(String),
+    });
     let unassigned = 0;
     for (const row of existing) {
       if (!wanted.has(row.siteId)) {
-        await ctx.db.delete(row._id);
+        await ctx.db.patch(row._id, { archivedAt: Date.now() }); // archive, never delete
         unassigned++;
       }
     }
-    const existingIds = new Set(existing.map((r) => r.siteId as string));
+    const activeIds = new Set(existing.map((r) => r.siteId as string));
+    const archivedBySite = new Map(archived.map((r) => [String(r.siteId), r]));
     let assigned = 0;
     for (const siteId of wanted) {
-      if (!existingIds.has(siteId)) {
-        await ctx.db.insert("managerSites", {
-          managerId: args.managerId,
-          siteId: siteId as Id<"sites">,
-        });
+      if (activeIds.has(siteId)) continue;
+      const revivable = archivedBySite.get(siteId);
+      if (revivable) {
+        await ctx.db.patch(revivable._id, { archivedAt: undefined }); // revive the evidence row
         assigned++;
+        continue;
       }
+      await ctx.db.insert("managerSites", {
+        managerId: args.managerId,
+        siteId: siteId as Id<"sites">,
+      });
+      assigned++;
     }
     return { assigned, unassigned, total: wanted.size as number };
   },
@@ -308,7 +344,7 @@ export const setManagerSites = mutation({
 export const promoteToManager = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
+    const actorId = await requireModerator(ctx);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
     if (target.role !== "employee") {
@@ -317,6 +353,13 @@ export const promoteToManager = mutation({
     }
     if (target.archivedAt !== undefined || !target.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
     if (isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+    await auditManagerGrant(ctx, {
+      actorId,
+      action: "manager_promoted",
+      targetUserId: args.userId,
+      before: ["employee"],
+      after: ["manager"],
+    });
     await ctx.db.patch(args.userId, { role: "manager" });
     return { ok: true as const, already: false as const };
   },
@@ -326,7 +369,7 @@ export const promoteToManager = mutation({
 export const demoteManager = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireModerator(ctx);
+    const actorId = await requireModerator(ctx);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
     if (target.role !== "manager") {
@@ -337,7 +380,15 @@ export const demoteManager = mutation({
       .query("managerSites")
       .withIndex("by_manager", (q) => q.eq("managerId", args.userId))
       .collect();
-    for (const row of rows) await ctx.db.delete(row._id);
+    const activeRows = rows.filter((r) => r.archivedAt === undefined);
+    await auditManagerGrant(ctx, {
+      actorId,
+      action: "manager_demoted",
+      targetUserId: args.userId,
+      before: activeRows.map((r) => String(r.siteId)),
+      after: [],
+    });
+    for (const row of activeRows) await ctx.db.patch(row._id, { archivedAt: Date.now() }); // archive, never delete
     await ctx.db.patch(args.userId, { role: "employee" });
     return { ok: true as const, already: false as const };
   },
