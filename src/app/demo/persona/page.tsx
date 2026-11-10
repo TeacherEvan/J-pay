@@ -88,16 +88,15 @@ export default function PersonaSwitcher() {
               </div>
               <button
                 type="button"
+                data-loading={busyEmail === p.email}
+                aria-busy={busyEmail === p.email}
                 onClick={() => void pick(p.email)}
                 disabled={busyEmail === p.email || isCurrent}
-                className={isCurrent ? "btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider opacity-60 cursor-not-allowed" : "btn-surgical-mint rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"}
+                className={isCurrent ? "btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider opacity-60 cursor-not-allowed" : "btn-surgical btn-surgical-mint rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"}
                 data-testid="persona-play-button"
               >
-                {isCurrent
-                  ? "Current"
-                  : busyEmail === p.email
-                  ? "Switching…"
-                  : "Play as"}
+                <span className="btn-label">{isCurrent ? "Current" : "Play as"}</span>
+                <span className="btn-spinner" aria-hidden="true" />
               </button>
             </li>
           );

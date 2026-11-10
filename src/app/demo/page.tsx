@@ -154,6 +154,8 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
               <div className="flex gap-2">
                 <button
                   type="button"
+                  data-loading={busyId === s._id}
+                  aria-busy={busyId === s._id}
                   onClick={() => {
                     setBusyId(s._id);
                     if (s.userId) recompute({ userId: s.userId }).finally(() => setBusyId(null));
@@ -161,18 +163,22 @@ function ReviewList({ shifts, personaLocale }: { shifts: { _id: string; userId: 
                   disabled={busyId === s._id}
                   className="btn-surgical rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-[var(--paper)]"
                 >
-                  Recompute
+                  <span className="btn-label">Recompute</span>
+                  <span className="btn-spinner" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
+                  data-loading={busyId === s._id}
+                  aria-busy={busyId === s._id}
                   onClick={() => {
                     setBusyId(s._id);
                     resolve({ shiftId: s._id as Id<"shifts"> }).catch(() => {}).finally(() => setBusyId(null));
                   }}
                   disabled={busyId === s._id}
-                  className="btn-surgical-mint rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider"
+                  className="btn-surgical btn-surgical-mint rounded px-3 py-1.5 text-xs font-mono uppercase tracking-wider"
                 >
-                  Resolve
+                  <span className="btn-label">Resolve</span>
+                  <span className="btn-spinner" aria-hidden="true" />
                 </button>
               </div>
             </li>
@@ -307,11 +313,14 @@ function ExportPanel() {
       <h2 className="mb-2 text-xs font-mono uppercase tracking-wider text-[var(--fog)]">Export my logs</h2>
       <button
         type="button"
+        data-loading={busy}
+        aria-busy={busy}
         onClick={() => void doExport()}
         disabled={busy}
         className="btn-surgical rounded px-3 py-2 text-xs font-mono uppercase tracking-wider text-[var(--paper)] disabled:opacity-50"
       >
-        {busy ? "Building CSV…" : "Download CSV (last 14 days)"}
+        <span className="btn-label">Download CSV (last 14 days)</span>
+        <span className="btn-spinner" aria-hidden="true" />
       </button>
       {message && <p className="mt-2 text-xs font-mono text-[var(--text-secondary)]">{message}</p>}
     </section>

@@ -130,9 +130,9 @@
     display: block;
   }
 
-  /* Disabled state */
-  .btn-surgical:disabled,
-  .btn-surgical[aria-disabled="true"] {
+  /* Disabled state — suppressed while loading so the spinner stays legible */
+  .btn-surgical:disabled:not([data-loading="true"]),
+  .btn-surgical[aria-disabled="true"]:not([data-loading="true"]) {
     opacity: 0.45;
     cursor: not-allowed;
     filter: grayscale(35%);

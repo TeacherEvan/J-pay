@@ -56,9 +56,10 @@ export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProp
       <input id={`${idSuffix}-pw-next`} value={next} onChange={(e) => setNext(e.target.value)} placeholder="New password (min 8 chars)" type="password" className={inputCls} />
       <label className="sr-only" htmlFor={`${idSuffix}-pw-confirm`}>Confirm new password</label>
       <input id={`${idSuffix}-pw-confirm`} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" type="password" className={inputCls} />
-      <button ref={buttonRef} onClick={() => void submit()} disabled={busy || !current || next.length < 8}
+      <button ref={buttonRef} data-loading={busy} aria-busy={busy} onClick={() => void submit()} disabled={busy || !current || next.length < 8}
         className={compact ? "btn-surgical min-h-[44px] self-start px-4 py-2 text-sm disabled:opacity-50" : "btn-surgical btn-surgical-mint min-h-[44px] w-full px-4 py-2.5 text-sm font-semibold disabled:opacity-50"}>
-        {busy ? "Saving…" : "Update password"}
+        <span className="btn-label">Update password</span>
+        <span className="btn-spinner" aria-hidden="true" />
       </button>
       {msg && <p role="status" aria-live="polite" className={compact ? "text-sm text-[var(--fog)]" : "text-center text-sm font-medium text-[var(--paper)]"}>{msg}</p>}
     </div>

@@ -170,18 +170,24 @@ export default function PunchPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <button
+            data-loading={isClockingIn || isClockingOut}
+            aria-busy={isClockingIn || isClockingOut}
             onClick={() => handlePunch("in")}
             disabled={isClockingIn || isClockingOut}
-            className="btn-surgical-mint rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
+            className="btn-surgical btn-surgical-mint rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
-            {isClockingIn ? "Locating…" : "Clock In"}
+            <span className="btn-label">Clock In</span>
+            <span className="btn-spinner" aria-hidden="true" />
           </button>
           <button
+            data-loading={isClockingIn || isClockingOut}
+            aria-busy={isClockingIn || isClockingOut}
             onClick={() => handlePunch("out")}
             disabled={isClockingIn || isClockingOut}
-            className="btn-surgical-danger rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
+            className="btn-surgical btn-surgical-danger rounded px-4 py-3 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
-            {isClockingOut ? "Locating…" : "Clock Out"}
+            <span className="btn-label">Clock Out</span>
+            <span className="btn-spinner" aria-hidden="true" />
           </button>
         </div>
 

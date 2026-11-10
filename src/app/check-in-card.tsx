@@ -527,11 +527,14 @@ function LiveSubmit({
           </span>
           <button
             data-testid="outbox-sync"
+            data-loading={syncing}
+            aria-busy={syncing}
             onClick={() => void flush()}
             disabled={syncing}
             className="btn-surgical min-h-[44px] px-3 py-1 text-xs border-[var(--hivis)]/40 text-[var(--hivis)] hover:text-[var(--hivis)] disabled:opacity-50"
           >
-            {syncing ? "Syncing…" : "Sync now"}
+            <span className="btn-label">Sync now</span>
+            <span className="btn-spinner" aria-hidden="true" />
           </button>
         </div>
       )}

@@ -245,6 +245,8 @@ function ProvisionPanel() {
           </select>
         </label>
         <button
+          data-loading={busy}
+          aria-busy={busy}
           disabled={busy || !name || !email}
           onClick={async () => {
             setBusy(true);
@@ -265,7 +267,8 @@ function ProvisionPanel() {
           }}
           className="btn-surgical btn-surgical-mint min-h-[44px] px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
         >
-          Create account + ID code ({role})
+          <span className="btn-label">Create account + ID code ({role})</span>
+          <span className="btn-spinner" aria-hidden="true" />
         </button>
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         {code && (
@@ -329,6 +332,8 @@ function SitePanel() {
             className="input-surgical px-3.5 py-2 text-sm" />
         </label>
         <button
+          data-loading={busy}
+          aria-busy={busy}
           disabled={busy}
           onClick={async () => {
             setBusy(true);
@@ -351,7 +356,8 @@ function SitePanel() {
           }}
           className="btn-surgical col-span-2 min-h-[44px] px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
         >
-          Create site
+          <span className="btn-label">Create site</span>
+          <span className="btn-spinner" aria-hidden="true" />
         </button>
         {msg && <p className="col-span-2 text-sm text-[var(--fog)]">{msg}</p>}
       </div>

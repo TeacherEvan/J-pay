@@ -85,6 +85,8 @@ export function SignIn() {
           <button
             type="button"
             data-testid="demo-preview-cta"
+            data-loading={demoBusy}
+            aria-busy={demoBusy}
             disabled={demoBusy}
             onClick={() => {
               setError(null);
@@ -100,7 +102,8 @@ export function SignIn() {
             }}
             className="btn-surgical min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-medium disabled:opacity-50"
           >
-            {demoBusy ? "Entering preview…" : "Enter demo preview (no account)"}
+            <span className="btn-label">Enter demo preview (no account)</span>
+            <span className="btn-spinner" aria-hidden="true" />
           </button>
           <p className="text-center text-xs text-[var(--fog)]">
             Preview mode uses throwaway demo data — nothing here is real.

@@ -126,10 +126,13 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
+            data-loading={isSubmitting}
+            aria-busy={isSubmitting}
             disabled={isSubmitting || !effectiveEmail || !signInId.trim()}
-            className="btn-surgical-mint w-full rounded py-2.5 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
+            className="btn-surgical btn-surgical-mint w-full rounded py-2.5 text-xs font-semibold uppercase tracking-wider min-h-[44px]"
           >
-            {isSubmitting ? "Signing in…" : "Sign In"}
+            <span className="btn-label">Sign In</span>
+            <span className="btn-spinner" aria-hidden="true" />
           </button>
         </form>
         <p className="text-xs font-mono text-[var(--fog)] text-center mt-6">
