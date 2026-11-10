@@ -23,7 +23,11 @@ function isIos(): boolean {
 
 export default function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const me = useQuery(api.users_queries.me);
+  // Skip while signed out so `me === null` only ever means "the post-login
+  // query settled to null" — never the stale pre-sign-in settle, which used
+  // to trigger the auto-sign-out effect right after credentials flipped true
+  // and bounced people back to the login screen.
+  const me = useQuery(api.users_queries.me, isAuthenticated ? {} : "skip");
   const { signOut } = useAuthActions();
   const convex = useConvex();
   useEffect(() => {
@@ -48,7 +52,7 @@ export default function Home() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && me === undefined)) {
     return (
       <main className="grid min-h-dvh place-items-center text-sm text-[var(--fog)]">
         <div className="flex flex-col items-center gap-3">
