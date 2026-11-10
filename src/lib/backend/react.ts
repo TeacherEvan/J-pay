@@ -119,6 +119,7 @@ export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
   // moderator
   "moderator:auditRecentLogs": ["logs", "users", "sites"],
   "moderator:auditNeedsReview": ["shifts", "users"],
+  "moderator:activeShifts": ["shifts", "logs", "users", "sites"],
   "moderator:listEmployeesWithAssignments": ["users", "userSites", "sites"],
   "moderator:listAllSites": ["sites", "users"],
 

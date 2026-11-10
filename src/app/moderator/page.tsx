@@ -11,6 +11,7 @@ import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { SiteMapPicker } from "../site-map-picker";
 import { errMsg } from "@/lib/errors";
 import { KpiBanner } from "./kpi-banner";
+import { ActiveShiftsMap } from "./active-shifts-map";
 import { GeofenceModal, type GeofenceFix } from "./geofence-modal";
 import { formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
@@ -56,6 +57,7 @@ export default function ModeratorPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6">
       <KpiBanner />
+      <ActiveShiftsMap />
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-b border-[var(--line)] pb-4">
         <h1 className="text-xl font-bold tracking-tight text-[var(--paper)]">Moderator console</h1>
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">

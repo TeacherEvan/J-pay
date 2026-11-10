@@ -181,3 +181,62 @@ export const setHourlyOverride = mutation({
     await ctx.db.patch(args.userId, { hourlyRateOverride: args.rate });
   },
 });
+
+export const activeShifts = query({
+  args: {},
+  handler: async (ctx) => {
+    // Sibling of auditRecentLogs: moderator-gated, demo-filtered, returns []
+    // to non-moderators (the public /api/backend/call door stays harmless).
+    const modId = await maybeCurrentUserId(ctx);
+    if (!modId) return [];
+    const mod = await ctx.db.get(modId);
+    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+
+    // Active = no end time (the by_active adapter path pushes IS NULL to SQL).
+    const active = await ctx.db
+      .query("shifts")
+      .withIndex("by_active", (q) => q.eq("endedAt", undefined))
+      .collect();
+
+    const out = [];
+    for (const shift of active) {
+      const user = await ctx.db.get(shift.userId);
+      // Owner directive 2026-08-26: seeded personas / e2e users never appear.
+      if (!user || isDemoUser(user)) continue;
+
+      // Shifts are derived from logs per site; the session's site comes from
+      // the employee's latest log. No logs yet -> no site, no pin (the UI
+      // lists them as "no GPS log yet" rather than inventing a position).
+      const lastLogs = await ctx.db
+        .query("logs")
+        .withIndex("by_user_time", (q) => q.eq("userId", shift.userId))
+        .order("desc")
+        .take(1);
+      const lastLog = lastLogs[0] ?? null;
+      const site = lastLog?.siteId ? await ctx.db.get(lastLog.siteId) : null;
+
+      out.push({
+        _id: shift._id,
+        userId: shift.userId,
+        name: user.name ?? user.email ?? "unknown",
+        startedAt: shift.startedAt,
+        siteName: site?.name,
+        siteLat: site?.latitude,
+        siteLng: site?.longitude,
+        siteRadiusMeters: site?.geofenceRadiusMeters,
+        lastLog: lastLog
+          ? {
+              lat: lastLog.latitude,
+              lng: lastLog.longitude,
+              accuracyMeters: lastLog.accuracyMeters,
+              clientReportedTime: lastLog.clientReportedTime,
+              status: lastLog.status,
+              isWithinGeofence: lastLog.isWithinGeofence,
+            }
+          : null,
+      });
+    }
+    out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return out;
+  },
+});
