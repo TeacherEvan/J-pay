@@ -7,6 +7,7 @@ import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
 import { isDemoUser } from "./demo/scope";
 import { serverClockSkewMs } from "../src/lib/shift-engine";
+import { purgeExpiredTravelPathsInternal } from "./travel";
 
 import { jpayConfig } from "../src/config/jpay.config";
 
@@ -270,6 +271,11 @@ async function purgeExpiredCoordsHandler(
   ctx: import("./_generated/server").MutationCtx,
   args: { cursor?: number }
 ) {
+  // Same retention job also strips raw route samples from travel segments
+  // (GDPR parity — logs anonymisation alone would leak paths). Direct call:
+  // same process, same transaction semantics as the logs sweep itself.
+  await purgeExpiredTravelPathsInternal(ctx);
+
   const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
   const batch = await ctx.db
     .query("logs")

@@ -59,6 +59,7 @@ const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
   reviewResolutions: { by_user_key: ["userId", "shiftKey"] },
   demoSessions: { by_reviewer: ["reviewerId"], by_persona: ["personaEmail"] },
   managerSites: { by_manager: ["managerId"], by_site: ["siteId"] },
+  travelSegments: { by_user: ["userId"], by_departed: ["departedAt"] },
 };
 
 /* ------------------------------------------------------------------ types -- */

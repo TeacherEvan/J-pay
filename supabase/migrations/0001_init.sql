@@ -204,6 +204,25 @@ create table if not exists public."managerSites" (
 create index if not exists manager_sites_manager_idx on public."managerSites" ("managerId");
 create index if not exists manager_sites_site_idx on public."managerSites" ("siteId");
 
+-- --------------------------------------------------------- travelSegments ---
+create table if not exists public."travelSegments" (
+  "_id"            uuid primary key default gen_random_uuid(),
+  "_creationTime"  bigint not null default (extract(epoch from clock_timestamp()) * 1000)::bigint,
+  "userId"         uuid not null references public.users("_id") on delete cascade,
+  "fromSiteId"     uuid references public.sites("_id") on delete set null,
+  "toSiteId"       uuid references public.sites("_id") on delete set null,
+  "departedAt"     bigint not null,
+  "arrivedAt"      bigint,
+  "distanceMeters" double precision not null default 0,
+  "maxSpeedMps"    double precision,
+  "pathSamples"    jsonb not null default '[]'::jsonb,
+  "lastFixKey"     text,
+  "needsReview"    boolean not null default false,
+  "reviewReason"   text
+);
+create index if not exists travel_segments_user_departed_idx on public."travelSegments" ("userId", "departedAt" desc);
+create index if not exists travel_segments_departed_idx on public."travelSegments" ("departedAt" desc);
+
 -- --------------------------------------------------- jpay_id_registry view --
 -- Polyfill for untyped uuid lookup across tables (used by Database.tableOf)
 create or replace view public.jpay_id_registry as
@@ -229,7 +248,9 @@ create or replace view public.jpay_id_registry as
   union all
   select "_id"::text as id, 'demoSessions' as tbl from public."demoSessions"
   union all
-  select "_id"::text as id, 'managerSites' as tbl from public."managerSites";
+  select "_id"::text as id, 'managerSites' as tbl from public."managerSites"
+  union all
+  select "_id"::text as id, 'travelSegments' as tbl from public."travelSegments";
 
 -- ------------------------------------------------------------ lockdown ------
 alter table public.users                enable row level security;
@@ -244,6 +265,7 @@ alter table public."purgeAudit"         enable row level security;
 alter table public."reviewResolutions"  enable row level security;
 alter table public."demoSessions"       enable row level security;
 alter table public."managerSites"       enable row level security;
+alter table public."travelSegments"     enable row level security;
 
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;

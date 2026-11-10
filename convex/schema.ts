@@ -29,6 +29,7 @@ export default defineSchema({
       )
     ),
     locale: v.optional(v.string()),
+    travelConsentAt: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
@@ -154,6 +155,27 @@ export default defineSchema({
   })
     .index("by_manager", ["managerId"])
     .index("by_site", ["siteId"]),
+
+  travelSegments: defineTable({
+    userId: v.id("users"),
+    fromSiteId: v.optional(v.id("sites")),
+    toSiteId: v.optional(v.id("sites")),
+    departedAt: v.number(),
+    arrivedAt: v.optional(v.number()),
+    distanceMeters: v.number(),
+    maxSpeedMps: v.optional(v.number()),
+    pathSamples: v.array(v.object({
+      lat: v.number(),
+      lng: v.number(),
+      t: v.number(),
+      s: v.optional(v.number()),
+    })),
+    lastFixKey: v.optional(v.string()),
+    needsReview: v.boolean(),
+    reviewReason: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_departed", ["departedAt"]),
 
   demoSessions: defineTable({
     reviewerId: v.id("users"),

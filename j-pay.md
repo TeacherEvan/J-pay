@@ -74,6 +74,7 @@ Read every runtime-specific clause as superseded:
 | R37 | §2/§3/§11 | **Next 16.3.2 upgrade (closes D2).** `next` bumped 15.3 → 16.3.2 clearing the postcss 4 + sharp 4 high-severity advisories that were transitively bundled. `@serwist/next` bumped 9.5.12 → 10.0.0-preview.14 (Next 16 compat; export paths unchanged so `src/app/sw.ts` did not need a code change). `glob` pinned to `^11.1.0` via `overrides` to clear the Serwist-10 transitive GHSA-5j98-mcp5-4vw2 (CLI command injection in a build-time-only tool — not exploitable from this codebase, tracked as Open Question #10). Production build stays on **webpack** (`next build --webpack`) because Serwist 10-preview does not yet support Turbopack SW generation (https://github.com/serwist/serwist/issues/54); Turbopack adoption deferred to Open Question #11. New canary workflow at `.github/workflows/canary.yml` deploys to a Vercel preview on PRs labeled `next16-canary`. Rollback runbook at `docs/ops/next-16-rollback.md`. See `docs/plans/2026-08-25-next-16-upgrade.md` for the full plan + audit before/after snapshots. |
 | R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). Demo fix B2: `ensurePersonaSiteAssignments` called on bind so Thabo has site rows; `boundPersonaSites` query replaces hardcoded `sites.listMine` in demo CheckInPanel. Broadcast filtered to exclude demo users. TRD §6 + §10.2 + §11 updated. |
 | R39 | §6/§10.2/§11 | Manager feature set, phase A1–A2 groundwork (owner 2026-11-10): `users.role` check relaxed to `moderator|employee|manager` (migration `0004_manager_role.sql`); bulk multi-site assignment replaces one-at-a-time assign/unassign (`sites.setEmployeeSites`, single transaction); manager role + `managerSites` site-scoped assignment model (managers = promoted employees, auto-scoped crew = employees on managed sites; managers get no payroll/provisioning rights); §6/ERD synced |
+| R40 | §6/§10.2/§5.1/§9 | Travel tracking (owner 2026-11-10): on-shift, off-site-only, consent-gated `travelSegments` (server-decided geofence resolution in `travel.recordFix` — device-token verified, idempotency-deduped, sample-capped, impossible-travel/gps-gap flagged); raw `pathSamples` anonymised after `retentionDays` by the purge job; payroll unchanged (shift span already contains in-shift travel); manager + moderator visibility via `travel.forUser` / `manager.recentForCrew`; migration `0006_travel_tracking.sql` |
 
 ---
 
@@ -135,6 +136,7 @@ The architecture is designed around these limits explicitly:
 - One-way messaging to Moderator queue.
 - Web Push reminders + approval alerts.
 - **Offline mode (foreground-primary):** failed check-ins enqueue to an IndexedDB outbox. Foreground reconciliation — `visibilitychange`, the window `online` event, and the next successful mutation — flushes the outbox on ALL platforms (primary path, see §8); Background Sync is a Chromium-only bonus. Original client timestamps are preserved and flagged through `clientReportedTime` delta.
+- **Travel tracking (v1.5.0, owner 2026-11-10):** opt-in toggle in the check-in card — consent stored as `users.travelConsentAt`; without it nothing is recorded. While an employee has an **open shift and is outside every assigned geofence**, the app posts coarse GPS fixes (~15s, `watchPosition`) to `travel.recordFix`, which verifies the device token and decides **server-side** whether the employee is on-site (fix dropped) or travelling (fix appended to the open `travelSegments` leg). Inside 15s/25m of the previous fix nothing is stored. A visible live indicator shows while sharing. Fixes are evidence for managers/moderators and payroll disputes — they never add pay (the shift span already contains in-shift travel).
 
 ### 5.2 Moderator Interface (Desktop-Optimized)
 
@@ -173,6 +175,7 @@ export default defineSchema({
     role: v.union(v.literal("moderator"), v.literal("employee"), v.literal("manager")),
     isActive: v.boolean(),
     passwordChangedAt: v.optional(v.number()), // undefined = still using provisioned ID code
+    travelConsentAt: v.optional(v.number()),  // consent gate for on-shift off-site travel tracking (owner 2026-11-10)
     deviceId: v.optional(v.string()),          // signed device token id
     archivedAt: v.optional(v.number()),        // soft delete (payroll compliance)
     isMasterTemp: v.optional(v.boolean()),     // transient moderator via master-password login
@@ -283,6 +286,27 @@ export default defineSchema({
   })
     .index("by_user_key", ["userId", "shiftKey"]),
 
+  travelSegments: defineTable({                 // on-shift off-site travel legs (owner 2026-11-10); consent + evidence, NOT pay derivation
+    userId: v.id("users"),
+    fromSiteId: v.optional(v.id("sites")),
+    toSiteId: v.optional(v.id("sites")),
+    departedAt: v.number(),
+    arrivedAt: v.optional(v.number()),
+    distanceMeters: v.number(),
+    maxSpeedMps: v.optional(v.number()),
+    pathSamples: v.array(v.object({
+      lat: v.number(),
+      lng: v.number(),
+      t: v.number(),
+      s: v.optional(v.number()),
+    })),                                      // raw route; anonymised after retentionDays via the coordinates purge (aggregate kept)
+    lastFixKey: v.optional(v.string()),        // idempotency for offline replay of the latest fix
+    needsReview: v.boolean(),                  // impossible_travel | gps_gap | path_truncated | shift_ended_during_travel
+    reviewReason: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_departed", ["departedAt"]),
+
   managerSites: defineTable({                     // manager → managed sites; crew derived via userSites (owner 2026-11-10)
     managerId: v.id("users"),
     siteId: v.id("sites"),
@@ -358,12 +382,12 @@ Derivation rules (v1.1):
 
 - **Lawful basis:** legitimate interest (employment context consent is invalid under GDPR Art. 7 due to power imbalance). Consent modal = transparency notice.
 - **Retention schedule (defaults, exact durations = Open Question):**
-  - Raw GPS coordinates: **anonymized, not deleted** — purge jobs **zero out lat/lng** and retain the row (status/timestamps/geofence result survive as payroll-dispute evidence); payroll-finalized periods hold anonymization until the dispute window (default 90 days) closes. Exact N days remains Open Question 1.
+  - Raw GPS coordinates: **anonymized, not deleted** — purge jobs **zero out lat/lng** and retain the row (status/timestamps/geofence result survive as payroll-dispute evidence); payroll-finalized periods hold anonymization until the dispute window (default 90 days) closes. Exact N days remains Open Question 1. **`travelSegments.pathSamples` (raw route polylines) are dropped entirely at the same horizon** (aggregate distance/duration kept for payroll evidence) — chained from the same coordinates purge job.
   - Aggregated hours / shift totals: retained per local labor statute (typically 2–7 years).
   - Messages: archived rows honor an optional per-row `messages.retentionDays` override; absent it, message retention defaults follow Open Questions 1–2.
 - **Retention enforcement mechanism (v1.2):** retention is executed, not aspirational — a **native Convex cron** (`convex/crons.ts` → internal purge mutation) runs daily, zeroes raw coords past the retention window, and writes a purge-audit entry. Policy text without a scheduled job is an audit finding.
 - **Worker rights:** access/export request procedure defined (self-serve CSV of own logs; includes their push subscription endpoints — these are personal data under Art. 4(1)).
-- **Minimization:** no third-party ad/analytics trackers; location recorded only at explicit badge events, never continuous tracking.
+- **Minimization:** no third-party ad/analytics trackers; location recorded at explicit badge events, plus — only with the employee's explicit opt-in (`travelConsentAt`) — on-shift off-site travel fixes. **Travel tracking cannot run while the app is closed.** A PWA/service worker cannot receive continuous OS-level background geolocation; guaranteed background tracking requires a native wrapper and is out of scope. Fixes while inside an assigned geofence are discarded server-side.
 
 ---
 
@@ -408,6 +432,8 @@ erDiagram
     users ||--o{ pushSubscriptions : "registers"
     users ||--o{ managerSites : "manages"
     sites ||--o{ managerSites : "managed by"
+    users ||--o{ travelSegments : "travels"
+    sites ||--o{ travelSegments : "departs from / arrives at"
 
     users {
         string name
@@ -418,6 +444,7 @@ erDiagram
         number archivedAt "SOFT DELETE"
         boolean isMasterTemp "OPTIONAL transient moderator"
         number passwordChangedAt "OPTIONAL force-set at provisioning"
+        number travelConsentAt "OPTIONAL consent gate"
 
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
@@ -495,6 +522,19 @@ erDiagram
     managerSites {
         id managerId
         id siteId
+    }
+    travelSegments {
+        id userId
+        id fromSiteId "OPTIONAL"
+        id toSiteId "OPTIONAL"
+        number departedAt
+        number arrivedAt "OPTIONAL leg closes inside a geofence"
+        number distanceMeters
+        number maxSpeedMps "OPTIONAL"
+        string pathSamples "jsonb raw route, anonymised at retention"
+        string lastFixKey "OPTIONAL replay dedupe"
+        boolean needsReview
+        string reviewReason "OPTIONAL"
     }
 ```
 

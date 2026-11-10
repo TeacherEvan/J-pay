@@ -15,6 +15,8 @@ import * as logs from "../../../convex/logs";
 import * as shifts from "../../../convex/shifts";
 import * as messages from "../../../convex/messages";
 import * as moderator from "../../../convex/moderator";
+import * as manager from "../../../convex/manager";
+import * as travel from "../../../convex/travel";
 import * as payroll from "../../../convex/payroll";
 import * as payrollData from "../../../convex/payroll_data";
 import * as kpi from "../../../convex/kpi";
@@ -63,6 +65,8 @@ const MODULES: Record<string, unknown> = {
   shifts,
   messages,
   moderator,
+  manager,
+  travel,
   payroll,
   payroll_data: payrollData,
   kpi,

@@ -45,7 +45,8 @@ export type TableName =
   | "purgeAudit"
   | "reviewResolutions"
   | "demoSessions"
-  | "managerSites";
+  | "managerSites"
+  | "travelSegments";
 
 /**
  * Mapping of known mutation function keys to the tables/domains they mutate.
@@ -66,6 +67,10 @@ export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
   "manager:setManagerSites": ["managerSites", "users", "sites"],
   "manager:promoteToManager": ["users"],
   "manager:demoteManager": ["users", "managerSites"],
+
+  // travel tracking
+  "travel:setConsent": ["users"],
+  "travel:recordFix": ["travelSegments", "logs", "shifts", "userSites", "sites", "users"],
 
   // messages
   "messages:sendToModerators": ["messages"],
@@ -135,6 +140,8 @@ export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
   "manager:managedActiveShifts": ["shifts", "logs", "users", "sites", "managerSites", "userSites"],
   "manager:myCrew": ["userSites", "shifts", "sites", "users", "managerSites"],
   "manager:listManagers": ["users", "managerSites", "sites"],
+  "travel:recentForCrew": ["travelSegments", "userSites", "sites", "users", "managerSites"],
+  "travel:forUser": ["travelSegments", "userSites", "sites"],
 
   // kpi & payroll
   "kpi:summary": ["logs", "shifts", "users", "sites"],
