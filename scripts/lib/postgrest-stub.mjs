@@ -44,6 +44,12 @@ class StubQuery {
     return this;
   }
   eq(col, val) { return this.pushFilter("eq", col, val); }
+  is(col, val) {
+    calls.push({ table: this.table, method: "is", col, val });
+    this.ops.push((rows) => rows.filter((r) =>
+      val === null || val === undefined ? r[col] == null : r[col] === val));
+    return this;
+  }
   neq(col, val) { return this.pushFilter("neq", col, val); }
   lt(col, val) { return this.pushFilter("lt", col, val); }
   lte(col, val) { return this.pushFilter("lte", col, val); }

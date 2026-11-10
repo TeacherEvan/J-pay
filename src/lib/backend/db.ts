@@ -388,17 +388,33 @@ export class QueryBuilder {
     // `neq` has no direct SQL equivalent worth relying on here, and `.filter`
     // predicates stay JS. Previously EVERY query loaded the whole table into
     // memory and filtered/sorted in JS — O(table) bytes per call (audit
-    // 2026-11-10, P1-1). Absent rows match `col IS NULL` via `.eq(col, null)`,
-    // mirroring the adapter's Convex-parity null handling.
-    const pushable = this.constraints.filter((constraint) => constraint.op !== "neq");
-    if (pushable.length === 0) return this.runFullTable();
+    // 2026-11-10, P1-1). Absent rows are pushed as `.is(col, null)`, mirroring
+    // the adapter's Convex-parity null handling — supabase-js `.eq(col, null)`
+    // serialises the STRING "null" (`col=eq.null`) and Postgres then casts
+    // 'null' to the column type (bigint: invalid input syntax, seen live in
+    // kpi.summary's by_active query, 2026-11-10), so null must never reach .eq.
+    const isNullish = (v: unknown) => v === null || v === undefined;
+    const pushable = this.constraints.filter(
+      (c) => c.op !== "neq" && !(c.op === "eq" && isNullish(c.value))
+    );
+    const isNulls = this.constraints.filter(
+      (c) => c.op === "eq" && isNullish(c.value)
+    );
+    // Range operators on absent values have no SQL form here — take the JS path.
+    const hasNullRange = this.constraints.some(
+      (c) => c.op !== "neq" && c.op !== "eq" && isNullish(c.value)
+    );
+    if (hasNullRange) return this.runFullTable();
+    if (pushable.length + isNulls.length === 0) return this.runFullTable();
 
     const keys = this.sortKey();
     const ascending = this.direction === "asc";
     let query = this.db.postgrest().from(this.table).select("*");
+    for (const constraint of isNulls) {
+      query = query.is(constraint.field, null); // col=is.null — absent ↔ NULL parity
+    }
     for (const constraint of pushable) {
-      // `.eq(col, null)` becomes `is.null` (absent ↔ NULL parity); `never` satisfies the column-typed param.
-      const value = (constraint.value ?? null) as never;
+      const value = constraint.value as never;
       switch (constraint.op) {
         case "eq": query = query.eq(constraint.field, value); break;
         case "lt": query = query.lt(constraint.field, value); break;

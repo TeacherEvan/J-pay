@@ -34,7 +34,8 @@ assert.ok(!__pg.calls.some((c) => c.method === "range"), "pushable query must no
 __pg.calls.length = 0;
 const nullShifts = await db.query("shifts").withIndex("by_needs_review", (q) => q.eq("needsReview", undefined)).collect();
 assert.deepEqual(nullShifts.map((r) => r._id), ["s1"], "absent field must match is.null");
-assert.ok(__pg.calls.some((c) => c.method === "eq" && c.val === null), "undefined constraint must push as null");
+assert.ok(__pg.calls.some((c) => c.method === "is" && c.col === "needsReview" && c.val === null), "undefined constraint must push as is.null");
+assert.ok(!__pg.calls.some((c) => c.method === "eq" && (c.val === null || c.val === undefined)), "eq(null) must never reach SQL (PostgREST casts 'null' and errors)");
 
 // --- Test 3: pushdown + residual JS predicate compose
 __pg.calls.length = 0;
