@@ -279,3 +279,17 @@ Plus: `0002_crons_and_indexes.sql` with `create unique index logs_user_idem_uniq
 - Gates run: `npm test` → 95 + 6 pass / 0 fail · `check_consistency.py` → PASS · `check_diagrams.py` → PASS.
 - **Not done / explicitly out of scope:** any source fix (this report is the deliverable); live DB verification of `pg_cron` (requires the Supabase project); e2e browser run (requires dev server + test credentials); production deploy verification.
 - **Score honesty note:** `S_health = 70` sits in the Moderate band but `N_P0 = 1` pins the classification to HIGH. If P0-1 alone is fixed and MVTH #2 lands, recompute: `D_raw = 59`, `S ≈ 76`, risk HIGH→MODERATE (subject to review of P1 closure).
+
+---
+
+## Post-Commit Addendum (same session) — the audit's own blind spots, closed
+
+The first cut of this report had four evidentiary gaps. All are now closed; the headline findings were correct, the *proof* was not strong enough.
+
+1. **Registry enumeration (exact).** Importing the real registry in-process (Node + `typescript.transpileModule` loader, `db.ts` replaced by an in-memory stub — zero network, zero real data): **120 registered functions; 30 internal handlers; 3 of those (`users:bootstrapFirstModerator`, `users:resetPasswordBreakGlass`, `users:createMasterTempUser`) are additionally deny-listed by `INTERNAL_ONLY_OVERRIDES`; 27 are browser-exploitable.** No registry key is missing from this accounting; `demo/seed:seedAll` reaches the wire via `convex/demo.ts` re-export.
+2. **In-process exploit chain, no production contact.** With the stub wired: `invoke({module:'users_queries', fn:'listByRole'}, {role:'moderator'}, null, false)` → returns the roster (fixture row) to an anonymous caller; `invoke({module:'payroll_data', fn:'logsForExport'}, {userId:'anyone', fromMs:0, toMs:9e15}, null, false)` → handler executes, returns `{rows:[], truncated:false}`; controls refused as designed (`UNKNOWN_FUNCTION` for unknown keys and for the 3 deny-listed overrides). The dead `isPublic === false` gate is the *only* thing asked to stand in front of those 27 handlers, and it never fires.
+3. **Type gate.** `npm run typecheck` (tsc --noEmit, strict) passes clean — previously unassessed in this session.
+4. **What is actually deployed.** Latest Production deployment = `7656881840`, created 2026-11-09T14:11Z, **SHA `9a11f35`** — i.e. the cutover (`f823fa1`) is in the live build, and line 413 of the deployed `runtime.ts` is byte-identical to the audited dead gate (`git show 9a11f35:src/lib/backend/runtime.ts | sed -n '413p'`). The canonical site `https://j-pay.vercel.app` is serving this build (GET `/api/backend/call` → 200, JSON inventory listing `payroll_data:logsForExport`, `logs:createLogAs`, `users_queries:listByRole`, `demo:seedAll`, …, `linked:true`). **No internal mutation or internal query was sent to production**; the deployment `environment_url` (`j-ds7j5640j-…vercel.app`) is behind Vercel deployment protection, but the canonical domain is open.
+5. **Score unchanged.** `S_health = 70`, HIGH. The evidence strengthening adds no new findings; it removes the "only a static read" caveat from P0-1.
+
+**Still not done (by design / by mandate):** no fix has been applied (the deliverable was the audit); no probe has executed any production-affecting action (the exploit was proven against a stub only); nothing was pushed; Phase 1 acceptance gate (live `pg_cron` inventory + one forced retention run) cannot be satisfied from this machine and is recorded in the plan.
