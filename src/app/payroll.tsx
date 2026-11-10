@@ -6,6 +6,9 @@ import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
 import { useUserLocale } from "../lib/use-user-locale";
+import { ConsoleWindow } from "@/components/console/window";
+import { Pager } from "@/components/console/pager";
+import { usePagination } from "@/components/console/use-pagination";
 
 type PayrollResult = {
   rate: number;
@@ -26,7 +29,7 @@ type SupportedStrategy = {
   displayName: string;
 };
 
-export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee" }) {
+export function PayrollPanel({ employees, role, className }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee"; className?: string }) {
   const [userId, setUserId] = useState("");
   const [range, setRange] = useState<7 | 14 | 28>(7);
   const active = employees.filter((e) => !e.archivedAt);
@@ -50,6 +53,7 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
   const isModerator = role === "moderator";
   const locale = browserLocale();
+  const dayPages = usePagination(result?.days ?? [], 6);
 
   function download(filename: string, csv: string) {
     const blob = new Blob([csv], { type: "text/csv" });
@@ -62,11 +66,8 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
   }
 
   return (
-    <section className="card-surgical p-5">
-      <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
-        Payroll
-      </h2>
-      <div className="flex flex-wrap items-center gap-2.5 text-sm">
+    <ConsoleWindow title="Payroll" className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-2 p-3">
+      <div className="flex flex-none flex-wrap items-center gap-2 text-sm">
         <select
           value={userId}
           onChange={(e) => setUserId(e.target.value as Id<"users">)}
@@ -128,89 +129,93 @@ export function PayrollPanel({ employees, role }: { employees: { _id: Id<"users"
         )}
       </div>
       {result && (
-        <div className="mt-4">
-          <p className="tnum mb-2.5 text-xs text-[var(--fog)]">
-            Rate <span className="font-semibold text-[var(--paper)]">{formatCurrency(result.rate, result.currency, result.locale ?? locale)}</span>/h · strategy {result.strategy} · tz {result.timezone} ·{" "}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <p className="tnum mb-1.5 flex-none text-xs text-[var(--fog)]">
+            Rate <span className="font-semibold text-[var(--paper)]">{formatCurrency(result.rate, result.currency, result.locale ?? locale)}</span>/h · {result.strategy} · tz {result.timezone} ·{" "}
             <span className={result.totals.flaggedCount ? "font-semibold text-[var(--hivis)]" : ""}>
-              {result.totals.flaggedCount} flagged shift(s) excluded
+              {result.totals.flaggedCount} flagged excluded
             </span>
           </p>
-          <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--panel-2)]">
-            <table className="w-full text-left text-sm">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--panel-2)]">
+            <table className="w-full text-left text-xs">
               <thead className="bg-[var(--panel)] text-[var(--fog)]">
                 <tr>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Day</th>
-                  <th scope="col" className="p-3 text-right text-xs uppercase tracking-wider">Minutes</th>
-                  <th scope="col" className="p-3 text-right text-xs uppercase tracking-wider">Pay ({result.currency})</th>
+                  <th scope="col" className="px-3 py-2 text-xs uppercase tracking-wider">Day</th>
+                  <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Minutes</th>
+                  <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Pay ({result.currency})</th>
                 </tr>
               </thead>
               <tbody>
-                {result.days.map((d) => (
-                  <tr key={d.day} className="border-t border-[var(--line)]/50 hover:bg-[var(--panel-elevated)]/40 transition">
-                    <td className="p-3 text-[var(--paper)]">{d.day}</td>
-                    <td className="tnum p-3 text-right text-[var(--text-secondary)]">{d.minutes}</td>
-                    <td className="tnum p-3 text-right font-medium text-[var(--paper)]">{formatCurrency(d.pay, result.currency, result.locale ?? locale)}</td>
+                {dayPages.pageItems.map((d) => (
+                  <tr key={d.day} className="border-t border-[var(--line)]/50 transition hover:bg-[var(--panel-elevated)]/40">
+                    <td className="px-3 py-1.5 text-[var(--paper)]">{d.day}</td>
+                    <td className="tnum px-3 py-1.5 text-right text-[var(--text-secondary)]">{d.minutes}</td>
+                    <td className="tnum px-3 py-1.5 text-right font-medium text-[var(--paper)]">{formatCurrency(d.pay, result.currency, result.locale ?? locale)}</td>
                   </tr>
                 ))}
                 <tr className="border-t border-[var(--line)] bg-[var(--panel)] font-semibold">
-                  <td className="p-3 text-[var(--paper)]">Total ({result.totals.shiftCount} shifts)</td>
-                  <td className="tnum p-3 text-right text-[var(--paper)]">{result.totals.payableMinutes}</td>
-                  <td className="tnum p-3 text-right text-[var(--mint)] font-bold">{formatCurrency(result.totals.pay, result.currency, result.locale ?? locale)}</td>
+                  <td className="px-3 py-1.5 text-[var(--paper)]">Total ({result.totals.shiftCount} shifts)</td>
+                  <td className="tnum px-3 py-1.5 text-right text-[var(--paper)]">{result.totals.payableMinutes}</td>
+                  <td className="tnum px-3 py-1.5 text-right font-bold text-[var(--mint)]">{formatCurrency(result.totals.pay, result.currency, result.locale ?? locale)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <Pager page={dayPages.page} pageCount={dayPages.pageCount} total={dayPages.total} onPage={dayPages.setPage} label="Days" />
           {result.flagged.length > 0 && (
-            <ul className="mt-3 flex flex-col gap-1 text-xs text-[var(--hivis)]">
-              {result.flagged.map((f) => (
+            <ul className="mt-1.5 flex flex-none flex-col gap-0.5 text-xs text-[var(--hivis)]">
+              {result.flagged.slice(0, 2).map((f) => (
                 <li key={f.startedAt} className="tnum flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--hivis)]" />
                   {formatDateTime(f.startedAt, result.locale ?? locale)} — {f.reason ?? "flagged"} ({f.minutes ?? "?"} min held)
                 </li>
               ))}
+              {result.flagged.length > 2 && (
+                <li className="pl-3 text-[var(--fog)]">+{result.flagged.length - 2} more flagged shift(s) in export</li>
+              )}
             </ul>
           )}
         </div>
       )}
-    </section>
+    </ConsoleWindow>
   );
 }
 
-export function ReviewPanel() {
+export function ReviewPanel({ className }: { className?: string }) {
   const review = useQuery(api.moderator.auditNeedsReview);
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
   const locale = useUserLocale();
+  const list = usePagination<any>(review ?? [], 3);
   return (
-    <section className="card-surgical p-5">
-      <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
-        Shifts needing review
-      </h2>
-      {(review ?? []).length === 0 && <p className="text-sm text-[var(--fog)]">Nothing flagged.</p>}
-      {(review ?? []).map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
-        <div key={s._id} className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[var(--line)]/50 py-3 text-sm first:border-0">
-          <span className="flex items-center gap-2">
+    <ConsoleWindow title="Shifts needing review" className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-1 p-3">
+      {review === undefined && <p className="text-xs text-[var(--fog)]">Loading…</p>}
+      {review !== undefined && (review ?? []).length === 0 && <p className="text-xs text-[var(--fog)]">Nothing flagged.</p>}
+      {list.pageItems.map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
+        <div key={s._id} className="flex flex-none flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--line)] p-2 text-xs">
+          <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="tnum font-medium text-[var(--paper)]">{formatDateTime(s.startedAt, locale)}</span>
             <span className="rounded-full bg-[var(--danger)]/20 px-2 py-0.5 text-xs font-semibold text-[var(--danger)]">{s.reviewReason}</span>
           </span>
-          <span className="flex gap-2">
+          <span className="inline-flex flex-none gap-1.5">
             <button
               data-testid="review-recompute"
               onClick={() => void recompute({ userId: s.userId })}
-              className="btn-surgical min-h-[44px] px-3.5 py-1.5 text-xs font-medium"
+              className="btn-surgical min-h-[40px] px-3 py-1.5 text-xs font-medium"
             >
               Recompute
             </button>
             <button
               data-testid="review-resolve"
               onClick={() => void resolveShift({ shiftId: s._id })}
-              className="btn-surgical btn-surgical-mint min-h-[44px] px-3.5 py-1.5 text-xs font-semibold"
+              className="btn-surgical btn-surgical-mint min-h-[40px] px-3 py-1.5 text-xs font-semibold"
             >
               Resolve
             </button>
           </span>
         </div>
       ))}
-    </section>
+      <Pager page={list.page} pageCount={list.pageCount} total={list.total} onPage={list.setPage} label="Flagged shifts" />
+    </ConsoleWindow>
   );
 }

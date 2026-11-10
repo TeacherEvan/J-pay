@@ -125,11 +125,18 @@ await runWithBrowser(async (page, { baseUrl, cdp, assertions }) => {
     await new Promise((r) => setTimeout(r, 500));
   }
 
+  // Zero-scroll console: switch to the Payroll tab (role=tab pill ≥md).
+  await clickByText(page, "Payroll");
+  await new Promise((r) => setTimeout(r, 1500));
   const resolveClicked = await clickByTestId(page, "review-resolve").catch(() => false);
   await add("resolve review item", resolveClicked);
   await new Promise((r) => setTimeout(r, 3500));
 
   await add("payroll panel present", /payroll/i.test(await page.evaluate(() => document.body.innerText)));
+
+  // Zero-scroll console: provision lives on the Access tab.
+  await clickByText(page, "Access");
+  await new Promise((r) => setTimeout(r, 1500));
 
   // ---------- B. PROVISION EMPLOYEE VIA UI ----------
   const stamp = Date.now().toString(36);
@@ -147,43 +154,55 @@ await runWithBrowser(async (page, { baseUrl, cdp, assertions }) => {
   // assign the new employee to the first site so check-in can pass the geofence
   await page
     .waitForFunction(
-      (n) => [...document.querySelectorAll("option")].filter((o) => o.text === n).length >= 2,
+      (n) => [...document.querySelectorAll("option")].filter((o) => o.text === n).length >= 1,
       { timeout: 12000 },
       empName,
     )
     .catch(() => {});
-  const tagged = await page.evaluate((n) => {
+  // The Assign window holds a single <select> (employee) and checkbox rows (sites).
+  const assignNote = await page.evaluate((n) => {
     const sec = [...document.querySelectorAll("section")].find((x) =>
       x.querySelector("h2")?.textContent.includes("Assign employee"),
     );
-    if (!sec) return null;
-    const [empSel, siteSel] = [...sec.querySelectorAll("select")];
-    empSel.setAttribute("data-t", "emp");
-    siteSel.setAttribute("data-t", "site");
-    return {
-      emp: [...empSel.options].find((o) => o.text === n)?.value,
-      site: [...siteSel.options].find((o) => o.text === "JNB Central Depot")?.value,
-    };
+    if (!sec) return "no-section";
+    const empSel = sec.querySelector("select");
+    if (!empSel) return "no-select";
+    const opt = [...empSel.options].find((o) => o.text.includes(n));
+    if (!opt) return "no-option";
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+    setter.call(empSel, opt.value);
+    empSel.dispatchEvent(new Event("change", { bubbles: true }));
+    return "ok";
   }, empName);
+  await new Promise((r) => setTimeout(r, 800));
+  const siteTicked = await page.evaluate(() => {
+    const sec = [...document.querySelectorAll("section")].find((x) =>
+      x.querySelector("h2")?.textContent.includes("Assign employee"),
+    );
+    const label = [...(sec?.querySelectorAll("label") ?? [])].find((l) =>
+      l.textContent.includes("JNB Central Depot"),
+    );
+    const box = label?.querySelector('input[type="checkbox"]');
+    if (!box) return false;
+    if (!box.checked) box.click();
+    return box.checked;
+  });
   let assignOk = false;
-  let assignNote = "no-selects";
-  if (tagged?.emp && tagged?.site) {
-    await page.select('select[data-t="emp"]', tagged.emp);
-    await page.select('select[data-t="site"]', tagged.site);
-    await new Promise((r) => setTimeout(r, 500));
+  let assignSaveNote = assignNote === "ok" ? "employee-selected" : assignNote;
+  if (assignNote === "ok" && siteTicked) {
     await page.evaluate(() => {
-      const btn = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Assign");
+      const btn = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save assignments");
       if (btn && !btn.disabled) btn.click();
     });
     await new Promise((r) => setTimeout(r, 4000));
-    assignNote = await page.evaluate(() =>
-      [...document.querySelectorAll("p,span")].map((x) => x.textContent).find((t) => t && (/Assigned|ASSIGNED|error|INVALID/i.test(t))) ?? "(no msg)",
+    assignSaveNote = await page.evaluate(() =>
+      [...document.querySelectorAll("p,span")].map((x) => x.textContent).find((t) => t && (/Assigned|Saved|sites assigned|error|INVALID/i.test(t))) ?? "(no msg)",
     );
-    assignOk = /Assigned\.|ALREADY_ASSIGNED/i.test(assignNote);
+    assignOk = /sites assigned|Assigned\.|ALREADY_ASSIGNED/i.test(assignSaveNote);
   } else {
-    assignNote = `tagged=${JSON.stringify(tagged)}`;
+    assignSaveNote = `assign=${assignNote} ticked=${siteTicked}`;
   }
-  await add("employee assigned to site", assignOk, String(assignNote).slice(0, 70));
+  await add("employee assigned to site", assignOk, String(assignSaveNote).slice(0, 70));
 
   // ---------- C. EMPLOYEE LEG (fresh session with the new code) ----------
   await wipe(page, cdp, baseUrl);

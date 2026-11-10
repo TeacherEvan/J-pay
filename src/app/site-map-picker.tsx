@@ -93,7 +93,7 @@ export function SiteMapPicker({
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex h-full min-h-0 flex-col gap-1.5 md:gap-2">
       <div className="relative">
         <input
           value={query}
@@ -122,7 +122,7 @@ export function SiteMapPicker({
         )}
         {searching && <span className="absolute right-3.5 top-2.5 text-xs text-[var(--fog)]">…</span>}
       </div>
-      <div ref={containerRef} className="h-52 w-full overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)]" />
+      <div ref={containerRef} className="h-32 w-full flex-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)] md:h-full md:min-h-0 md:flex-1" />
       <div className="flex flex-wrap items-center gap-2.5 text-xs">
         <button
           type="button"

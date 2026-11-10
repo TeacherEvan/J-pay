@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { bump, useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
 import { formatDateTime } from "@/lib/format";
+import { ConsoleWindow } from "@/components/console/window";
 import { useUserLocale } from "@/lib/use-user-locale";
 
 type ManagedShiftRow = {
@@ -229,49 +230,49 @@ export function ManagerMap() {
   const noPing = (rows ?? []).filter((r) => !r.lastLog);
 
   return (
-    <section aria-labelledby="manager-map-heading">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="manager-map-heading" className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fog)]">
-          My crew on site{rows ? ` (${rows.length})` : ""}
-        </h2>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-[var(--text-secondary)]" aria-live="polite">
+    <ConsoleWindow
+      title={`My crew on site${rows ? ` (${rows.length})` : ""}`}
+      className="min-h-0 flex-1"
+      bodyClassName="flex min-h-0 flex-col gap-1 p-2"
+      aside={
+        <>
+          <span className="hidden text-xs text-[var(--text-secondary)] sm:inline" aria-live="polite">
             {updatedAt ? `updated ${new Date(updatedAt).toLocaleTimeString(userLocale)} · auto 45s` : "loading…"}
           </span>
           <button
             onClick={() => bump({ tables: [...MAP_TABLES] })}
             aria-label="Refresh manager map"
-            className="btn-surgical min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-semibold text-[var(--cyan)] border-[var(--cyan)]/40 hover:bg-[var(--cyan)]/10"
+            className="btn-surgical min-h-[40px] min-w-[40px] px-3 py-1.5 text-xs font-semibold border-[var(--cyan)]/40 text-[var(--cyan)] hover:bg-[var(--cyan)]/10"
           >
             refresh
           </button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div
         ref={containerRef}
         role="application"
         aria-label="Map of crew assigned to your sites currently on shift"
-        className="h-80 w-full overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-2)]"
+        className="h-full min-h-[160px] w-full flex-1 overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--panel-2)]"
       />
 
       {rows !== undefined && rows.length === 0 && (
-        <p className="mt-2 text-sm text-[var(--fog)]">No crew on shift right now.</p>
+        <p className="flex-none text-xs text-[var(--fog)]">No crew on shift right now.</p>
       )}
 
       {noPing.length > 0 && (
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">
+        <p className="flex-none truncate text-xs text-[var(--text-secondary)]">
           No GPS log yet:{" "}
           {noPing.map((r) => `${r.name} (on shift since ${formatDateTime(r.startedAt, userLocale)})`).join(" · ")}
         </p>
       )}
 
-      <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]" aria-hidden="true">
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SITE_COLOR }} />managed geofence</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: INSIDE_COLOR }} />inside geofence</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: TRAVEL_COLOR }} />travelling (on-shift, off-site)</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: OUTSIDE_COLOR }} />off-site, no travel fixes</span>
+      <p className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]" aria-hidden="true">
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: SITE_COLOR }} />managed geofence</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: INSIDE_COLOR }} />inside geofence</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: TRAVEL_COLOR }} />travelling (on-shift, off-site)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: OUTSIDE_COLOR }} />off-site, no travel fixes</span>
       </p>
-    </section>
+    </ConsoleWindow>
   );
 }
