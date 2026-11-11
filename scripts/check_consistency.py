@@ -4,8 +4,21 @@ import re, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-doc = (ROOT / "j-pay.md").read_text(encoding="utf-8")
+doc_path = ROOT / "j-pay.md"
+doc = doc_path.read_text(encoding="utf-8")
 failures = []
+
+def anchor_after(anchor, context):
+    """Return the text after the first occurrence of `anchor`, or None after
+    recording a readable anchor-drift failure (never a raw traceback)."""
+    parts = doc.split(anchor, 1)
+    if len(parts) < 2:
+        failures.append(
+            f"ANCHOR: expected anchor {anchor!r} missing in {context} "
+            f"(file examined: {doc_path}) — the section moved or was renamed; update the anchor in scripts/check_consistency.py"
+        )
+        return None
+    return parts[1]
 
 # D4: Clerk must be fully removed
 if re.search(r"\bClerk\b", doc):
@@ -39,7 +52,8 @@ if "web-push" not in doc:
 
 # B2: state diagram must contain side-mission substate
 FENCE = chr(96) * 3  # avoid literal fence inside this snippet
-if "stateDiagram-v2" in doc and "side_mission" not in doc.split("stateDiagram-v2")[1].split(FENCE)[0]:
+sd_block = anchor_after("stateDiagram-v2", "§6.1 state diagram") if "stateDiagram-v2" in doc else None
+if sd_block is not None and "side_mission" not in sd_block.split(FENCE)[0]:
     failures.append("B2: state diagram lacks quick_side_mission substate")
 # B2: unpaired side-mission rule must parallel unpaired-lunch rule
 if "unpaired lunch" in doc.lower() and "unpaired side mission" not in doc.lower():
@@ -71,7 +85,8 @@ if "Fluid compute" not in doc and "300s" not in doc:
 if "purge" in doc.lower() and "zero out lat/lng" not in doc and "anonymize (zero" not in doc:
     failures.append("M3: coordinate purge outcome (anonymize vs delete) unspecified")
 # M6: sites audit fields
-if "createdBy" not in doc.split("sites: defineTable")[1].split("}),")[0]:
+sites_block = anchor_after("sites: defineTable", "§6 schema (sites table)")
+if sites_block is not None and "createdBy" not in sites_block.split("}),")[0]:
     failures.append("M6: sites table lacks createdBy audit field")
 # M7 covered by base script (web-push presence) — tighten to require Convex Action wording
 if "web-push" in doc and "Convex Action" not in doc:
@@ -119,15 +134,17 @@ if version and readme_path.exists():
 
 # R26: side-mission implicit exits must include day_finish (§6.1 rule 8)
 if "stateDiagram-v2" in doc:
-    sd = doc.split("stateDiagram-v2")[1].split(FENCE)[0]
+    sd = (anchor_after("stateDiagram-v2", "§6.1 state diagram (R26)") or "").split(FENCE)[0]
     if "side_mission --> checkpoint" in sd and "side_mission --> day_finish" not in sd:
         failures.append("B2/R26: side-mission lacks day_finish implicit exit (§6.1 rule 8)")
 
 # messages.retentionDays must be wired into §9 policy text, not exist in schema only
 if "retentionDays" in doc:
-    sec9 = doc.split("## 9.")[1].split("\n## ")[0]
-    if "retentionDays" not in sec9:
-        failures.append("RESIDUE: messages.retentionDays in schema but unwired in §9 policy text")
+    sec9_body = anchor_after("## 9.", "§9 retention policy")
+    if sec9_body is not None:
+        sec9 = sec9_body.split("\n## ")[0]
+        if "retentionDays" not in sec9:
+            failures.append("RESIDUE: messages.retentionDays in schema but unwired in §9 policy text")
 
 print("\n".join(failures) if failures else "ALL CONSISTENCY CHECKS PASS")
 sys.exit(1 if failures else 0)

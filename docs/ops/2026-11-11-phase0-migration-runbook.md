@@ -21,6 +21,11 @@ select table_name from information_schema.tables
 
 `0002_logs_idempotency_unique.sql` → `0004_manager_role.sql` → `0005_manager_sites.sql` → `0006_travel_tracking.sql` → `0007_shift_overrides.sql` → `0009_organisations.sql` → `0010_travel_open_leg_unique.sql` → `0011_system_events.sql` → `0012_manager_sites_archive.sql` → `0013_rate_limit_buckets.sql` → `0014_registry_hardening.sql` → `0015_shifts_unique_user_started.sql`
 
+**New drafts (2026-11-11, not yet applied):**
+
+- `0016_rate_limit_fn_lockdown.sql` — locks `jpay_rate_limit_hit` to `service_role` (PUBLIC EXECUTE revoked; pinned `search_path`). Optional hardening; app runs without it via the 0013 grant.
+- `0017_drop_duplicate_idem_index.sql` — drops redundant non-unique `logs_user_idem_idx`; guarded by a uniqueness pre-flight on `logs_user_idem_uniq`.
+
 **Quarantined files — do NOT apply:**
 
 - `archive/0003_retention_crons.OWNER_ONLY.sql` — retention crons. Requires pg_cron + pg_net enabled and hand-replaced `__SITE_URL__` / `__CRON_SECRET__`. The app runs fine without them. Only the owner, via SQL editor, after step 1 is done and verified. Never `db push`.

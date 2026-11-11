@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
+import { FocusTrapModal } from "@/components/console/focus-trap-modal";
 
 /** Set when a forced first-login password change is saved; page.tsx reads it
  * to request the one-time install popup. */
@@ -85,24 +86,18 @@ export function ChangePassword() {
 
 export function ForcedPasswordChange() {
   const [saved, setSaved] = useState(false);
-  const submitRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (!saved) submitRef.current?.focus();
-  }, [saved]);
   useEffect(() => {
     if (!saved) return;
     const t = setTimeout(() => window.location.reload(), 1200);
     return () => clearTimeout(t);
   }, [saved]);
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-[var(--ink)]/90 backdrop-blur-sm p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="forced-pw-title"
+    <FocusTrapModal
+      labelledBy="forced-pw-title"
+      overlayClassName="fixed inset-0 z-[100] grid place-items-center bg-[var(--ink)]/90 backdrop-blur-sm p-6"
+      className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40 shadow-[0_0_24px_var(--mint-glow)] outline-none"
     >
-      <div className="card-surgical w-full max-w-sm p-6 border-[var(--mint)]/40 shadow-[0_0_24px_var(--mint-glow)]">
-        {!saved ? (
+      {!saved ? (
           <>
             <h2 id="forced-pw-title" className="mb-2 text-lg font-bold text-[var(--paper)]">Set your own password</h2>
             <p className="mb-4 text-sm text-[var(--text-secondary)]">
@@ -110,7 +105,6 @@ export function ForcedPasswordChange() {
               password to continue — you will only be asked once.
             </p>
             <PasswordFields
-          submitRef={submitRef}
           onSaved={() => {
             try {
               sessionStorage.setItem(PW_CHANGED_KEY, String(Date.now()));
@@ -125,7 +119,6 @@ export function ForcedPasswordChange() {
             <p role="status" aria-live="polite" className="mb-4 text-sm text-[var(--fog)]">Reloading…</p>
           </>
         )}
-      </div>
-    </div>
+    </FocusTrapModal>
   );
 }

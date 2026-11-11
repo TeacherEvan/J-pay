@@ -52,7 +52,7 @@ offers **"Enter demo preview"**.
 Each client company gets an isolated fork + Supabase project:
 
 1. Fork/copy this repo → `jpay-<client>`. Update `name` in `package.json` and `manifest.webmanifest`.
-2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/` **one file at a time in the SQL editor, in this order**: `0001_init.sql` → `0002` → `0004` → `0005` → `0006` → `0007` → `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015`. Do **not** apply `archive/` and do **not** use `supabase db push` (see above) — and do not skip `0014`, which closes an unauthenticated read on `jpay_id_registry`.
+2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/` **one file at a time in the SQL editor, in this order**: `0001_init.sql` → `0002` → `0004` → `0005` → `0006` → `0007` → `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015` → `0016` → `0017`. Do **not** apply `archive/` and do **not** use `supabase db push` (see above) — and do not skip `0014`, which closes an unauthenticated read on `jpay_id_registry`.
 3. Set env vars per deployment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`, `DEVICE_TOKEN_SECRET`, `CRON_SECRET` (+ `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`,
    `MASTER_PASSWORD`, vapid keys if push is wanted).

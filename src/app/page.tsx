@@ -206,7 +206,7 @@ export default function Home() {
                 storageSet(IOS_DISMISS_KEY, "1");
               }}
               aria-label="Dismiss iPhone install hint"
-              className="shrink-0 rounded p-1.5 text-[var(--fog)] hover:text-[var(--paper)]"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-lg text-[var(--fog)] hover:text-[var(--paper)]"
             >
               ✕
             </button>

@@ -80,7 +80,7 @@ export function ConsoleTabs({
               role="tab"
               id={`tab-${t.id}`}
               aria-selected={selected}
-              aria-controls={`tabpanel-${t.id}`}
+              aria-controls={selected ? `tabpanel-${t.id}` : undefined}
               tabIndex={selected ? 0 : -1}
               data-testid={`console-tab-${t.id}`}
               onClick={() => onChange(t.id)}

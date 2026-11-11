@@ -1,32 +1,28 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Focus-trap modal shell: Tab cycles inside, Escape closes when `onClose`
- * is provided (omit for must-acknowledge gates), body scroll is locked while
- * mounted, and focus returns to the previously focused element on unmount.
+ * Shared focus-trap protocol used by every modal in the app:
+ * Tab/Shift+Tab cycle inside `panelRef`, Escape calls the LATEST `onClose`
+ * (held in a ref so the keydown handler never goes stale), body scroll is
+ * locked while mounted, and focus returns to the previously focused element
+ * on unmount. `onClose` may be omitted for must-acknowledge gates (Escape is
+ * then ignored).
  */
-export function FocusTrapModal({
-  labelledBy,
-  onClose,
-  className,
-  overlayClassName,
-  children,
-}: {
-  /** id of the element labelling the dialog */
-  labelledBy: string;
-  onClose?: () => void;
-  className?: string;
-  overlayClassName?: string;
-  children: ReactNode;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
+export function useFocusTrap(
+  panelRef: RefObject<HTMLElement | null>,
+  onClose?: () => void
+) {
   const restoreRef = useRef<Element | null>(null);
-  const id = useId();
+  // Latest-onClose ref: the keydown listener is bound once on mount, so it
+  // must read the handler through a ref or it would close over the FIRST
+  // onClose prop forever.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     restoreRef.current = document.activeElement;
@@ -36,9 +32,9 @@ export function FocusTrapModal({
     (first ?? panel)?.focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && onClose) {
+      if (e.key === "Escape" && onCloseRef.current) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel) return;
@@ -69,6 +65,30 @@ export function FocusTrapModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+}
+
+/**
+ * Focus-trap modal shell: Tab cycles inside, Escape closes when `onClose`
+ * is provided (omit for must-acknowledge gates), body scroll is locked while
+ * mounted, and focus returns to the previously focused element on unmount.
+ */
+export function FocusTrapModal({
+  labelledBy,
+  onClose,
+  className,
+  overlayClassName,
+  children,
+}: {
+  /** id of the element labelling the dialog */
+  labelledBy: string;
+  onClose?: () => void;
+  className?: string;
+  overlayClassName?: string;
+  children: ReactNode;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+  useFocusTrap(panelRef, onClose);
 
   return (
     <div
