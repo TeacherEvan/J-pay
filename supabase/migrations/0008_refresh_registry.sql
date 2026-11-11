@@ -8,6 +8,13 @@
 -- everything inline from 0001).
 --
 -- Apply after 0007. Purely additive; no data touched.
+--
+-- WARNING (2026-11-11): superseded by 0011_system_events.sql, whose registry
+-- union additionally includes organisations and systemEvents. Do NOT apply
+-- this file AFTER 0011 — it would drop those two from the view. It is kept
+-- for historical/fork parity only. Also note: on installs whose registry
+-- view has id typed uuid (pre-2026-11-11 production), create-or-replace
+-- fails; drop+recreate instead (see 0009_organisations.sql).
 
 create or replace view public.jpay_id_registry as
   select "_id"::text as id, 'users' as tbl from public.users

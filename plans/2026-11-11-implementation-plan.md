@@ -59,3 +59,15 @@
 | S2 | Phase 1 (items 1–3) | MVTH red→green; `npm run verify` |
 | S3 | Phase 2 (items 4–9) | shared-bucket test green; EXPLAIN posted; `npm audit --omit=dev` clean or documented; maps deleted |
 | S4 | Phase 3 (items 8–10) | re-audit `S_health ≥ 85` |
+
+---
+
+## Phase 0 execution record (2026-11-11, owner-authorized)
+
+Applied to production Supabase project `dlwlbvhyrvyftpjruqdq` (ref; name "J-pay") by the owner-authorized agent session, in order: `0002` (unique index; pre-checked duplicate-free, 16 logs), `0009` (**+ inline `jpay_id_registry` drop/rebuild — the existing view had `id` uuid, blocking `create or replace`; repo file updated to match**), `0010`, `0011`, `0012`, `0013`. `0008` was **not applied** — superseded by 0011's superset union (header warning added to the repo file). `0003` (retention crons) **not applied** — needs `pg_cron` + `pg_net` enabled by the owner and a canonical site URL + `CRON_SECRET`; until then the four retention jobs do not run.
+
+Post-apply verification: `organisations`/`systemEvents`/`jpay_rate_limits` present with RLS on; backfill created 1 default org linked to 6 users / 3 sites; `logs_user_idem_uniq` + `travel_segments_one_open` indexes present; `jpay_rate_limit_hit` self-test first-call `false`, second-call `true` (limit=1) and test bucket deleted; registry view reports 48 rows.
+
+**Deploy:** Vercel Git integration is live — pushes to `main` deploy automatically. `37ac344` deployed 2026-11-11T05:44:29Z, state `success` (GitHub deployment record `7702790027`, environment Production). Live verification on `https://j-pay.vercel.app`: `/api/health/db` → `{"ok":true,"tables":16}`; anonymous POST `users_queries:me` → `{"result":null,"tables":[],"reads":[]}` (safe null, no data); anonymous POST `logs:createLogAs` → `UNKNOWN_FUNCTION` (deny-by-default holds); `GET /api/backend/call` → 403 (smoke-key fail-closed); unknown function → 404.
+
+**Still open:** (1) `0003` + CRON_SECRET + cron dry-run; (2) `/privacy` counsel policy; (3) `npm ci` on a networked machine; (4) authed post-deploy round-trip (punch → re-derive; consent revoke → `consent_revoked`) needs moderator/employee credentials; (5) deliberate `DEMO_MODE` audit of the production env.

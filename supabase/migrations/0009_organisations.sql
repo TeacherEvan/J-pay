@@ -39,8 +39,12 @@ end $$;
 
 alter table public.organisations enable row level security;
 
--- Registry view refresh (must include every table) + PostgREST schema reload.
-create or replace view public.jpay_id_registry as
+-- Existing installs carry jpay_id_registry with id typed uuid, so a plain
+-- create-or-replace cannot widen to text. Drop and rebuild the view (it is
+-- derived; no data is lost). Matches what was applied to production
+-- 2026-11-11 (migration version 20261111054825, view rebuild folded in).
+drop view if exists public.jpay_id_registry;
+create view public.jpay_id_registry as
   select "_id"::text as id, 'users' as tbl from public.users
   union all
   select "_id"::text as id, 'organisations' as tbl from public.organisations
