@@ -5,6 +5,7 @@ import { useAction } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errMsg } from "@/lib/errors";
+import { serverNow } from "@/lib/server-clock";
 import { LABEL } from "./types";
 import type { Status, CardSite } from "./types";
 
@@ -46,7 +47,7 @@ export function PersonaSubmit({
     try {
       const result = await checkIn({
         siteId: chosen._id,
-        clientReportedTime: Date.now(),
+        clientReportedTime: serverNow(),
         status,
         latitude: chosen.latitude,
         longitude: chosen.longitude,

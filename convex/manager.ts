@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId } from "./access";
+import { requireModerator, maybeCurrentUserId, orgBoundaryOk } from "./access";
 import { isDemoUser } from "./demo/scope";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -314,6 +314,9 @@ export const setManagerSites = mutation({
       const site = await ctx.db.get(siteId);
       if (!site) throw new ConvexError("SITE_NOT_FOUND");
       if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
+      if (!orgBoundaryOk(manager.orgId, site.orgId)) {
+        throw new ConvexError("CROSS_ORG_SITE_ASSIGNMENT_FORBIDDEN");
+      }
       wanted.add(siteId);
     }
     const allRows = await ctx.db
@@ -363,6 +366,7 @@ export const promoteToManager = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const actorId = await requireModerator(ctx);
+    const actor = await ctx.db.get(actorId);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
     if (target.role !== "employee") {
@@ -371,6 +375,23 @@ export const promoteToManager = mutation({
     }
     if (target.archivedAt !== undefined || !target.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
     if (isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+
+    // Org boundary check (fail closed): both parties must agree on the org —
+    // same org, or both unscoped. Exactly one side org'd, or different orgs → refuse.
+    if (!orgBoundaryOk(actor?.orgId, target.orgId)) {
+      throw new ConvexError("CROSS_ORG_PROMOTION_FORBIDDEN");
+    }
+
+    // Mid-shift lock: Check if target employee has an active open shift
+    const userShifts = await ctx.db
+      .query("shifts")
+      .withIndex("by_user_start", (q) => q.eq("userId", args.userId))
+      .collect();
+    const hasOpenShift = userShifts.some((s) => s.endedAt === undefined);
+    if (hasOpenShift) {
+      throw new ConvexError("ACTIVE_SHIFT_IN_PROGRESS");
+    }
+
     await auditManagerGrant(ctx, {
       actorId,
       action: "manager_promoted",
@@ -378,6 +399,45 @@ export const promoteToManager = mutation({
       before: ["employee"],
       after: ["manager"],
     });
+
+    // Site inheritance on promotion: automatically seed managerSites from employee's userSites
+    const userSiteRows = await ctx.db
+      .query("userSites")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Query existing managerSites rows for reviving or skipping
+    const existingManagerSites = await ctx.db
+      .query("managerSites")
+      .withIndex("by_manager", (q) => q.eq("managerId", args.userId))
+      .collect();
+    const activeMgrSites = new Set(
+      existingManagerSites.filter((r) => r.archivedAt === undefined).map((r) => r.siteId as string)
+    );
+    const archivedMgrSitesBySite = new Map(
+      existingManagerSites.filter((r) => r.archivedAt !== undefined).map((r) => [String(r.siteId), r])
+    );
+
+    for (const us of userSiteRows) {
+      const site = await ctx.db.get(us.siteId);
+      if (!site || site.archivedAt !== undefined) continue;
+      // Cross-org guard: never inherit a site from another org (or a scoped site
+      // for an unscoped target, or vice versa).
+      if (!orgBoundaryOk(target.orgId, site.orgId)) continue;
+      const sId = String(us.siteId);
+      if (activeMgrSites.has(sId)) continue;
+      const revivable = archivedMgrSitesBySite.get(sId);
+      if (revivable) {
+        await ctx.db.patch(revivable._id, { archivedAt: undefined });
+      } else {
+        await ctx.db.insert("managerSites", {
+          managerId: args.userId,
+          siteId: us.siteId,
+        });
+      }
+      activeMgrSites.add(sId);
+    }
+
     await ctx.db.patch(args.userId, { role: "manager" });
     return { ok: true as const, already: false as const };
   },
@@ -406,9 +466,172 @@ export const demoteManager = mutation({
       before: activeRows.map((r) => String(r.siteId)),
       after: [],
     });
+
+    // Demotion safeguards: find any assigned sites where this manager is the sole active manager
+    const orphanSiteIds: string[] = [];
+    for (const row of activeRows) {
+      const siteManagers = await ctx.db
+        .query("managerSites")
+        .withIndex("by_site", (q) => q.eq("siteId", row.siteId))
+        .collect();
+      // Active managers on this site other than the one being demoted
+      let otherActiveCount = 0;
+      for (const sm of siteManagers) {
+        if (sm.managerId !== args.userId && sm.archivedAt === undefined) {
+          const mUser = await ctx.db.get(sm.managerId);
+          if (mUser && mUser.role === "manager" && mUser.isActive && mUser.archivedAt === undefined && !isDemoUser(mUser)) {
+            otherActiveCount++;
+          }
+        }
+      }
+      if (otherActiveCount === 0) {
+        orphanSiteIds.push(String(row.siteId));
+      }
+    }
+
+    if (orphanSiteIds.length > 0) {
+      await ctx.db.insert("systemEvents", {
+        kind: "manager_demoted_orphan_sites",
+        userId: args.userId,
+        at: Date.now(),
+        detail: JSON.stringify({
+          actorId,
+          managerId: args.userId,
+          orphanSiteIds,
+        }),
+      });
+    }
+
     for (const row of activeRows) await ctx.db.patch(row._id, { archivedAt: Date.now() }); // archive, never delete
     await ctx.db.patch(args.userId, { role: "employee" });
     return { ok: true as const, already: false as const };
+  },
+});
+
+/**
+ * Crew timesheets query: allows a manager to inspect their managed crew's shifts
+ * within a time range [fromMs, toMs], filtering to crew members assigned to the manager's sites.
+ * Strips all financial fields (no pay rate, no total pay).
+ */
+export const crewTimesheets = query({
+  args: {
+    fromMs: v.number(),
+    toMs: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const scope = await requireManagerViewer(ctx);
+    if (!scope) return [];
+    if (scope.siteIds.size === 0) return [];
+
+    const crewUserIds = await userIdsForSites(ctx, scope.siteIds);
+    if (crewUserIds.size === 0) return [];
+
+    const out = [];
+    for (const userId of crewUserIds) {
+      const user = await ctx.db.get(userId);
+      if (!user || isDemoUser(user) || !user.isActive || user.archivedAt !== undefined) continue;
+
+      const userShifts = await ctx.db
+        .query("shifts")
+        .withIndex("by_user_start", (q) =>
+          q.eq("userId", userId).gte("startedAt", args.fromMs).lte("startedAt", args.toMs)
+        )
+        .collect();
+
+      for (const shift of userShifts) {
+        // Query attestation in systemEvents for this shift
+        const events = await ctx.db
+          .query("systemEvents")
+          .withIndex("by_kind_time", (q) => q.eq("kind", "manager_shift_attested"))
+          .order("desc")
+          .collect();
+        const shiftEvent = events.find((e) => {
+          if (!e.detail) return false;
+          try {
+            const parsed = JSON.parse(e.detail);
+            return parsed.shiftId === shift._id;
+          } catch {
+            return false;
+          }
+        });
+
+        let attestation: { verified: boolean; managerId: Id<"users">; at: number; notes?: string } | null = null;
+        if (shiftEvent && shiftEvent.detail) {
+          try {
+            const parsed = JSON.parse(shiftEvent.detail);
+            attestation = {
+              verified: parsed.verified,
+              managerId: parsed.managerId,
+              at: shiftEvent.at,
+              notes: parsed.notes,
+            };
+          } catch {
+            // ignore malformed
+          }
+        }
+
+        out.push({
+          _id: shift._id,
+          userId: shift.userId,
+          userName: user.name ?? user.email ?? "unknown",
+          startedAt: shift.startedAt,
+          endedAt: shift.endedAt,
+          totalMinutes: shift.totalMinutes,
+          needsReview: shift.needsReview,
+          reviewReason: shift.reviewReason,
+          sealed: shift.sealed,
+          attestation,
+        });
+      }
+    }
+
+    out.sort((a, b) => b.startedAt - a.startedAt);
+    return out;
+  },
+});
+
+/**
+ * Attest shift mutation: allows a manager to attest/sign off on an operational shift for their crew.
+ * Verifies shift belongs to an employee in the manager's managed crew.
+ * Records the attestation in systemEvents (kind: manager_shift_attested).
+ */
+export const attestShift = mutation({
+  args: {
+    shiftId: v.id("shifts"),
+    verified: v.boolean(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const scope = await requireManagerViewer(ctx);
+    if (!scope) throw new ConvexError("FORBIDDEN");
+
+    const shift = await ctx.db.get(args.shiftId);
+    if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
+
+    const crewUserIds = await userIdsForSites(ctx, scope.siteIds);
+    if (!crewUserIds.has(shift.userId)) {
+      throw new ConvexError("CREW_MEMBER_NOT_MANAGED");
+    }
+
+    const targetUser = await ctx.db.get(shift.userId);
+    if (!targetUser || isDemoUser(targetUser) || !targetUser.isActive || targetUser.archivedAt !== undefined) {
+      throw new ConvexError("USER_NOT_ELIGIBLE");
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("systemEvents", {
+      kind: "manager_shift_attested",
+      userId: shift.userId,
+      at: now,
+      detail: JSON.stringify({
+        managerId: scope.managerId,
+        shiftId: args.shiftId,
+        verified: args.verified,
+        notes: args.notes,
+      }),
+    });
+
+    return { ok: true as const };
   },
 });
 

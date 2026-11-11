@@ -58,6 +58,18 @@ export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
   return userId;
 }
 
+/**
+ * Multi-tenant org boundary (audit 2026-11-11, P1-C1/C2 — the guards shipped
+ * before this only checked when the *subject* had an orgId, so every moderator
+ * provisioned without one (the default) silently bypassed cross-tenant protection).
+ *
+ * Both sides must agree: identical orgId, or BOTH absent (single-org install).
+ * Exactly one side having an orgId, or two different orgIds → cross-tenant → refused.
+ */
+export function orgBoundaryOk(a: string | undefined | null, b: string | undefined | null): boolean {
+  return (a ?? null) === (b ?? null);
+}
+
 export async function requireDemoReviewer(
   ctx: Ctx
 ): Promise<{ userId: Id<"users">; personaUserId: Id<"users">; personaEmail: string }> {

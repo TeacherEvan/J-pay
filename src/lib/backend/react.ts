@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { refToKey, type FunctionRef } from "./api";
+import { observeServerDate } from "../server-clock";
 
 /**
  * Drop-in replacement for the `convex/react` + `@convex-dev/auth/react`
@@ -153,6 +154,15 @@ export function callBackend(
       },
       body: JSON.stringify({ ref: fnKey, args: args ?? {} }),
     });
+    // Learn the device↔server clock offset from the Date header (safelisted;
+    // readable on same-origin fetches). Every API call refreshes it. Tolerate
+    // response mocks that carry no Headers at all.
+    try {
+      const headers = (response as { headers?: { get?: (k: string) => string | null } }).headers;
+      observeServerDate(headers && typeof headers.get === "function" ? headers.get("date") : null);
+    } catch {
+      /* a response without readable headers simply does not teach the offset */
+    }
 
     let payload: { result?: unknown; error?: string; message?: string; tables?: string[]; reads?: string[] } = {};
     try {

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
+import { errMsg } from "../lib/errors";
 import { useUserLocale } from "../lib/use-user-locale";
 import { ConsoleWindow } from "@/components/console/window";
 import { Pager } from "@/components/console/pager";
@@ -31,25 +32,36 @@ type SupportedStrategy = {
 
 export function PayrollPanel({ employees, role, className }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee"; className?: string }) {
   const [userId, setUserId] = useState("");
-  const [range, setRange] = useState<7 | 14 | 28>(7);
+  // ISO-week-aligned periods (1/2/4 weeks, Mon–Sun). A rolling N-day window straddles
+  // two ISO weeks, resetting the BCEA weekly overtime cap for each half and erasing
+  // statutory OT the worker already earned (audit 2026-11-11, P1-B1). No free-form
+  // window is offered anymore: every selectable period is complete ISO weeks, so the
+  // 45h/week cap is always consumed correctly.
+  const [weeks, setWeeks] = useState<1 | 2 | 4>(1);
   const active = employees.filter((e) => !e.archivedAt);
   // Re-anchor at local midnight so an open panel never drifts stale across days.
   const dayKey = new Date().toDateString();
-  const fromMs = useMemo(
+  const monday = useMemo(
     () => {
       const d = new Date();
       d.setHours(0, 0, 0, 0);
-      return d.getTime() - (range - 1) * 24 * 3600 * 1000;
+      // Monday=0..Sunday=6 (getDay: Sunday=0)
+      return (d.getDay() + 6) % 7 === 0 ? d.getTime() : d.getTime() - ((d.getDay() + 6) % 7) * 24 * 3600 * 1000;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [range, dayKey],
+    [dayKey],
   );
-  const toMs = useMemo(() => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d.getTime();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayKey]);
+  const fromMs = monday;
+  const toMs = useMemo(
+    () => {
+      const d = new Date(monday);
+      d.setHours(0, 0, 0, 0);
+      d.setTime(d.getTime() + weeks * 7 * 24 * 3600 * 1000);
+      // End-exclusive is not supported by the API; use the last ms of the last day.
+      return d.getTime() - 1;
+    },
+    [monday, weeks],
+  );
   const payrollArgs = useMemo(
     () => (userId ? { userId, fromMs, toMs } : "skip"),
     [userId, fromMs, toMs],
@@ -61,6 +73,8 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   const supported = useQuery(
     api.payroll.listSupportedStrategies,
   ) as SupportedStrategy[] | undefined;
+  const [payStrategyBusy, setPayStrategyBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
   const isModerator = role === "moderator";
@@ -93,24 +107,38 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
             </option>
           ))}
         </select>
-        {([7, 14, 28] as const).map((d) => (
+        {([1, 2, 4] as const).map((w) => (
           <button
-            key={d}
-            onClick={() => setRange(d)}
+            key={w}
+            onClick={() => setWeeks(w)}
             className={`btn-surgical pill-surgical px-3.5 py-1.5 text-xs font-semibold ${
-              range === d
+              weeks === w
                 ? "border-[var(--mint)]/70 bg-[var(--mint)]/15 text-[var(--mint)]"
                 : "text-[var(--fog)]"
             }`}
+            aria-pressed={weeks === w}
           >
-            {d}d
+            {w === 1 ? "This week" : `${w} weeks`}
           </button>
         ))}
         {isModerator && userId && (
           <select
             value={result?.strategy ?? ""}
-            onChange={(e) => void setPayStrategy({ userId: userId as Id<"users">, strategy: e.target.value as "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk" })}
-            className="input-surgical px-3 py-2"
+            onChange={async (e) => {
+              const strategy = e.target.value;
+              if (!strategy || payStrategyBusy) return;
+              setPayStrategyBusy(true);
+              setSaveError(null);
+              try {
+                await setPayStrategy({ userId: userId as Id<"users">, strategy: strategy as "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk" });
+              } catch (err) {
+                setSaveError(errMsg(err));
+              } finally {
+                setPayStrategyBusy(false);
+              }
+            }}
+            disabled={payStrategyBusy}
+            className="input-surgical px-3 py-2 disabled:opacity-50"
             aria-label="Pay strategy"
           >
             <option value="" disabled>
@@ -128,12 +156,18 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
         {userId && (
           <button
             onClick={async () => {
-              const out = await exportLogsCsv({
-                userId: userId as Id<"users">,
-                fromMs,
-                toMs,
-              });
-              download(out.filename, out.csv);
+              if (!userId) return;
+              setSaveError(null);
+              try {
+                const out = await exportLogsCsv({
+                  userId: userId as Id<"users">,
+                  fromMs,
+                  toMs,
+                });
+                download(out.filename, out.csv);
+              } catch (err) {
+                setSaveError(errMsg(err));
+              }
             }}
             className="btn-surgical ml-auto min-h-[44px] px-4 py-2 text-xs font-semibold"
           >
@@ -141,6 +175,7 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
           </button>
         )}
       </div>
+      {saveError && <p role="alert" className="flex-none text-xs font-semibold text-[var(--hivis)]">{saveError}</p>}
       {result && (
         <div className="flex min-h-0 flex-1 flex-col">
           <p className="tnum mb-1.5 flex-none text-xs text-[var(--fog)]">
@@ -199,6 +234,8 @@ export function ReviewPanel({ className }: { className?: string }) {
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
   const locale = useUserLocale();
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
   const list = usePagination<any>(review ?? [], 3);
   return (
     <ConsoleWindow title="Shifts needing review" className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-1 p-3">
@@ -213,22 +250,47 @@ export function ReviewPanel({ className }: { className?: string }) {
           <span className="inline-flex flex-none gap-1.5">
             <button
               data-testid="review-recompute"
-              onClick={() => void recompute({ userId: s.userId })}
-              className="btn-surgical min-h-[44px] px-3 py-1.5 text-xs font-medium"
+              onClick={async () => {
+                if (busy[s._id]) return;
+                setBusy({ ...busy, [s._id]: true });
+                setActionError(null);
+                try {
+                  await recompute({ userId: s.userId });
+                } catch (e) {
+                  setActionError(errMsg(e));
+                } finally {
+                  setBusy({ ...busy, [s._id]: false });
+                }
+              }}
+              disabled={busy[s._id]}
+              className="btn-surgical min-h-[44px] px-3 py-1.5 text-xs font-medium disabled:opacity-50"
             >
-              Recompute
+              {busy[s._id] ? "Working…" : "Recompute"}
             </button>
             <button
               data-testid="review-resolve"
-              onClick={() => void resolveShift({ shiftId: s._id })}
-              className="btn-surgical btn-surgical-mint min-h-[44px] px-3 py-1.5 text-xs font-semibold"
+              onClick={async () => {
+                if (busy[s._id]) return;
+                setBusy({ ...busy, [s._id]: true });
+                setActionError(null);
+                try {
+                  await resolveShift({ shiftId: s._id });
+                } catch (e) {
+                  setActionError(errMsg(e));
+                } finally {
+                  setBusy({ ...busy, [s._id]: false });
+                }
+              }}
+              disabled={busy[s._id]}
+              className="btn-surgical btn-surgical-mint min-h-[44px] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
             >
-              Resolve
+              {busy[s._id] ? "Working…" : "Resolve"}
             </button>
           </span>
         </div>
       ))}
       <Pager page={list.page} pageCount={list.pageCount} total={list.total} onPage={list.setPage} label="Flagged shifts" />
+      {actionError && <p role="alert" className="mt-1.5 flex-none text-xs font-semibold text-[var(--hivis)]">{actionError}</p>}
     </ConsoleWindow>
   );
 }

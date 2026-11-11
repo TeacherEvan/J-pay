@@ -19,7 +19,21 @@ export const calcForEmployee = query({
 
     const user = await ctx.db.get(args.userId);
     if (!user) throw new ConvexError("USER_NOT_FOUND");
+    // Config integrity (audit P2-B4/B5): a missing rate pays R0.00 in silence, and
+    // an unrecognised PAYROLL_STRATEGY silently degrades to flat-rate pay. Fail
+    // loudly instead — these are payroll bugs, not inputs.
+    const envStrategy = process.env.PAYROLL_STRATEGY;
+    const KNOWN_STRATEGIES: readonly string[] = ["flat", "bcea", "dailyOvertime", "flsa", "wtr_uk"];
+    if (envStrategy !== undefined && !KNOWN_STRATEGIES.includes(envStrategy)) {
+      throw new ConvexError("INVALID_PAYROLL_STRATEGY");
+    }
+    if (user.payStrategy !== undefined && !KNOWN_STRATEGIES.includes(user.payStrategy)) {
+      throw new ConvexError("INVALID_PAYROLL_STRATEGY");
+    }
     const rate = user.hourlyRateOverride ?? Number(process.env.PAYROLL_DEFAULT_RATE ?? 0);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new ConvexError("RATE_NOT_CONFIGURED");
+    }
     const effectiveStrategy: PayStrategyName =
       user.payStrategy ??
       (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ??

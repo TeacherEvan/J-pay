@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId, requireEmployee } from "./access";
+import { requireModerator, maybeCurrentUserId, requireEmployee, orgBoundaryOk } from "./access";
 import type { Id } from "./_generated/dataModel";
 import { isDemoUser } from "./demo/scope";
 
@@ -107,6 +107,9 @@ export const assignEmployee = mutation({
     if (!user || (user.role !== "employee" && user.role !== "manager")) throw new ConvexError("NOT_AN_EMPLOYEE");
     const site = await ctx.db.get(args.siteId);
     if (!site) throw new ConvexError("SITE_NOT_FOUND");
+    if (!orgBoundaryOk(user.orgId, site.orgId)) {
+      throw new ConvexError("CROSS_ORG_ASSIGNMENT_FORBIDDEN");
+    }
     const existing = await ctx.db
       .query("userSites")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -158,6 +161,9 @@ export const setEmployeeSites = mutation({
       const site = await ctx.db.get(siteId);
       if (!site) throw new ConvexError("SITE_NOT_FOUND");
       if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
+      if (!orgBoundaryOk(user.orgId, site.orgId)) {
+        throw new ConvexError("CROSS_ORG_ASSIGNMENT_FORBIDDEN");
+      }
       wanted.add(siteId);
     }
     const existing = await ctx.db

@@ -9,6 +9,7 @@ import { useUserLocale } from "@/lib/use-user-locale";
 import { ConsoleWindow } from "@/components/console/window";
 import { Pager } from "@/components/console/pager";
 import { usePagination } from "@/components/console/use-pagination";
+import { errMsg } from "@/lib/errors";
 
 export function MessagesPanel({ role, className }: { role: "employee" | "moderator"; className?: string }) {
   const inbox = useQuery(api.messages.myInbox);
@@ -25,6 +26,9 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [broadcastText, setBroadcastText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [broadcastBusy, setBroadcastBusy] = useState(false);
+  const [replyBusy, setReplyBusy] = useState<Record<string, boolean>>({});
   const seenUnread = useRef(false);
   const userLocale = useUserLocale();
   const inboxPages = usePagination((role === "moderator" ? modInbox : inbox) ?? [], 2);
@@ -51,14 +55,22 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
           />
           <button
             onClick={async () => {
-              if (!text.trim()) return;
-              await sendToModerators({ content: text });
-              setText("");
-              setMsg("Sent to moderator.");
+              if (!text.trim() || sendBusy) return;
+              setSendBusy(true);
+              try {
+                await sendToModerators({ content: text });
+                setText("");
+                setMsg("Sent to moderator.");
+              } catch (e) {
+                setMsg(errMsg(e));
+              } finally {
+                setSendBusy(false);
+              }
             }}
-            className="btn-surgical btn-surgical-light min-h-[44px] px-4 py-2 text-sm font-semibold"
+            disabled={sendBusy || !text.trim()}
+            className="btn-surgical btn-surgical-light min-h-[44px] px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
-            Send
+            {sendBusy ? "Sending…" : "Send"}
           </button>
         </div>
         {msg && <p role="status" aria-live="polite" className="text-sm font-medium text-[var(--paper)]">{msg}</p>}
@@ -85,14 +97,22 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
         />
         <button
           onClick={async () => {
-            if (!broadcastText.trim()) return;
-            await broadcast({ content: broadcastText });
-            setBroadcastText("");
-            setMsg("Broadcast sent.");
+            if (!broadcastText.trim() || broadcastBusy) return;
+            setBroadcastBusy(true);
+            try {
+              await broadcast({ content: broadcastText });
+              setBroadcastText("");
+              setMsg("Broadcast sent.");
+            } catch (e) {
+              setMsg(errMsg(e));
+            } finally {
+              setBroadcastBusy(false);
+            }
           }}
-          className="btn-surgical btn-surgical-mint min-h-[44px] flex-none px-3 py-1.5 text-xs font-semibold"
+          disabled={broadcastBusy || !broadcastText.trim()}
+          className="btn-surgical btn-surgical-mint min-h-[44px] flex-none px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
         >
-          Broadcast
+          {broadcastBusy ? "Sending…" : "Broadcast"}
         </button>
       </div>
       {msg && <p role="status" aria-live="polite" className="flex-none text-xs font-medium text-[var(--paper)]">{msg}</p>}
@@ -118,15 +138,23 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
               <button
                 onClick={async () => {
                   const content = replyText[m._id];
-                  if (!content?.trim()) return;
-                  await replyToEmployee({ recipientId: m.senderId as Id<"users">, content });
-                  await markQueueItemRead({ messageId: m._id as Id<"messages"> });
-                  setReplyText({ ...replyText, [m._id]: "" });
-                  setMsg("Reply sent.");
+                  if (!content?.trim() || replyBusy[m._id]) return;
+                  setReplyBusy({ ...replyBusy, [m._id]: true });
+                  try {
+                    await replyToEmployee({ recipientId: m.senderId as Id<"users">, content });
+                    await markQueueItemRead({ messageId: m._id as Id<"messages"> });
+                    setReplyText({ ...replyText, [m._id]: "" });
+                    setMsg("Reply sent.");
+                  } catch (e) {
+                    setMsg(errMsg(e));
+                  } finally {
+                    setReplyBusy({ ...replyBusy, [m._id]: false });
+                  }
                 }}
-                className="btn-surgical btn-surgical-light flex-none px-2.5 py-1.5 text-xs font-semibold"
+                disabled={replyBusy[m._id] || !(replyText[m._id] ?? "").trim()}
+                className="btn-surgical btn-surgical-light flex-none px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
               >
-                Reply
+                {replyBusy[m._id] ? "Sending…" : "Reply"}
               </button>
               {!m.isRead && (
                 <button

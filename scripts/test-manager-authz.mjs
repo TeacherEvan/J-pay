@@ -146,6 +146,9 @@ await run("manager:setManagerSites — moderator replaces set transactionally; n
 });
 
 await run("manager:promoteToManager / demoteManager roundtrip; demotion archives managerSites + audits", async () => {
+  // End active shift for emp-2 so promotion succeeds
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
   await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
   assert.equal(__stub.store.users.find((u) => u._id === "emp-2").role, "manager");
   await call("manager", "setManagerSites", { managerId: "emp-2", siteIds: ["site-c"] }, asUser("mod-1"));
@@ -213,6 +216,212 @@ await run("moderator:overridableShifts — demo personas excluded, sealed exclud
   __stub.store.shifts.find((s) => s.userId === "emp-1").sealed = true;
   const rows = await call("moderator", "overridableShifts", {}, asUser("mod-1"));
   assert.deepEqual(rows.map((r) => r.userId).sort(), ["emp-2"]);
+});
+
+await run("manager:mid-shift promotion blocked (ACTIVE_SHIFT_IN_PROGRESS)", async () => {
+  // emp-1 has an open shift (endedAt is undefined)
+  await assert.rejects(
+    () => call("manager", "promoteToManager", { userId: "emp-1" }, asUser("mod-1")),
+    /ACTIVE_SHIFT_IN_PROGRESS/
+  );
+});
+
+await run("manager:cross-org promotion blocked (CROSS_ORG_PROMOTION_FORBIDDEN)", async () => {
+  // Give mod-1 an orgId
+  const mod = __stub.store.users.find((u) => u._id === "mod-1");
+  mod.orgId = "org-alpha";
+  // Give emp-2 a completed shift and a different orgId
+  const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
+  emp2.orgId = "org-beta";
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
+
+  await assert.rejects(
+    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
+    /CROSS_ORG_PROMOTION_FORBIDDEN/
+  );
+
+  // When org matches, promotion succeeds
+  emp2.orgId = "org-alpha";
+  const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
+  assert.equal(res.ok, true);
+  assert.equal(emp2.role, "manager");
+});
+
+await run("manager:cross-org site assignment blocked (CROSS_ORG_SITE_ASSIGNMENT_FORBIDDEN)", async () => {
+  const mgr1 = __stub.store.users.find((u) => u._id === "mgr-1");
+  mgr1.orgId = "org-alpha";
+
+  const siteA = __stub.store.sites.find((s) => s._id === "site-a");
+  siteA.orgId = "org-alpha";
+  const siteB = __stub.store.sites.find((s) => s._id === "site-b");
+  siteB.orgId = "org-beta";
+
+  // Assigning site-b (org-beta) to mgr-1 (org-alpha) should be blocked
+  await assert.rejects(
+    () => call("manager", "setManagerSites", { managerId: "mgr-1", siteIds: ["site-a", "site-b"] }, asUser("mod-1")),
+    /CROSS_ORG_SITE_ASSIGNMENT_FORBIDDEN/
+  );
+
+  // Assigning matching org site succeeds
+  const res = await call("manager", "setManagerSites", { managerId: "mgr-1", siteIds: ["site-a"] }, asUser("mod-1"));
+  assert.equal(res.total, 1);
+});
+
+await run("org guard fail-closed: unscoped moderator + scoped target refused; both unscoped allowed", async () => {
+  // Default fixture: nobody has an orgId. Assign emp-2 an org, keep mod-1 unscoped.
+  const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
+  emp2.orgId = "org-beta";
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
+
+  await assert.rejects(
+    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
+    /CROSS_ORG_PROMOTION_FORBIDDEN/
+  );
+
+  // And the inverse: scoped actor + unscoped target is equally refused.
+  const mod1 = __stub.store.users.find((u) => u._id === "mod-1");
+  mod1.orgId = "org-alpha";
+  emp2.orgId = undefined;
+  await assert.rejects(
+    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
+    /CROSS_ORG_PROMOTION_FORBIDDEN/
+  );
+
+  // Both unscoped (default install) still works.
+  mod1.orgId = undefined;
+  const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
+  assert.equal(res.ok, true);
+});
+
+await run("org guard fail-closed: unscoped manager + scoped site refused", async () => {
+  const siteA = __stub.store.sites.find((s) => s._id === "site-a");
+  siteA.orgId = "org-alpha";
+  await assert.rejects(
+    () => call("manager", "setManagerSites", { managerId: "mgr-1", siteIds: ["site-a"] }, asUser("mod-1")),
+    /CROSS_ORG_SITE_ASSIGNMENT_FORBIDDEN/
+  );
+});
+
+await run("sites:assignEmployee refuses cross-org assignment", async () => {
+  const siteA = __stub.store.sites.find((s) => s._id === "site-a");
+  siteA.orgId = "org-alpha";
+  const emp1 = __stub.store.users.find((u) => u._id === "emp-1");
+  emp1.orgId = undefined; // unscoped employee vs scoped site
+  await assert.rejects(
+    () => call("sites", "assignEmployee", { userId: "emp-1", siteId: "site-a" }, asUser("mod-1")),
+    /CROSS_ORG_ASSIGNMENT_FORBIDDEN/
+  );
+  // Same-org pair accepted
+  emp1.orgId = "org-alpha";
+  const newsite = __stub.store.sites.find((s) => s._id === "site-c");
+  newsite.orgId = "org-alpha";
+  const res = await call("sites", "assignEmployee", { userId: "emp-1", siteId: "site-c" }, asUser("mod-1"));
+  assert.equal(res, undefined);
+});
+
+await run("org guard fail-closed: promotion inheritance skips cross-org sites but does not refuse promotion", async () => {
+  // emp-2 (unscoped) assigned to org-alpha site site-b via userSites; promotion must succeed
+  // but the scoped site must NOT be inherited into managerSites.
+  const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
+  const siteB = __stub.store.sites.find((s) => s._id === "site-b");
+  siteB.orgId = "org-alpha"; // scoped site; target unscoped
+
+  const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
+  assert.equal(res.ok, true, "promotion itself must succeed");
+  const inherited = __stub.store.managerSites.filter((m) => m.managerId === "emp-2" && m.archivedAt === undefined);
+  assert.equal(inherited.length, 0, "scoped site must not be inherited into managerSites for unscoped target");
+});
+
+await run("manager:automatic site inheritance on promotion", async () => {
+  // emp-2 has userSites: site-b
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
+  await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
+
+  // Check that managerSites was seeded with site-b
+  const mgrSites = __stub.store.managerSites.filter((ms) => ms.managerId === "emp-2" && ms.archivedAt === undefined);
+  assert.equal(mgrSites.length, 1);
+  assert.equal(mgrSites[0].siteId, "site-b");
+});
+
+await run("manager:demotion orphan warning logged to systemEvents", async () => {
+  // mgr-1 is the sole manager of site-a
+  await call("manager", "demoteManager", { userId: "mgr-1" }, asUser("mod-1"));
+  assert.equal(__stub.store.users.find((u) => u._id === "mgr-1").role, "employee");
+
+  // Check systemEvents for manager_demoted_orphan_sites
+  const orphanEvents = (__stub.store.systemEvents ?? []).filter((e) => e.kind === "manager_demoted_orphan_sites");
+  assert.equal(orphanEvents.length, 1);
+  const detail = JSON.parse(orphanEvents[0].detail);
+  assert.equal(detail.managerId, "mgr-1");
+  assert.deepEqual(detail.orphanSiteIds, ["site-a"]);
+});
+
+await run("manager:crewTimesheets returns operational hours without pay rates & filters correctly", async () => {
+  // mgr-1 manages site-a. Crew on site-a: emp-1 (demo-1 excluded)
+  // Add a completed shift for emp-1
+  __stub.store.shifts.push({
+    _id: "shift-completed",
+    _creationTime: 99,
+    userId: "emp-1",
+    startedAt: NOW - 2 * H,
+    endedAt: NOW - 1 * H,
+    totalMinutes: 60,
+    needsReview: false,
+    reviewReason: undefined,
+    sealed: false,
+  });
+
+  const timesheets = await call("manager", "crewTimesheets", { fromMs: NOW - 10 * H, toMs: NOW }, asUser("mgr-1"));
+  assert.ok(timesheets.length >= 1);
+  const sheet = timesheets.find((s) => s._id === "shift-completed");
+  assert.ok(sheet);
+  assert.equal(sheet.userId, "emp-1");
+  assert.equal(sheet.userName, "Evan");
+  assert.equal(sheet.totalMinutes, 60);
+  assert.equal(sheet.needsReview, false);
+  assert.equal(sheet.sealed, false);
+  // Verify financial fields are NOT present
+  assert.equal(sheet.hourlyRateOverride, undefined);
+  assert.equal(sheet.payRate, undefined);
+  assert.equal(sheet.rate, undefined);
+  assert.equal(sheet.totalPay, undefined);
+  assert.equal(sheet.pay, undefined);
+});
+
+await run("manager:attestShift records attestation and forbids non-crew shifts", async () => {
+  // mgr-1 manages site-a (emp-1). emp-2 is on site-b only.
+  // mgr-1 attempting to attest emp-2's shift must fail
+  await assert.rejects(
+    () => call("manager", "attestShift", { shiftId: "shift-e2", verified: true, notes: "Looks good" }, asUser("mgr-1")),
+    /CREW_MEMBER_NOT_MANAGED/
+  );
+
+  // mgr-1 attesting emp-1's shift succeeds
+  const res = await call("manager", "attestShift", { shiftId: "shift-e1", verified: true, notes: "Verified on site" }, asUser("mgr-1"));
+  assert.equal(res.ok, true);
+
+  // Verify attestation recorded in systemEvents
+  const attestEvents = (__stub.store.systemEvents ?? []).filter((e) => e.kind === "manager_shift_attested");
+  assert.equal(attestEvents.length, 1);
+  const detail = JSON.parse(attestEvents[0].detail);
+  assert.equal(detail.managerId, "mgr-1");
+  assert.equal(detail.shiftId, "shift-e1");
+  assert.equal(detail.verified, true);
+  assert.equal(detail.notes, "Verified on site");
+
+  // Verify that crewTimesheets now reflects the attestation
+  const timesheets = await call("manager", "crewTimesheets", { fromMs: NOW - 10 * H, toMs: NOW }, asUser("mgr-1"));
+  const sheet = timesheets.find((s) => s._id === "shift-e1");
+  assert.ok(sheet);
+  assert.ok(sheet.attestation);
+  assert.equal(sheet.attestation.verified, true);
+  assert.equal(sheet.attestation.managerId, "mgr-1");
+  assert.equal(sheet.attestation.notes, "Verified on site");
 });
 
 console.log(process.exitCode ? "\nHARNESS FAILED" : "\nALL MANAGER-AUTHZ HARNESS CHECKS PASS");

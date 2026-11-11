@@ -278,6 +278,9 @@ export const boundPersonaPayroll = query({
     const { personaUserId } = await requireDemoReviewer(ctx);
     const persona = await ctx.db.get(personaUserId);
     const rate = persona?.hourlyRateOverride ?? Number(process.env.PAYROLL_DEFAULT_RATE ?? 0);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new ConvexError("RATE_NOT_CONFIGURED");
+    }
     const shifts = await ctx.db
       .query("shifts")
       .withIndex("by_user_start", (q) => q.eq("userId", personaUserId))

@@ -7,6 +7,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import type { OutboxEntry } from "@/lib/outbox";
 import { useOutbox } from "../use-outbox";
 import { errMsg } from "@/lib/errors";
+import { serverNow } from "@/lib/server-clock";
 import { getPosition } from "./geoposition";
 import { LABEL, TOKEN_KEY } from "./types";
 import type { Status, Phase, CardSite } from "./types";
@@ -149,7 +150,7 @@ export function LiveSubmit({
       }
       const entry: OutboxEntry = {
         siteId: chosen,
-        clientReportedTime: Date.now(),
+        clientReportedTime: serverNow(),
         status,
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
@@ -159,7 +160,7 @@ export function LiveSubmit({
         deviceToken: token,
         idempotencyKey: crypto.randomUUID(),
         deviceMetadata: navigator.userAgent.slice(0, 200),
-        queuedAt: Date.now(),
+        queuedAt: serverNow(),
       };
       if (!navigator.onLine) {
         await enqueue(entry);
