@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev-strict.mjs",
-    "build": "npm run verify && next build --webpack",
+    "build": "npm run verify:node && next build --webpack",
     "start": "next start",
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
@@ -12,7 +12,8 @@
     "e2e:rich": "node scripts/e2e-demo-rich.mjs",
     "e2e:all": "node scripts/e2e-all.mjs",
     "test": "node scripts/run-gate.mjs test",
-    "verify": "node scripts/run-gate.mjs verify"
+    "verify": "node scripts/run-gate.mjs verify",
+    "verify:node": "node scripts/run-gate.mjs verify:node"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",

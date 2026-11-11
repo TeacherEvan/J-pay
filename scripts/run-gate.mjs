@@ -75,11 +75,18 @@ const stagesFor = (mode) => {
 };
 
 const mode = process.argv[2] ?? "test";
-if (!["test", "verify"].includes(mode)) {
-  console.error(`usage: node scripts/run-gate.mjs [test|verify]`);
+if (!["test", "verify", "verify:node"].includes(mode)) {
+  console.error(`usage: node scripts/run-gate.mjs [test|verify|verify:node]`);
   process.exit(2);
 }
 const stages = stagesFor(mode);
+// verify:node — the subset of verify that needs only Node (no python3):
+// refs check + every test stage + tsc. Used by the Vercel build gate, whose
+// image cannot be assumed to provide python3 (and shouldn't need it).
+if (mode === "verify:node") {
+  stages.unshift({ label: "function-refs in sync", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/gen-function-refs.mjs", "--check"] });
+  stages.push({ label: "tsc --noEmit", cmd: "npx", args: ["tsc", "--noEmit"] });
+}
 console.log(`run-gate[${mode}]: executing ${stages.length} stage(s)…`);
 
 const results = [];
