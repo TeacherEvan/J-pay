@@ -59,12 +59,18 @@ Each client company gets an isolated fork + Supabase project:
 
 ## Gates
 
+There is no hosted CI for this repo (GitHub Actions never allocated a runner — account
+billing lock). The gate is local and mandatory before merge:
+
 ```bash
-npm test                               # shift-engine grammar (§6.1 rules 1–9) + CSV guard
-python3 scripts/check_consistency.py   # TRD internal consistency
-python3 scripts/check_diagrams.py      # mermaid structural gate
-npm run typecheck                      # tsc --strict over app + convex (handlers)
+npm run verify                         # consistency + mermaid + gen-function-refs check + npm test + tsc --strict
+npm run build                          # Next 16 production build (also proves the serwist override chain)
 ```
+
+`npm test` alone is not sufficient — a green suite without a clean build has not
+been verified. The two dormant workflow files under `.github/workflows/`
+(`e2e-nightly.yml`, `canary.yml`) are intentionally disabled placeholders with
+documented enable paths; they report on nothing today.
 
 ## Included features
 
