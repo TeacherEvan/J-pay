@@ -70,7 +70,7 @@ original Convex code and still run inside each handler.
 
 ## Accounts
 
-- **Bootstrap the first moderator:** `node scripts/bootstrap-supabase.mjs <email> "<Name>"`
+- **Bootstrap the first moderator:** `node --env-file=.env.local scripts/create-moderator.mjs --email <email> --name "Name"` (the old `bootstrap-supabase.mjs` was retired 2026-11-11 — see `scripts/archive/bootstrap-supabase.RETIRED.mjs`).
   — prints the ID code once. The app forces a password change on first sign-in.
 - **Employees / moderators** are provisioned in-app by a moderator; the ID code
   is the initial password (same contract as before).

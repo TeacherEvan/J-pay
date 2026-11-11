@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * RETIRED 2026-11-11 (audit F20). Use `node --env-file=.env.local scripts/create-moderator.mjs --email <email> --name "Name"` — same job, documented contract, no stray deps.
+ * ==================================================================
  * Bootstrap the first J-Pay moderator in Supabase.
  *
  * Creates the Supabase Auth identity and the matching public.users row, then
