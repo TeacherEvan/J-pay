@@ -108,27 +108,42 @@ export const deriveForUser = internalMutation({
 
     const segments = deriveSegments(engineLogs, overrides);
 
-    // 3. Clean up unsealed shifts within the active horizon
-    // Sealed rows and rows strictly before horizonCutoff stay untouched.
+    // 3. Reconcile in place instead of delete+insert (audit 2026-11-11, P2-B3).
+    // Unsealed rows are matched to segments by `startedAt`:
+    //   * matched  → patched in place (row _id preserved; stable cache lineage)
+    //   * unmatched existing → deleted (stale segment no longer derivable)
+    //   * unmatched segment   → inserted (new segment)
+    // Sealed rows stay frozen. Combined with 0015's unique index on
+    // shifts("userId","startedAt"), a concurrent double-insert fails loudly
+    // (constraint error → derivation_failed marker) instead of duplicating pay.
     const sealedStarts = new Set(
       userShifts.filter((r) => r.sealed === true).map((r) => r.startedAt)
     );
 
+    // Group by startedAt; if legacy duplicates exist (pre-0015), keep the
+    // earliest-created row, delete the rest — deterministic convergence to
+    // one row per (userId, startedAt) even before the unique index exists.
+    const grouped = new Map<number, typeof userShifts>();
     for (const row of userShifts) {
-      // Sealed shifts are immutable
       if (row.sealed === true) continue;
-      // If a horizonCutoff exists, shifts that started before the cutoff are preserved
       if (horizonCutoff !== undefined && row.startedAt < horizonCutoff) continue;
-      await ctx.db.delete(row._id);
+      const list = grouped.get(row.startedAt) ?? [];
+      list.push(row);
+      grouped.set(row.startedAt, list);
+    }
+    const existingUnsealed = new Map<number, typeof userShifts[number]>();
+    for (const [startedAt, rows] of grouped) {
+      rows.sort((a, b) => a._creationTime - b._creationTime);
+      existingUnsealed.set(startedAt, rows[0]);
+      for (const dup of rows.slice(1)) {
+        await ctx.db.delete(dup._id);
+      }
     }
 
-    // 4. Insert newly derived segments that fall within the active horizon
+    const derived = new Map<number, (typeof segments)[number]>();
     for (const seg of segments) {
-      // Sealed rows stay frozen; skip reinsert to avoid duplicates.
       if (sealedStarts.has(seg.startedAt)) continue;
-      // If cutoff exists and segment started before cutoff, skip it
       if (horizonCutoff !== undefined && seg.startedAt < horizonCutoff) continue;
-
       if (
         seg.needsReview &&
         resolvedKeys.has(String(seg.startedAt))
@@ -136,6 +151,16 @@ export const deriveForUser = internalMutation({
         seg.needsReview = false;
         seg.reviewReason = `resolved:${seg.reviewReason ?? "flagged"}`;
       }
+      derived.set(seg.startedAt, seg);
+    }
+
+    for (const [startedAt, row] of existingUnsealed) {
+      if (!derived.has(startedAt)) {
+        await ctx.db.delete(row._id);
+      }
+    }
+
+    for (const [startedAt, seg] of derived) {
       const row: {
         userId: typeof args.userId;
         startedAt: number;
@@ -147,14 +172,20 @@ export const deriveForUser = internalMutation({
         sealed?: boolean;
       } = {
         userId: args.userId,
-        startedAt: seg.startedAt,
+        startedAt,
         needsReview: seg.needsReview,
       };
       if (seg.endedAt !== undefined) row.endedAt = seg.endedAt;
       if (seg.totalMinutes !== undefined) row.totalMinutes = seg.totalMinutes;
       if (seg.reviewReason !== undefined) row.reviewReason = seg.reviewReason;
       if (seg.timezone !== undefined) row.timezone = seg.timezone;
-      await ctx.db.insert("shifts", row);
+      const prior = existingUnsealed.get(startedAt);
+      if (prior) {
+        // _id preserved across re-derivation: upsert, not delete+insert.
+        await ctx.db.patch(prior._id, row);
+      } else {
+        await ctx.db.insert("shifts", row);
+      }
     }
   },
 });

@@ -7,6 +7,24 @@ const withSerwist = withSerwistInit({
 });
 
 /** @type {import('next').NextConfig} */
+// Same-origin + the two external origins the app actually talks to:
+//   connect-src — Supabase (REST + Realtime websocket)
+//   img-src     — OpenStreetMap tiles (Leaflet in the crew map / site picker)
+// script-src/style-src carry 'unsafe-inline' because Next inline-hydrates and
+// Leaflet positions via inline styles; tightening those needs nonces — future work.
+const cspReportOnly = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https://tile.openstreetmap.org",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: import("next").NextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: import.meta.dirname,
@@ -26,24 +44,6 @@ const nextConfig: import("next").NextConfig = {
   // When @serwist/next ships Turbopack support, remove `turbopack: {}` and
   // the dev/build --webpack flags, and add real Turbopack config — see
   // docs/plans/2026-08-25-next-16-upgrade.md §M2 + TRD Open Question #2.
-  // Same-origin + the two external origins the app actually talks to:
-  //   connect-src — Supabase (REST + Realtime websocket)
-  //   img-src     — OpenStreetMap tiles (Leaflet in the crew map / site picker)
-  // script-src/style-src carry 'unsafe-inline' because Next inline-hydrates and
-  // Leaflet positions via inline styles; tightening those needs nonces — future work.
-  const cspReportOnly = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://tile.openstreetmap.org",
-    "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join("; ");
-
   turbopack: {},
   async headers() {
     return [

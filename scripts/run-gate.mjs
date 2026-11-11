@@ -58,6 +58,7 @@ const stagesFor = (mode) => {
     { label: "runtime module census", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-runtime-modules.mjs"] },
     { label: "manager authz + override chain + org guards", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-manager-authz.mjs"] },
     { label: "derivation-failure ledger", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-derivation-failure.mjs"] },
+    { label: "derivation idempotency (upsert-in-place)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-derivation-idempotent.mjs"] },
     { label: "org list counts", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-list-orgs.mjs"] },
     { label: "write-set telemetry", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-write-set.mjs"] },
     { label: "server-clock calibration", cmd: process.execPath, args: [...TS_NODE, "scripts/test-server-clock.mjs"] },

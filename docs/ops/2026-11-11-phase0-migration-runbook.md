@@ -19,13 +19,15 @@ select table_name from information_schema.tables
 
 ## 1. Apply in numeric order
 
-`0002_logs_idempotency_unique.sql` → `0004_manager_role.sql` → `0005_manager_sites.sql` → `0006_travel_tracking.sql` → `0007_shift_overrides.sql` → `0009_organisations.sql` → `0010_travel_open_leg_unique.sql` → `0011_system_events.sql` → `0012_manager_sites_archive.sql` → `0013_rate_limit_buckets.sql` → `0014_registry_hardening.sql`
+`0002_logs_idempotency_unique.sql` → `0004_manager_role.sql` → `0005_manager_sites.sql` → `0006_travel_tracking.sql` → `0007_shift_overrides.sql` → `0009_organisations.sql` → `0010_travel_open_leg_unique.sql` → `0011_system_events.sql` → `0012_manager_sites_archive.sql` → `0013_rate_limit_buckets.sql` → `0014_registry_hardening.sql` → `0015_shifts_unique_user_started.sql`
 
 **Quarantined files — do NOT apply:**
 
 - `archive/0003_retention_crons.OWNER_ONLY.sql` — retention crons. Requires pg_cron + pg_net enabled and hand-replaced `__SITE_URL__` / `__CRON_SECRET__`. The app runs fine without them. Only the owner, via SQL editor, after step 1 is done and verified. Never `db push`.
 - `archive/0008_refresh_registry.DO_NOT_APPLY.sql` — dead. Superseded by `0011_system_events.sql` (whose registry union includes `organisations` + `systemEvents`). Applying 0008 on a 0011-era install silently drops both from the registry and breaks `ctx.db.get(<org/systemEvent id>)`. Kept for history only.
 - `0001_init.sql` is the fresh-install baseline and is ALREADY applied in production (hand-run). Do not re-apply; see registry section of the audit report.
+
+`0015_shifts_unique_user_started.sql` enforces a unique index on `shifts("userId","startedAt")` — its embedded pre-flight aborts with a readable error if duplicates exist; resolve by hand, then re-run.
 
 Before `0002`: run the duplicate-logs diagnostic embedded in the file header (it prints offending rows). Any duplicates must be resolved by a human decision — do not let the unique index creation fail mid-session half-applied.
 
