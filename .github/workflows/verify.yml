@@ -1,0 +1,27 @@
+name: verify
+
+# Push-triggered verification for main. Runs the same gate an agent runs
+# locally (npm run verify = python doc-gates + all Node suites + tsc).
+# This is the authoritative post-push signal; Vercel's build is the artifact.
+# A red run means: fix forward or revert immediately.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: npm ci
+      - run: npm run verify
