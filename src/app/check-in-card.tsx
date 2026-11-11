@@ -7,6 +7,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import type { OutboxEntry } from "@/lib/outbox";
 import { useOutbox } from "./use-outbox";
 import { errMsg } from "@/lib/errors";
+import { storageGet } from "@/lib/safe-storage";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { formatTime } from "@/lib/format";
 import { haversineMeters } from "../../convex/geo";
@@ -151,7 +152,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         accuracyMeters: accuracy,
         clientReportedTime,
         idempotencyKey,
-        deviceToken: localStorage.getItem(TOKEN_KEY) ?? "",
+        deviceToken: storageGet(TOKEN_KEY) ?? "",
       })
         .then((res: { status?: string; mode?: string } | undefined) => {
           if (res?.status === "recorded") {

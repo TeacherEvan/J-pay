@@ -9,6 +9,7 @@ import { useOutbox } from "../use-outbox";
 import { errMsg } from "@/lib/errors";
 import { serverNow } from "@/lib/server-clock";
 import { getPosition } from "./geoposition";
+import { storageGet, storageSet, storageRemove } from "@/lib/safe-storage";
 import { LABEL, TOKEN_KEY } from "./types";
 import type { Status, Phase, CardSite } from "./types";
 
@@ -44,14 +45,14 @@ export function LiveSubmit({
     if (deviceToken.current) return deviceToken.current;
     if (tokenReady.current) return tokenReady.current;
     tokenReady.current = (async () => {
-      const stored = localStorage.getItem(TOKEN_KEY);
+      const stored = storageGet(TOKEN_KEY);
       if (stored) {
         deviceToken.current = stored;
         return stored;
       }
       const t = await issueToken();
       deviceToken.current = t;
-      localStorage.setItem(TOKEN_KEY, t);
+      storageSet(TOKEN_KEY, t);
       return t;
     })().catch((err) => {
       tokenReady.current = null;
@@ -90,13 +91,13 @@ export function LiveSubmit({
           deviceToken.current = null;
           tokenReady.current = null;
           try {
-            localStorage.removeItem(TOKEN_KEY);
+            storageRemove(TOKEN_KEY);
           } catch {}
           const fresh = await issueToken().catch(() => null);
           if (fresh) {
             deviceToken.current = fresh;
             try {
-              localStorage.setItem(TOKEN_KEY, fresh);
+              storageSet(TOKEN_KEY, fresh);
             } catch {}
             payload.deviceToken = fresh;
             await createLog(payload);
@@ -196,7 +197,7 @@ export function LiveSubmit({
           await enqueue(entry);
           setMessage("Connection lost — check-in queued.");
         } else if (/DEVICE_TOKEN_INVALID/.test(msg)) {
-          localStorage.removeItem(TOKEN_KEY);
+          storageRemove(TOKEN_KEY);
           deviceToken.current = null;
           tokenReady.current = null;
           setMessage("Device was reset by moderator — tap again.");

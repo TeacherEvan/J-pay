@@ -25,21 +25,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-dvh bg-[var(--ink)] text-[var(--paper)] antialiased canvas-dithered">
-        {/* Sub-perceptual anti-banding SVG dither filter (zero-dimension, purely visual) */}
-        <svg
-          style={{ position: "fixed", width: 0, height: 0, pointerEvents: "none" }}
-          aria-hidden="true"
-        >
-          <filter id="dither-noise">
-            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={3} result="noise" />
-            <feColorMatrix
-              type="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.015 0"
-            />
-            <feBlend mode="overlay" in="SourceGraphic" />
-          </filter>
-        </svg>
-        <Providers>{children}</Providers>
+      {/* Sub-perceptual anti-banding noise — pre-rendered static SVG tile
+          (see globals.css .canvas-dithered::before); no per-frame feTurbulence. */}
+      <Providers>{children}</Providers>
       </body>
     </html>
   );

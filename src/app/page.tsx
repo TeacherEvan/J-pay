@@ -1,6 +1,7 @@
 "use client";
 
 import { useConvexAuth, useQuery, useMutation } from "@/lib/backend/react";
+import { storageGet, storageSet, sessionGet, sessionSet, sessionRemove } from "@/lib/safe-storage";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/backend/api";
 import { SignIn } from "./sign-in";
@@ -53,7 +54,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      const snoozed = Number(localStorage.getItem(TRAVEL_SNOOZE_KEY) ?? 0);
+      const snoozed = Number(storageGet(TRAVEL_SNOOZE_KEY) ?? 0);
       setTravelSnoozed(Number.isFinite(snoozed) && Date.now() - snoozed < TRAVEL_SNOOZE_MS);
     } catch { /* storage unavailable */ }
   }, []);
@@ -61,16 +62,16 @@ export default function Home() {
   // One-time install request right after a forced first-login password change.
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(PW_CHANGED_KEY)) {
-        sessionStorage.removeItem(PW_CHANGED_KEY);
+      if (sessionGet(PW_CHANGED_KEY)) {
+        sessionRemove(PW_CHANGED_KEY);
         setInstallAsked(true);
       }
     } catch { /* sessionStorage unavailable */ }
   }, []);
 
   useEffect(() => {
-    setConsented(localStorage.getItem(CONSENT_KEY) === "1");
-    setIosDismissed(localStorage.getItem(IOS_DISMISS_KEY) === "1");
+    setConsented(storageGet(CONSENT_KEY) === "1");
+    setIosDismissed(storageGet(IOS_DISMISS_KEY) === "1");
     const handler = (e: Event) => {
       e.preventDefault();
       installEvent.current = e as unknown as { prompt: () => Promise<void> };
@@ -139,7 +140,7 @@ export default function Home() {
           error={ackError}
           onDefer={() => {
             try {
-              localStorage.setItem(TRAVEL_SNOOZE_KEY, String(Date.now()));
+              storageSet(TRAVEL_SNOOZE_KEY, String(Date.now()));
             } catch { /* storage unavailable — modal just won't persist the snooze */ }
             setTravelSnoozed(true);
           }}
@@ -155,7 +156,7 @@ export default function Home() {
       {!consented && (
         <ConsentGate
           onAccept={() => {
-            localStorage.setItem(CONSENT_KEY, "1");
+            storageSet(CONSENT_KEY, "1");
             setConsented(true);
           }}
         />
@@ -202,7 +203,7 @@ export default function Home() {
               type="button"
               onClick={() => {
                 setIosDismissed(true);
-                localStorage.setItem(IOS_DISMISS_KEY, "1");
+                storageSet(IOS_DISMISS_KEY, "1");
               }}
               aria-label="Dismiss iPhone install hint"
               className="shrink-0 rounded p-1.5 text-[var(--fog)] hover:text-[var(--paper)]"

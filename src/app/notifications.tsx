@@ -4,6 +4,25 @@ import { useMutation, useQuery } from "@/lib/backend/react";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/backend/api";
 
+/**
+ * Resolve the active service worker registration WITHOUT hanging forever on
+ * `navigator.serviceWorker.ready` (which never settles if Serwist failed to
+ * register — audit 2026-11-11, D12). Prefer an existing registration; race
+ * `ready` against a timeout; null means "not available right now".
+ */
+async function swRegistration(timeoutMs = 4000): Promise<ServiceWorkerRegistration | null> {
+  try {
+    const existing = await navigator.serviceWorker.getRegistration();
+    if (existing?.active) return existing;
+  } catch {
+    /* fall through to the ready race */
+  }
+  return Promise.race([
+    navigator.serviceWorker.ready.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
 type NotifState = "unknown" | "unsupported" | "off" | "on" | "denied";
 
 export function EnableNotifications() {
@@ -28,7 +47,8 @@ export function EnableNotifications() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await swRegistration();
+        if (!reg) { if (!cancelled) setState("off"); return; }
         const sub = await reg.pushManager.getSubscription();
         if (!cancelled) setState(sub ? "on" : "off");
       } catch {
@@ -54,7 +74,11 @@ export function EnableNotifications() {
         setState(permission === "denied" ? "denied" : "off");
         return;
       }
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swRegistration();
+      if (!reg) {
+        setError("Notifications need the offline service worker, which is not active yet — reload once and try again.");
+        return;
+      }
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
         sub = await reg.pushManager.subscribe({
@@ -80,7 +104,11 @@ export function EnableNotifications() {
     setError(null);
     setBusy(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swRegistration();
+      if (!reg) {
+        setError("Notifications need the offline service worker, which is not active yet — reload once and try again.");
+        return;
+      }
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         await remove({ endpoint: sub.endpoint });
