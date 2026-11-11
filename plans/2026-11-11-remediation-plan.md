@@ -12,6 +12,17 @@
 
 ---
 
+## Phase progress log (authoritative)
+
+| Session | Date | Phase | Items | Result |
+| :--- | :--- | :--- | :--- | :--- |
+| S1 | 2026-11-11 | Phase 0 (0.1–0.4 partial, 0.5–0.6 partial) | Registry hardening migration `0014` drafted (owner applies); `0003`/`0008` quarantined to `archive/`; README/TRD/runbook updated; build gate = `npm run verify && next build --webpack`; build-artefact test skips (not fails) when `sw.js` absent; `/api/health/db` probes `systemEvents` + `jpay_rate_limits` | ✅ agent-side; **owner must apply 0014** |
+| S2 | 2026-11-11 | Phase 1 | 1.1 clock-skew split (client Date-header calibration); 1.2 ISO-week payroll selector (option d); 1.3–1.4 fail-closed org guards (manager.ts, sites.ts, 5 new harness cases); 1.5 money/destructive-action error surfaces (payroll panel, messages panel); 1.6 PAYROLL_STRATEGY/RATE validation; 1.7 deferred (window still viewer-anchored; server-side window deferred) | ✅ committed `ed2d9a1` |
+
+**Still outstanding for rollout decisions:** 1.7 (server-side site-TZ window), all of Phase 2 (schema-parity rewrite, test-chain aggregator, security headers, manager-feature fix-or-delete, shifts unique index/idempotent derivation, UI honesty batch, docs/env truth), Phase 3 (fresh-clone dress rehearsal + re-audit), the **owner-apply of `0014`**, and the privacy-policy blocker.
+
+> **Commits ahead of origin:** audit/plans (e6f4c1d, 94fafe5) + Phase 0 (harness test fix etc.) and Phase 1 (`ed2d9a1`) are local. **Nothing has been pushed; pushing to `main` deploys via Vercel Git integration.** `src/lib/backend/function-refs.ts` remains the owner's uncommitted in-flight file.
+
 ## 0. What changed and why this plan exists
 
 Prior cycles fixed the broken pieces and scored the **delta**. This audit scored the **whole tree** and found that the new layer — manager authorization, org scoping, and the payroll window — is where the dangerous defects now live:
