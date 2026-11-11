@@ -28,7 +28,44 @@ export interface PayResult {
 }
 
 const P = jpayConfig.payrollRules;
-const roundCents = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Exact rational → integer cents, rounding half away from zero on the TRUE
+ * rational product (not on a float approximation). Math.round(n*100)/100
+ * under-rounded exact half-cent products (audit P2-B10) because n*100 is
+ * not always exactly representable. Rates and multipliers are parsed from
+ * their shortest round-trip decimal string, so 1.5 and 2.0 are exact.
+ */
+function rationalFromNumber(x: number): { n: bigint; d: bigint } {
+  let s = x.toString();
+  if (/e/i.test(s)) {
+    s = x.toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+  }
+  const neg = s.startsWith("-");
+  if (neg) s = s.slice(1);
+  const dot = s.indexOf(".");
+  const intPart = dot === -1 ? s : s.slice(0, dot);
+  const fracPart = dot === -1 ? "" : s.slice(dot + 1);
+  let n = BigInt((intPart || "0") + fracPart);
+  const d = 10n ** BigInt(fracPart.length);
+  if (neg) n = -n;
+  return { n, d };
+}
+
+/** Exact cents for minutes × rate × multiplier (minutes integer). */
+function centsExact(minutes: number, rate: number, multiplier: number): number {
+  const r = rationalFromNumber(rate);
+  const m = rationalFromNumber(multiplier);
+  const num0 = BigInt(Math.trunc(minutes)) * r.n * m.n * 100n;
+  const den = r.d * m.d * 60n;
+  const neg = num0 < 0n;
+  const a = neg ? -num0 : num0;
+  const q = a / den;
+  const rem = a % den;
+  let cents = rem * 2n >= den ? q + 1n : q; // round half away from zero
+  if (neg) cents = -cents;
+  return Number(cents);
+}
 
 export function isSunday(day: string): boolean {
   const d = new Date(`${day}T12:00:00Z`);
@@ -56,22 +93,25 @@ export function weeklyCapMinutes(strategy: PayStrategyName): number | null {
   }
 }
 
-function linePay(o: number, ot: number, sun: number, rate: number): number {
-  return roundCents(
-    (o / 60) * rate +
-      (ot / 60) * rate * P.overtimeMultiplier +
-      (sun / 60) * rate * P.sundayMultiplier
+/** Internal line carrying integer cents so finalize sums exactly. */
+type LineCents = PayLine & { payCents: number };
+
+function linePayCents(o: number, ot: number, sun: number, rate: number): number {
+  return (
+    centsExact(o, rate, 1) +
+    centsExact(ot, rate, P.overtimeMultiplier) +
+    centsExact(sun, rate, P.sundayMultiplier)
   );
 }
 
+function toLine(day: string, ordinaryMinutes: number, overtimeMinutes: number, sundayMinutes: number, payCents: number): LineCents {
+  return { day, ordinaryMinutes, overtimeMinutes, sundayMinutes, payCents, pay: payCents / 100 };
+}
+
 function computeFlat(days: PayInputDay[], rate: number): PayResult {
-  const lines = days.map(({ day, minutes }) => ({
-    day,
-    ordinaryMinutes: minutes,
-    overtimeMinutes: 0,
-    sundayMinutes: 0,
-    pay: roundCents((minutes / 60) * rate),
-  }));
+  const lines: LineCents[] = days.map(({ day, minutes }) =>
+    toLine(day, minutes, 0, 0, centsExact(minutes, rate, 1))
+  );
   return finalize("flat", lines);
 }
 
@@ -80,13 +120,7 @@ function computeDailyOvertime(days: PayInputDay[], rate: number): PayResult {
   const lines = days.map(({ day, minutes }) => {
     const ot = Math.max(0, minutes - thresholdMin);
     const o = minutes - ot;
-    return {
-      day,
-      ordinaryMinutes: o,
-      overtimeMinutes: ot,
-      sundayMinutes: 0,
-      pay: linePay(o, ot, 0, rate),
-    };
+    return toLine(day, o, ot, 0, linePayCents(o, ot, 0, rate));
   });
   return finalize("dailyOvertime", lines);
 }
@@ -101,30 +135,18 @@ function computeBcea(days: PayInputDay[], rate: number): PayResult {
     weeks.get(wk)!.push(d);
   }
 
-  const lines: PayLine[] = [];
+  const lines: LineCents[] = [];
   for (const [, weekDays] of weeks) {
     let capLeft = weeklyCapMin;
     for (const { day, minutes } of weekDays) {
       if (isSunday(day)) {
-        lines.push({
-          day,
-          ordinaryMinutes: 0,
-          overtimeMinutes: 0,
-          sundayMinutes: minutes,
-          pay: linePay(0, 0, minutes, rate),
-        });
+        lines.push(toLine(day, 0, 0, minutes, linePayCents(0, 0, minutes, rate)));
         continue;
       }
       const ordinary = Math.min(minutes, Math.max(0, capLeft));
       capLeft -= ordinary;
       const ot = minutes - ordinary;
-      lines.push({
-        day,
-        ordinaryMinutes: ordinary,
-        overtimeMinutes: ot,
-        sundayMinutes: 0,
-        pay: linePay(ordinary, ot, 0, rate),
-      });
+      lines.push(toLine(day, ordinary, ot, 0, linePayCents(ordinary, ot, 0, rate)));
     }
   }
   lines.sort((a, b) => a.day.localeCompare(b.day));
@@ -141,20 +163,14 @@ function computeFlsa(days: PayInputDay[], rate: number): PayResult {
     weeks.get(wk)!.push(d);
   }
 
-  const lines: PayLine[] = [];
+  const lines: LineCents[] = [];
   for (const [, weekDays] of weeks) {
     let capLeft = weeklyCapMin;
     for (const { day, minutes } of weekDays) {
       const ordinary = Math.min(minutes, Math.max(0, capLeft));
       capLeft -= ordinary;
       const ot = minutes - ordinary;
-      lines.push({
-        day,
-        ordinaryMinutes: ordinary,
-        overtimeMinutes: ot,
-        sundayMinutes: 0,
-        pay: linePay(ordinary, ot, 0, rate),
-      });
+      lines.push(toLine(day, ordinary, ot, 0, linePayCents(ordinary, ot, 0, rate)));
     }
   }
   lines.sort((a, b) => a.day.localeCompare(b.day));
@@ -174,43 +190,38 @@ function computeWtrUk(days: PayInputDay[], rate: number): PayResult {
     weeks.get(wk)!.push(d);
   }
 
-  const lines: PayLine[] = [];
+  const lines: LineCents[] = [];
   for (const [, weekDays] of weeks) {
     let capLeft = weeklyCapMin;
     for (const { day, minutes } of weekDays) {
       const ordinary = Math.min(minutes, Math.max(0, capLeft));
       capLeft -= ordinary;
       const ot = minutes - ordinary;
-      lines.push({
-        day,
-        ordinaryMinutes: ordinary,
-        overtimeMinutes: ot,
-        sundayMinutes: 0,
-        pay: roundCents((minutes / 60) * rate),
-      });
+      lines.push(toLine(day, ordinary, ot, 0, centsExact(minutes, rate, 1)));
     }
   }
   lines.sort((a, b) => a.day.localeCompare(b.day));
   return finalize("wtr_uk", lines);
 }
 
-function finalize(strategy: PayStrategyName, lines: PayLine[]): PayResult {
-  const t = lines.reduce(
-    (a, l) => ({
-      ordinaryMinutes: a.ordinaryMinutes + l.ordinaryMinutes,
-      overtimeMinutes: a.overtimeMinutes + l.overtimeMinutes,
-      sundayMinutes: a.sundayMinutes + l.sundayMinutes,
-      pay: roundCents(a.pay + l.pay),
-    }),
-    { ordinaryMinutes: 0, overtimeMinutes: 0, sundayMinutes: 0, pay: 0 }
-  );
+function finalize(strategy: PayStrategyName, lines: LineCents[]): PayResult {
+  let ordinaryMinutes = 0, overtimeMinutes = 0, sundayMinutes = 0, payCents = 0;
+  for (const l of lines) {
+    ordinaryMinutes += l.ordinaryMinutes;
+    overtimeMinutes += l.overtimeMinutes;
+    sundayMinutes += l.sundayMinutes;
+    payCents += l.payCents; // exact integer sum — no float drift
+  }
+  const outLines: PayLine[] = lines.map(({ payCents: _pc, ...rest }) => rest);
   return {
     strategy,
-    lines,
+    lines: outLines,
     totals: {
-      ...t,
-      payableMinutes:
-        t.ordinaryMinutes + t.overtimeMinutes + t.sundayMinutes,
+      ordinaryMinutes,
+      overtimeMinutes,
+      sundayMinutes,
+      payableMinutes: ordinaryMinutes + overtimeMinutes + sundayMinutes,
+      pay: payCents / 100,
     },
   };
 }
