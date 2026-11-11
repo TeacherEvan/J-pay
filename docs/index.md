@@ -1,7 +1,7 @@
 # J-Pay Documentation Index
 
 Project workspace: `/home/leandi-duplessis/github/workspaces/J-pay`
-TRD contract: `j-pay.md` (v1.4.0). Schema source of truth: `convex/schema.ts` §6 — enforced by `test-schema-parity.mjs`. Runtime backend: Supabase ([ADR-004](adr/ADR-004-supabase-authoritative-backend.md)), not a Convex deployment.
+TRD contract: `j-pay.md` (v1.4.0). Shape contract: the `j-pay.md` §6 TypeScript block ↔ `convex/schema.ts` ↔ `supabase/migrations/` ↔ `INDEX_FIELDS`, enforced field-level by `test-schema-parity.mjs`. Runtime backend: Supabase ([ADR-004](adr/ADR-004-supabase-authoritative-backend.md)), not a Convex deployment.
 
 ## Sections
 

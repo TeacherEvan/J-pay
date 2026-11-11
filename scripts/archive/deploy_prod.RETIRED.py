@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Deploy J-Pay to production: Convex backend first, then Vercel.
+"""
+RETIRED 2026-11-11 — audit finding F3. See docs/ops/deploy.md.
+Deploy J-Pay to production: Convex backend first, then Vercel.
 
 Order is load-bearing. ``queuedAt`` is a new argument on ``logs:createLog`` and
 Convex validates arguments strictly: a new frontend against the old backend

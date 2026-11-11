@@ -71,6 +71,7 @@ retention tier was silently dead (no `pg_cron`, orphaned `convex/crons.ts` — P
 
 - No `npx convex dev`, no Convex deploy keys, no JWT-JWKS bootstrap for forks.
   (`CONVEX_DEPLOYMENT` in env files remains only as inert history.)
+- `j-pay.md` §6 + `convex/schema.ts` + `supabase/migrations/` + `INDEX_FIELDS` are kept in field-level parity by `scripts/test-schema-parity.mjs`; drift fails `npm test`.
 - One extra hop (Node route → PostgREST) replaces client-direct reactive queries;
   the app compensates with a custom client adapter (`src/lib/backend/react.ts`)
   with scoped invalidation — see its tests.

@@ -26,9 +26,12 @@ Read every runtime-specific clause as superseded:
   `POST /api/backend/call`; RLS is default-deny with zero policies. Clients never
   connect directly to any BaaS.
 - **§6 schema shapes, §6.1 grammar, ADR-003's pure module, and all behavioral semantics
-  are UNCHANGED and binding.** `scripts/test-schema-parity.mjs` (npm test) enforces
-  shape parity across the §6 block, `supabase/migrations/`, and
-  `src/lib/backend/db.ts` (`INDEX_FIELDS`).
+  are binding.** `scripts/test-schema-parity.mjs` (npm test) enforces field-level
+  parity across the §6 block, `convex/schema.ts`, **all** `supabase/migrations/*.sql`
+  (including `ALTER TABLE … ADD COLUMN`), `src/lib/backend/db.ts` (`INDEX_FIELDS` —
+  tables and index columns), and the `jpay_id_registry` view definitions
+  (`0001` ∪ `0011`). It fails on any extra/missing field or table
+  (`INFRA_TABLES` = `jpay_rate_limits`).
 - **§10.2 ERD unchanged.** Deployment row: Vercel; env per README (no
   `NEXT_PUBLIC_CONVEX_URL`); fork model is one Supabase project per client (ADR-002).
 
@@ -186,6 +189,20 @@ export default defineSchema({
     isMasterTemp: v.optional(v.boolean()),     // transient moderator via master-password login
     hourlyRateOverride: v.optional(v.number()),
     pushSubscriptionTokens: v.optional(v.array(v.string())),
+    payStrategy: v.optional(
+      v.union(
+        v.literal("flat"),
+        v.literal("bcea"),
+        v.literal("dailyOvertime"),
+        v.literal("flsa"),
+        v.literal("wtr_uk")
+      )
+    ),
+    locale: v.optional(v.string()),              // BCP-47 UI locale (Intl); overrides browser locale
+    // Vestigial Convex Auth columns retained in SQL for backfilled installs (Convex Auth removed 2026-08-23):
+    emailVerificationTime: v.optional(v.number()),
+    image: v.optional(v.string()),
+    isAnonymous: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
@@ -255,6 +272,7 @@ export default defineSchema({
     idempotencyKey: v.string(),                // client-generated UUID per button press; mutation dedupes (v1.1)
     isModeratorOverride: v.optional(v.boolean()), // manual attestation for weak-GPS sites (v1.1)
     impossibleTravelFlag: v.optional(v.boolean()), // >200 km/h vs previous fix (v1.1)
+    createdByDemoReviewerId: v.optional(v.id("users")), // DEMO_MODE only: which reviewer triggered this demo log
   })
     .index("by_user_time", ["userId"])  // _creationTime tiebreaker auto-appended
     .index("by_status", ["status"])
@@ -342,6 +360,7 @@ export default defineSchema({
   managerSites: defineTable({                     // manager → managed sites; crew derived via userSites (owner 2026-11-10)
     managerId: v.id("users"),
     siteId: v.id("sites"),
+    archivedAt: v.optional(v.number()),          // demotion archives, never deletes (B7, 2026-11-10)
   })
     .index("by_manager", ["managerId"])
     .index("by_site", ["siteId"]),
@@ -352,6 +371,27 @@ export default defineSchema({
     kind: v.union(v.literal("coordinates"), v.literal("messages"), v.literal("masterTemps")),
   })
     .index("by_purged_at", ["purgedAt"]),
+
+  punches: defineTable({                      // legacy check-in/out punch pair (pre-logs); kept for history — new writes go to logs
+    userId: v.id("users"),
+    siteId: v.id("sites"),
+    type: v.union(v.literal("in"), v.literal("out")),
+    lat: v.number(),
+    lng: v.number(),
+    geoPassed: v.boolean(),
+    ts: v.number(),
+  })
+    .index("by_user_site_time", ["userId", "siteId"]),
+
+  demoSessions: defineTable({                 // DEMO_MODE viewer sessions bound to personas; never payroll-relevant
+    reviewerId: v.id("users"),
+    personaEmail: v.string(),
+    mode: v.union(v.literal("employee"), v.literal("moderator"), v.literal("full")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_persona", ["personaEmail"]),
 });
 ```
 
@@ -465,6 +505,9 @@ erDiagram
     users ||--o{ messages : "sends"
     users ||--o{ pushSubscriptions : "registers"
     users ||--o{ managerSites : "manages"
+    users ||--o{ punches : "punches"
+    sites ||--o{ punches : "at"
+    users ||--o{ demoSessions : "reviews"
     sites ||--o{ managerSites : "managed by"
     users ||--o{ travelSegments : "travels"
     users ||--o{ shiftOverrides : "overrides"
@@ -487,6 +530,11 @@ erDiagram
 
         number hourlyRateOverride "OPTIONAL"
         string pushSubscriptionTokens "OPTIONAL string[]"
+        string payStrategy "OPTIONAL flat|bcea|dailyOvertime|flsa|wtr_uk"
+        string locale "OPTIONAL BCP-47 UI locale"
+        number emailVerificationTime "OPTIONAL vestigial (Convex Auth removed)"
+        string image "OPTIONAL vestigial (Convex Auth removed)"
+        boolean isAnonymous "OPTIONAL vestigial (Convex Auth removed)"
     }
     systemEvents {
         string kind
@@ -528,6 +576,7 @@ erDiagram
         number sideMissionDurationMinutes "OPTIONAL enum 15..120"
         string deviceMetadata
         string ipAddress "ADVISORY"
+        id createdByDemoReviewerId "OPTIONAL DEMO_MODE only"
         string idempotencyKey "DEDUPE"
         boolean isModeratorOverride "OPTIONAL"
         boolean impossibleTravelFlag "OPTIONAL"
@@ -596,6 +645,22 @@ erDiagram
         string lastFixKey "OPTIONAL replay dedupe"
         boolean needsReview
         string reviewReason "OPTIONAL"
+    }
+    punches {
+        id userId
+        id siteId
+        string type "in|out"
+        number lat
+        number lng
+        boolean geoPassed
+        number ts
+    }
+    demoSessions {
+        id reviewerId
+        string personaEmail
+        string mode "employee|moderator|full"
+        number createdAt
+        number updatedAt
     }
 ```
 
@@ -691,9 +756,9 @@ stateDiagram-v2
 11. **Turbopack adoption for production builds** (deferred from R37). Serwist 10 stable + Turbopack support will let us drop the `next build --webpack` flag and the `outputFileTracingRoot` workaround. Track https://github.com/serwist/serwist/issues/54. Until then, `next dev` runs Turbopack (with a Serwist warning) and `next build` runs webpack (clean). If a stable Serwist 10 ships with Turbopack support, plan a D3 upgrade.
 12. **Master-password security posture** (R38). The `MASTER_PASSWORD` env var is a single shared secret that opens temporary moderator sessions for any email. Currently stored only in Convex env — rotates per-deployment. Consider adding: per-user rate limiting on master login, audit logging of master sessions, optional IP allowlist, or a short-lived token exchange instead of a static password. For production deployments, the master password MUST be rotated per-client and shared only with authorized moderators.
 
-13. **Schema drift: `punches` table** (convex/schema.ts:49–58) exists in implementation but is absent from TRD §6. This table supports a separate "punch-clock" UI (`/punch` route) with simple in/out semantics (TRD §5.1 only specifies the richer CHECK-IN badge flow). The `punches` feature is a simpler alternative; decision needed on whether to keep both, merge, or remove.
+13. **Schema drift: `punches` table** (convex/schema.ts) — NOW DOCUMENTED in §6 + §10.2 (2026-11-11). Supports the separate "punch-clock" UI (`/punch` route) with simple in/out semantics (TRD §5.1 only specifies the richer CHECK-IN badge flow). Decision needed from owner: keep both, merge, or remove.
 
-14. **Schema drift: `demoSessions` table** (convex/schema.ts:151–159) and `logs.createdByDemoReviewerId` (schema.ts:93) exist for demo/persona preview mode. These are NOT in TRD §6. They are guarded by `DEMO_MODE=1` env var and gated by `requireDemoReviewer` (access.ts:41–63). Decision needed: document as demo-only in TRD, or remove from production schema.
+14. **Schema drift: `demoSessions` table** (convex/schema.ts) and `logs.createdByDemoReviewerId` — NOW DOCUMENTED in §6 + §10.2 (2026-11-11). Demo/persona preview mode, guarded by `DEMO_MODE=1`, gated by `requireDemoReviewer`. Decision needed from owner: keep documented-as-demo-only (current state), or remove from production schema.
 
 15. **Schema drift: `users` table fields** — TRD §6 lists mandatory `name: v.string()`, `email: v.string()` but actual schema (via `...authTables` spread from `@convex-dev/auth`) makes them optional and adds `emailVerificationTime`, `image`, `isAnonymous`, plus app-specific `payStrategy`, `locale`. The `authTables` spread is required by Convex Auth; this is a framework constraint. TRD should be updated to reflect the actual generated schema.
 
