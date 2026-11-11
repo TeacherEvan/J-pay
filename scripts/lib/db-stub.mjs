@@ -31,25 +31,27 @@ const clone = (r) => ({ ...r });
 const matches = (row, field, value) => (row[field] ?? null) === (value ?? null);
 
 export class Database {
-  constructor() { this.idCache = new Map(); }
+  constructor() { this.idCache = new Map(); this.writtenTables = new Set(); this.readTables = new Set(); }
   remember() {}
   async loadAll(table) {
+    this.readTables.add(table);
     globalThis.__STUB_LOAD_COUNT__ += 1;
     if (fail()) throw new Error("ENOTCONN: stub failure injection");
     return (store[table] ?? []).map(clone);
   }
-  query(table) { return new QB(table); }
+  query(table) { this.readTables.add(table); return new QB(table); }
   async get(id) {
     if (fail()) throw new Error("ENOTCONN: stub failure injection");
     for (const t of Object.keys(store)) {
       const r = (store[t] ?? []).find((r) => r._id === id);
-      if (r) return clone(r);
+      if (r) { this.readTables.add(t); return clone(r); }
     }
     return null;
   }
   async insert(table, doc) {
     const id = doc._id ?? "stub-" + Math.random().toString(36).slice(2, 10);
     (store[table] ??= []).push({ _creationTime: Date.now(), ...doc, _id: id });
+    this.writtenTables.add(table);
     return id;
   }
   async patch(id, partial) {
@@ -58,6 +60,7 @@ export class Database {
       const r = (store[t] ?? []).find((r) => r._id === id);
       if (!r) continue;
       for (const [k, v] of Object.entries(partial)) { if (v === undefined) delete r[k]; else r[k] = v; }
+      this.writtenTables.add(t);
       return;
     }
     throw new Error("Document not found: " + id);
@@ -66,7 +69,7 @@ export class Database {
   async delete(id) {
     for (const t of Object.keys(store)) {
       const i = (store[t] ?? []).findIndex((r) => r._id === id);
-      if (i >= 0) { store[t].splice(i, 1); return; }
+      if (i >= 0) { store[t].splice(i, 1); this.writtenTables.add(t); return; }
     }
   }
 }

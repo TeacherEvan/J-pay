@@ -137,18 +137,18 @@ describe("React Adapter Query Deduplication & Scoped Invalidation", () => {
       const unsubMessages = bus.subscribe(["messages"], () => messagesFired++);
       const unsubAll = bus.subscribe(null, () => wildcardFired++);
 
-      // Mutation: punches:recordPunch (affects punches, logs, shifts)
-      bus.bump({ mutationName: "punches:recordPunch" });
+      // Server-reported write-set: only overlapping subscribers fire
+      bus.bump({ tables: ["punches", "logs", "shifts"] });
 
-      assert.strictEqual(logsFired, 1, "logs subscriber should fire for punches:recordPunch");
-      assert.strictEqual(messagesFired, 0, "messages subscriber should NOT fire for punches:recordPunch");
+      assert.strictEqual(logsFired, 1, "logs subscriber should fire for punches/logs/shifts write-set");
+      assert.strictEqual(messagesFired, 0, "messages subscriber should NOT fire for logs write-set");
       assert.strictEqual(wildcardFired, 1, "wildcard subscriber should always fire");
 
-      // Mutation: messages:replyToEmployee (affects messages)
+      // Bare mutationName carries no table information → notify all (safe default)
       bus.bump({ mutationName: "messages:replyToEmployee" });
 
-      assert.strictEqual(logsFired, 1, "logs subscriber should NOT fire for messages:replyToEmployee");
-      assert.strictEqual(messagesFired, 1, "messages subscriber should fire for messages:replyToEmployee");
+      assert.strictEqual(logsFired, 2, "logs subscriber fires on uninformative bump");
+      assert.strictEqual(messagesFired, 1, "messages subscriber fires on uninformative bump");
       assert.strictEqual(wildcardFired, 2, "wildcard subscriber should always fire");
 
       unsubLogs();
@@ -175,13 +175,10 @@ describe("React Adapter Query Deduplication & Scoped Invalidation", () => {
       assert.strictEqual(messagesFired, 2);
     });
 
-    it("correctly identifies tables for queries", () => {
-      const { getTablesForQuery } = __test_invalidationBus;
-      assert.deepStrictEqual(getTablesForQuery("logs:listMine"), ["logs"]);
-      assert.deepStrictEqual(getTablesForQuery("users_queries:me"), ["users"]);
-      assert.deepStrictEqual(getTablesForQuery("moderator:listEmployeesWithAssignments"), ["users", "userSites", "sites"]);
-      assert.deepStrictEqual(getTablesForQuery("demo:boundPersonaPayroll"), ["logs", "shifts", "users", "userSites", "sites"]);
-      assert.deepStrictEqual(getTablesForQuery("push_subs:publicVapidKey"), []);
+    it("no longer ships a hand-maintained table map — server reports write-sets", () => {
+      const bus = /** @type {Record<string, unknown>} */ (__test_invalidationBus);
+      assert.equal(bus.getTablesForQuery, undefined, "getTablesForQuery must be deleted");
+      assert.equal(bus.getTablesForMutation, undefined, "getTablesForMutation must be deleted");
     });
   });
 });

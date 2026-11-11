@@ -471,26 +471,32 @@ export async function invoke(
    * public/internal split. true = called by another backend function or the
    * scheduler.
    */
-  fromServer = false
+  fromServer = false,
+  /** Out-param: tables written during this call (audit 2026-11-11, P2-5). */
+  meta?: { tablesWritten?: string[]; tablesRead?: string[] }
 ): Promise<unknown> {
   const key = refToKey(ref);
   const override = OVERRIDES[key];
+  const ctx = new RequestContext(identity);
+  let result: unknown;
   if (override) {
     if (!fromServer && INTERNAL_ONLY_OVERRIDES.has(key)) {
       throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
     }
-    return await override(new RequestContext(identity) as unknown as never, args ?? {});
+    result = await override(ctx as unknown as never, args ?? {});
+  } else {
+    const handler = registry().get(key);
+    if (!handler) throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
+    // Deny-by-default: ONLY an explicit `isPublic === true` may serve the browser.
+    // Internal functions carry `isInternal: true` with `isPublic` absent — the old
+    // `=== false` check refused nothing (audit 2026-11-10, P0-1).
+    if (!fromServer && handler.isPublic !== true) {
+      throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
+    }
+    result = await handler._handler(ctx as unknown, args ?? {});
   }
-  const handler = registry().get(key);
-  if (!handler) throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
-  // Deny-by-default: ONLY an explicit `isPublic === true` may serve the browser.
-  // Internal functions carry `isInternal: true` with `isPublic` absent — the old
-  // `=== false` check refused nothing (audit 2026-11-10, P0-1).
-  if (!fromServer && handler.isPublic !== true) {
-    throw new ConvexError(`UNKNOWN_FUNCTION:${key}`);
-  }
-  const ctx = new RequestContext(identity);
-  return await handler._handler(ctx as unknown, args ?? {});
+  if (meta) { meta.tablesWritten = [...ctx.db.writtenTables]; meta.tablesRead = [...ctx.db.readTables]; }
+  return result;
 }
 
 /** Diagnostics: how many exports each mapped convex module actually has. */

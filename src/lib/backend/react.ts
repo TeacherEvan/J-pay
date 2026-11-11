@@ -50,150 +50,6 @@ export type TableName =
   | "travelSegments"
   | "shiftOverrides";
 
-/**
- * Mapping of known mutation function keys to the tables/domains they mutate.
- */
-export const MUTATION_TABLE_MAP: Record<string, readonly TableName[]> = {
-  // logs & punches
-  "logs:createLog": ["logs", "shifts"],
-  "punches:recordPunch": ["punches", "logs", "shifts"],
-  "punches:logPunch": ["punches", "logs", "shifts"], // alias for safety
-
-  // sites
-  "sites:createSite": ["sites"],
-  "sites:assignEmployee": ["userSites"],
-  "sites:unassignEmployee": ["userSites"],
-  "sites:setEmployeeSites": ["userSites", "users"],
-
-  // manager console
-  "manager:setManagerSites": ["managerSites", "users", "sites"],
-  "manager:promoteToManager": ["users"],
-  "manager:demoteManager": ["users", "managerSites"],
-  "moderator:endShiftOverride": ["shifts", "shiftOverrides"],
-
-  // travel tracking
-  "travel:setConsent": ["users"],
-  "travel:recordFix": ["travelSegments"], // B10: fixes were nuking six tables sitewide every 15s
-
-  // organisations + manager messaging
-  "organisations:createOrg": ["organisations"],
-  "organisations:renameOrg": ["organisations"],
-  "organisations:archiveOrg": ["organisations", "sites", "users"],
-  "messages:managerMessage": ["messages"],
-  "messages:managerBroadcast": ["messages"],
-
-  // messages
-  "messages:sendToModerators": ["messages"],
-  "messages:replyToEmployee": ["messages"],
-  "messages:broadcast": ["messages"],
-  "messages:markThreadRead": ["messages"],
-  "messages:markQueueItemRead": ["messages"],
-
-  // moderator operations
-  "moderator:resolveShift": ["shifts", "reviewResolutions"],
-  "moderator:recomputeEmployeeShifts": ["shifts"],
-  "moderator:setHourlyOverride": ["users"],
-
-  // payroll
-  "payroll:setPayStrategy": ["users"],
-
-  // push
-  "push_subs:saveSubscription": ["pushSubscriptions"],
-
-  // users & account
-  "users:deactivateEmployee": ["users"],
-  "users:resetDeviceToken": ["users"],
-  "users:setMyLocale": ["users"],
-  "users:setUserLocale": ["users"],
-  "users:issueMyDeviceToken": ["users"],
-  "users:archiveMyMasterSession": ["users", "messages", "purgeAudit"],
-
-  // demo operations
-  "demo:bindReviewer": ["demoSessions"],
-  "demo:switchPersona": ["demoSessions"],
-  "demo:demoResolveShift": ["shifts", "reviewResolutions"],
-  "demo:demoRecomputeEmployeeShifts": ["shifts"],
-  "demo:demoMarkQueueItemRead": ["messages"],
-  "demo:demoReplyToEmployee": ["messages"],
-};
-
-/**
- * Mapping of known query function keys to the tables they observe.
- */
-export const QUERY_TABLE_MAP: Record<string, readonly TableName[]> = {
-  // users
-  "users_queries:me": ["users"],
-  "users_queries:listEmployees": ["users"],
-  "users:getMyLocale": ["users"],
-
-  // organisations + manager messaging
-  "organisations:listOrgs": ["organisations", "sites", "users"],
-  "messages:managerOrgUsers": ["users", "organisations"],
-
-  // sites & punches
-  "sites:listMine": ["sites", "userSites"],
-  "sites:getSiteForPunch": ["sites", "userSites"],
-  "punches:getPunchHistory": ["punches", "userSites"],
-
-  // logs & shifts
-  "logs:listMine": ["logs"],
-
-  // messages
-  "messages:myInbox": ["messages"],
-  "messages:moderatorInbox": ["messages"],
-
-  // moderator
-  "moderator:auditRecentLogs": ["logs", "users", "sites"],
-  "moderator:auditNeedsReview": ["shifts", "users"],
-  "moderator:activeShifts": ["shifts", "logs", "users", "sites"],
-  "moderator:listEmployeesWithAssignments": ["users", "userSites", "sites"],
-  "moderator:listAllSites": ["sites", "users"],
-
-  // manager console
-  "manager:listManagedSites": ["managerSites", "sites", "users"],
-  "manager:managedActiveShifts": ["shifts", "logs", "users", "sites", "managerSites", "userSites"],
-  "manager:myCrew": ["userSites", "shifts", "sites", "users", "managerSites"],
-  "manager:listManagers": ["users", "managerSites", "sites"],
-  "travel:recentForCrew": ["travelSegments", "userSites", "sites", "users", "managerSites"],
-  "travel:forUser": ["travelSegments", "userSites", "sites"],
-
-  // kpi & payroll
-  "kpi:summary": ["logs", "shifts", "users", "sites"],
-  "payroll:calcForEmployee": ["users", "shifts", "logs", "userSites", "sites"],
-  "payroll:listSupportedStrategies": [],
-  "payroll:listJurisdictionsForLocale": [],
-
-  // push
-  "push_subs:publicVapidKey": [],
-
-  // demo
-  "demo:status": ["demoSessions"],
-  "demo:getBinding": ["demoSessions"],
-  "demo:boundPersonaLogs": ["logs"],
-  "demo:boundPersonaShifts": ["shifts"],
-  "demo:boundPersonaPayroll": ["logs", "shifts", "users", "userSites", "sites"],
-  "demo:demoAudit": ["logs", "users", "sites"],
-  "demo:demoNeedsReview": ["shifts", "users"],
-  "demo:demoKpis": ["logs", "shifts", "users", "sites"],
-  "demo:demoEmployeeRoster": ["users", "userSites", "sites"],
-  "demo:demoModeratorInbox": ["messages"],
-  "demo:boundPersonaSites": ["sites", "userSites"],
-};
-
-export function getTablesForQuery(queryKey: string): readonly TableName[] | null {
-  if (Object.prototype.hasOwnProperty.call(QUERY_TABLE_MAP, queryKey)) {
-    return QUERY_TABLE_MAP[queryKey];
-  }
-  return null;
-}
-
-export function getTablesForMutation(mutationKey: string): readonly TableName[] | null {
-  if (Object.prototype.hasOwnProperty.call(MUTATION_TABLE_MAP, mutationKey)) {
-    return MUTATION_TABLE_MAP[mutationKey];
-  }
-  return null;
-}
-
 /* ------------------------------------------------------- invalidation bus -- */
 
 export type InvalidationEvent = {
@@ -213,10 +69,11 @@ export function bump(event?: InvalidationEvent): void {
   version += 1;
 
   let affectedTables: readonly string[] | null = null;
+  // The server reports each mutation's write-set (`tables`); there is no
+  // hand-maintained client map anymore (audit 2026-11-11, P2-5). A bare
+  // mutationName carries no table information here → notify everyone.
   if (event?.tables && event.tables.length > 0) {
     affectedTables = event.tables;
-  } else if (event?.mutationName) {
-    affectedTables = getTablesForMutation(event.mutationName);
   }
 
   for (const entry of Array.from(listenerEntries)) {
@@ -273,7 +130,11 @@ async function accessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-export function callBackend(ref: unknown, args?: unknown): Promise<unknown> {
+export function callBackend(
+  ref: unknown,
+  args?: unknown,
+  meta?: { tablesWritten?: string[]; tablesRead?: string[] }
+): Promise<unknown> {
   const fnKey = refToKey(ref);
   const cacheKey = `${fnKey}::${JSON.stringify(args ?? {})}`;
 
@@ -293,16 +154,22 @@ export function callBackend(ref: unknown, args?: unknown): Promise<unknown> {
       body: JSON.stringify({ ref: fnKey, args: args ?? {} }),
     });
 
-    let payload: { result?: unknown; error?: string; message?: string } = {};
+    let payload: { result?: unknown; error?: string; message?: string; tables?: string[]; reads?: string[] } = {};
     try {
       payload = (await response.json()) as typeof payload;
     } catch {
       // non-JSON error page
     }
 
+    if (meta) {
+      meta.tablesWritten = Array.isArray(payload.tables) ? payload.tables : undefined;
+      meta.tablesRead = Array.isArray(payload.reads) ? payload.reads : undefined;
+    }
     if (!response.ok) {
       throw new BackendError(payload.error ?? "INTERNAL", payload.message);
     }
+    // Invalidation is the caller's job (mutation hooks bump from the
+    // server-reported write-set; queries subscribe to their own reads).
     return payload.result;
   })();
 
@@ -344,18 +211,33 @@ export function useQuery<T = any>(
     };
   }, []);
 
-  const tables = useMemo(() => (refKey ? getTablesForQuery(refKey) : null), [refKey]);
+  const callMeta = useRef<{ tablesWritten?: string[]; tablesRead?: string[] }>({});
+  // undefined = unknown yet (or old server) → wildcard subscription.
+  const [reads, setReads] = useState<readonly string[] | undefined>(undefined);
 
   useEffect(() => {
-    return subscribe(tables, () => setTick((v) => v + 1));
-  }, [tables]);
+    setReads(undefined);
+  }, [key]);
+
+  useEffect(() => {
+    if (reads === undefined) return subscribe(null, () => setTick((v) => v + 1));
+    if (reads.length === 0) return;
+    return subscribe(reads, () => setTick((v) => v + 1));
+  }, [reads]);
 
   useEffect(() => {
     if (skip) return;
     let active = true;
-    callBackend(ref, args)
+    callMeta.current = {};
+    callBackend(ref, args, callMeta.current)
       .then((result) => {
         if (!active || !mounted.current) return;
+        const learned = callMeta.current.tablesRead;
+        setReads((prev) =>
+          prev && learned && prev.length === learned.length && prev.every((t, i) => t === learned[i])
+            ? prev
+            : learned
+        );
         setState({ key, data: result, error: null });
       })
       .catch((error: unknown) => {
@@ -389,9 +271,10 @@ export function useMutation<TArgs = any, TResult = any>(
 ): (args?: TArgs) => Promise<TResult> {
   return useCallback(
     async (args?: TArgs) => {
-      const result = (await callBackend(ref, (args ?? {}) as unknown)) as TResult;
-      const mutationName = typeof ref === "string" ? ref : refToKey(ref);
-      bump({ mutationName });
+      const meta: { tablesWritten?: string[] } = {};
+      const result = (await callBackend(ref, (args ?? {}) as unknown, meta)) as TResult;
+      if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
+      else if (meta.tablesWritten === undefined) bump(); // old server: wildcard fallback
       return result;
     },
     [ref]
@@ -403,9 +286,10 @@ export function useAction<TArgs = any, TResult = any>(
 ): (args?: TArgs) => Promise<TResult> {
   return useCallback(
     async (args?: TArgs) => {
-      const result = (await callBackend(ref, (args ?? {}) as unknown)) as TResult;
-      const actionName = typeof ref === "string" ? ref : refToKey(ref);
-      bump({ mutationName: actionName });
+      const meta: { tablesWritten?: string[] } = {};
+      const result = (await callBackend(ref, (args ?? {}) as unknown, meta)) as TResult;
+      if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
+      else if (meta.tablesWritten === undefined) bump();
       return result;
     },
     [ref]
@@ -543,15 +427,17 @@ export function useConvex(): {
     () => ({
       query: async (ref: unknown, args?: unknown) => callBackend(ref, args),
       mutation: async (ref: unknown, args?: unknown) => {
-        const result = await callBackend(ref, args);
-        const mutationName = typeof ref === "string" ? ref : refToKey(ref);
-        bump({ mutationName });
+        const meta: { tablesWritten?: string[] } = {};
+        const result = await callBackend(ref, args, meta);
+        if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
+        else if (meta.tablesWritten === undefined) bump();
         return result;
       },
       action: async (ref: unknown, args?: unknown) => {
-        const result = await callBackend(ref, args);
-        const actionName = typeof ref === "string" ? ref : refToKey(ref);
-        bump({ mutationName: actionName });
+        const meta: { tablesWritten?: string[] } = {};
+        const result = await callBackend(ref, args, meta);
+        if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
+        else if (meta.tablesWritten === undefined) bump();
         return result;
       },
     }),
@@ -575,6 +461,4 @@ export const __test_invalidationBus = {
     listenerEntries.clear();
   },
   listenerCount: () => listenerEntries.size,
-  getTablesForQuery,
-  getTablesForMutation,
 };

@@ -101,8 +101,9 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const identity = await resolveIdentity(request);
-    const result = await invoke(body.ref, body.args ?? {}, identity);
-    return NextResponse.json({ result });
+    const meta: { tablesWritten?: string[]; tablesRead?: string[] } = {};
+    const result = await invoke(body.ref, body.args ?? {}, identity, false, meta);
+    return NextResponse.json({ result, tables: meta.tablesWritten ?? [], reads: meta.tablesRead ?? [] });
   } catch (error) {
     const code = errorCode(error);
     if (code === "INTERNAL") {

@@ -225,6 +225,7 @@ export class Database {
   }
 
   async loadAll(table: string): Promise<Doc[]> {
+    this.readTables.add(table);
     const rows: RawRow[] = [];
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await this.client
@@ -251,6 +252,12 @@ export class Database {
   }
 
   /** Resolve the table that owns a uuid (cache first, registry view second). */
+  /** Tables written through this instance — used to report a mutation's
+   *  write-set to the client for targeted invalidation (audit 2026-11-11, P2-5). */
+  readonly writtenTables = new Set<string>();
+  /** Tables read through this instance (queries, loadAll, get). */
+  readonly readTables = new Set<string>();
+
   private async tableOf(id: string): Promise<string | null> {
     const cached = idCacheGet(this.idCache, id);
     if (cached) return cached;
@@ -270,6 +277,7 @@ export class Database {
     if (!id) return null;
     const table = await this.tableOf(id);
     if (!table) return null;
+    this.readTables.add(table);
     const { data, error } = await this.client
       .from(table)
       .select("*")
@@ -293,6 +301,7 @@ export class Database {
       .select("_id")
       .single();
     if (error) throw new Error(`${table} insert: ${error.message}`);
+    this.writtenTables.add(table);
     const id = String((data as { _id: string })._id);
     idCacheSet(this.idCache, id, table);
     return id;
@@ -313,6 +322,7 @@ export class Database {
       .select("_id");
     if (error) throw new Error(`${table} patch: ${error.message}`);
     if (!data || data.length === 0) throw new Error(`Document not found: ${id}`);
+    this.writtenTables.add(table);
   }
 
   async replace(id: string, doc: RawRow): Promise<void> {
@@ -328,6 +338,7 @@ export class Database {
     }
     const { error } = await this.client.from(table).update(payload).eq("_id", id);
     if (error) throw new Error(`${table} replace: ${error.message}`);
+    this.writtenTables.add(table);
   }
 
   async delete(id: string): Promise<void> {
@@ -335,6 +346,7 @@ export class Database {
     if (!table) return;
     const { error } = await this.client.from(table).delete().eq("_id", id);
     if (error) throw new Error(`${table} delete: ${error.message}`);
+    this.writtenTables.add(table);
     this.idCache.delete(id);
   }
 }
@@ -346,7 +358,9 @@ export class QueryBuilder {
   private direction: "asc" | "desc" = "asc";
   private limit?: number;
 
-  constructor(private db: Database, private table: string) {}
+  constructor(private db: Database, private table: string) {
+    db.readTables.add(table);
+  }
 
   private clone(): QueryBuilder {
     const next = new QueryBuilder(this.db, this.table);
