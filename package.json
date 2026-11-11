@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev-strict.mjs",
-    "build": "next build --webpack",
+    "build": "npm run verify && next build --webpack",
     "start": "next start",
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",

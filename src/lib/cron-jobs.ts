@@ -1,6 +1,6 @@
 /**
  * Retention/cleanup jobs the Supabase-authoritative deployment runs daily
- * via `POST /api/internal/cron?job=<name>` (see supabase/migrations/0003_retention_crons.sql).
+ * via `POST /api/internal/cron?job=<name>` (see supabase/migrations/archive/0003_retention_crons.OWNER_ONLY.sql).
  *
  * These are internal handlers from the Convex-shaped module registry (never
  * callable from the browser — the 2026-11-10 security gate refuses them);

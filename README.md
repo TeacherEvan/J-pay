@@ -22,10 +22,13 @@ npm install
 npm run dev           # http://localhost:3000
 ```
 
-The database schema lives in `supabase/migrations/` (`0001_init.sql` is the baseline;
-`0002`–`0009` add constraints, crons, the manager role, travel tracking, shift overrides,
-the id-registry refresh, and organisations). Apply with `supabase db push` or the dashboard.
-The Convex deployment is retired — there is nothing to `npx convex dev` against.
+The database schema lives in `supabase/migrations/`. `0001_init.sql` is the fresh-install
+baseline; the rest apply incrementally. **Apply files ONE AT A TIME in the SQL editor.**
+Never use `supabase db push` — migration names never matched applied history, and
+`supabase/migrations/archive/` contains two files (`0003_retention_crons.OWNER_ONLY.sql`,
+`0008_refresh_registry.DO_NOT_APPLY.sql`) that would break production if applied mechanically.
+Do not re-apply `0001_init.sql` to production either. The Convex deployment is retired —
+there is nothing to `npx convex dev` against.
 
 Bootstrap the first moderator (one-time, uses the service-role key on this machine):
 
@@ -49,13 +52,13 @@ offers **"Enter demo preview"**.
 Each client company gets an isolated fork + Supabase project:
 
 1. Fork/copy this repo → `jpay-<client>`. Update `name` in `package.json` and `manifest.webmanifest`.
-2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/0001..0009`.
+2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/` **one file at a time in the SQL editor, in this order**: `0001_init.sql` → `0002` → `0004` → `0005` → `0006` → `0007` → `0009` → `0010` → `0011` → `0012` → `0013` → `0014`. Do **not** apply `archive/` and do **not** use `supabase db push` (see above) — and do not skip `0014`, which closes an unauthenticated read on `jpay_id_registry`.
 3. Set env vars per deployment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`, `DEVICE_TOKEN_SECRET`, `CRON_SECRET` (+ `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`,
    `MASTER_PASSWORD`, vapid keys if push is wanted).
 4. Create that company's moderator with `scripts/create-moderator.mjs` (forced password change on first sign-in).
-5. Verify `0003` retention jobs registered (`select jobname, schedule from cron.job;`) and dry-run each once.
-6. Deploy frontend to Vercel (`vercel`) — same secrets in the project's env settings.
+5. (Optional) Retention crons are archived — see `supabase/migrations/archive/0003_retention_crons.OWNER_ONLY.sql`. The app runs without them; they are only relevant if you need 7-day coordinate purging on this client's project, and only the owner may enable them (requires pg_cron + pg_net).
+6. Deploy frontend to Vercel — pushing `main` deploys automatically. Do not push without running `npm run verify && npm run build` first. The same secrets go in the project's env settings (`CRON_SECRET`, `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`, `MASTER_PASSWORD`, VAPID keys if push is wanted; `DEMO_MODE` only if you want the demo preview on this fork).
 
 ## Gates
 

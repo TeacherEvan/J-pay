@@ -4,15 +4,18 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, hasSupabaseAdminKey } from "@/lib/supabase/admin";
 
 /**
- * GET /api/health/db — B5 (2026-11-10): deploy-order probe.
+ * GET /api/health/db — B5 (2026-11-10), completed 2026-11-11-11.
  *
- * The app must never deploy ahead of migrations 0003–0010 (table-exists
- * failures otherwise hard-error on the payroll path). This unauthenticated
- * route returns 200 { ok: true } when every table the current code reads
- * exists, or 503 with the missing table names so the failure is loud and
+ * Deploy-order probe. The app must never deploy ahead of the migrations it reads. This
+ * unauthenticated route returns 200 { ok: true, tables: N } when every object the current
+ * code reads exists, or 503 with the missing object names so the failure is loud and
  * debuggable instead of a silent stale payroll.
  *
- * Safe to expose: table names only, no data, no keys.
+ * Note: `tables` is the count of PROBED objects, not the database's total table count —
+ * earlier versions reported a hard-coded 16 while the DB had 17 tables + 1 view. The value
+ * tracks REQUIRED_TABLES exactly, which is the verifiable claim.
+ *
+ * Safe to expose: names only, no data, no keys.
  */
 
 export const runtime = "nodejs";
@@ -34,6 +37,8 @@ const REQUIRED_TABLES = [
   "managerSites",
   "travelSegments",
   "shiftOverrides",
+  "systemEvents",
+  "jpay_rate_limits",
   "jpay_id_registry",
 ] as const;
 

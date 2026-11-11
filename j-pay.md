@@ -18,7 +18,8 @@ Read every runtime-specific clause as superseded:
 
 - **R9 / R18 / §9 retention:** runs via `pg_cron` → `POST /api/internal/cron?job=<name>` →
   the same purge handlers. Execution is now independent of any Convex deployment
-  (migration `supabase/migrations/0003_retention_crons.sql`).
+  (migration `supabase/migrations/archive/0003_retention_crons.OWNER_ONLY.sql` — archived;
+  pg_cron is OPTIONAL and the app runs without it; never apply via `supabase db push`).
 - **R16 / R20 / R22 / §3 stack rows:** authentication is Supabase Auth (email + password).
   Convex Auth (removed 2026-08-23 — this TRD's own decision) and the earlier
   third-party-vendor integration are both gone. The only server-side door to data is

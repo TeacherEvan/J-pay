@@ -1,3 +1,15 @@
+-- 0008_refresh_registry.DO_NOT_APPLY.sql — archived, never to be run.
+-- (audit 2026-11-11, finding P1-F2 — quarantined 2026-11-11.)
+--
+-- WHY: `supabase db push` (or a careful operator following an outdated runbook) walks this
+-- directory in filename order and would apply this file against production, whose registry
+-- already carries organisations + systemEvents via 0011. This file's union omits both, so
+-- applying it would DROP those two members from `jpay_id_registry`, and every
+-- `ctx.db.get(<org/systemEvent id>)` would start returning "Document not found". The file's
+-- own header already forbade re-application after 0011 — the filename now enforces it.
+-- For incremental installs, run `0011_system_events.sql` instead. This file is kept only as
+-- history; do not recreate the view with its contents.
+--
 -- 0008_refresh_registry.sql — make incremental deployments self-contained
 --
 -- 0005/0006/0007 created the new tables but never refreshed the

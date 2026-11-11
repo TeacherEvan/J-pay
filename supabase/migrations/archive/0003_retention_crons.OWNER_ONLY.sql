@@ -1,3 +1,24 @@
+-- 0003_retention_crons.OWNER_ONLY.sql — DO NOT RUN VIA `supabase db push`.
+-- (audit 2026-11-11, finding P1-F2 — quarantined 2026-11-11-11.)
+--
+-- This file was found to break production if applied mechanically:
+--   * pg_cron/pg_net are NOT installed on the j-pay project (verified read-only), so a `db push`
+--     aborts mid-migration leaving a half-applied history, and
+--   * once pg_cron exists, `cron.schedule(name, ...)` REPLACES an existing job of the same
+--     name — so applying this file as-is would overwrite correctly-configured retention
+--     jobs with literal `__SITE_URL__` / `__CRON_SECRET__` placeholder URLs.
+--
+-- OWNER PROCEDURE (never the agent, never `db push`):
+--   0. Decide this file is wanted at all. The app runs WITHOUT these four jobs.
+--   1. Enable pg_cron + pg_net in the dashboard (Database → Extensions).
+--   2. Replace __SITE_URL__ and __CRON_SECRET__ BY HAND with the canonical site and a random secret.
+--   3. Set the same CRON_SECRET in Vercel env (Project → Settings → Environment Variables, Production)
+--      and redeploy.
+--   4. Execute this file in the SQL editor.
+--   5. Verify: select jobname, schedule from cron.job;          -- expect 4 rows
+--              select * from cron.job_run_details order by start_time desc limit 4;
+--   6. Dry-run each job: curl -X POST -H "Authorization: Bearer <secret>" "<SITE_URL>/api/internal/cron?job=purge-expired-coordinates"
+--
 -- 0003_retention_crons.sql — daily retention jobs for the Supabase-authoritative deployment
 -- (audit 2026-11-10, P1-4; supabase/migrations/0001_init.sql had no cron mechanism, and
 -- convex/crons.ts is never executed here — the retention tier was dead code in prod).
