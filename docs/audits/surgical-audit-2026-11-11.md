@@ -130,3 +130,20 @@ See `plans/2026-11-11-implementation-plan.md` — Phase 0 (owner: apply migratio
 - A bounded "fetch extra" window is a mitigation, not a fix — always pair it with an exhaustion-loop test or an explicit documented bound.
 - In-memory rate limiting on serverless is per-instance; never report it as brute-force protection without a shared store.
 - "Migrations written" ≠ "migrations applied" — every audit since 2026-11-10 has listed 0002+ as unapplied; treat apply + `/api/health/db` green as part of the definition of done.
+
+---
+
+## 6. Post-remediation re-audit (2026-11-11, same day, HEAD `2fd7f0b`)
+
+Landed in this cycle: **B1/R1 closed for real** (window-loop pagination + MVTH#9, red-proof verified), **MVTH#2** (derivation-failure ledger), **MVTH#3** (`listOrgs` counts), **P2-5 closed** (server-reported `{tables, reads}` on `/api/backend/call`; client maps deleted; `test-write-set.mjs`), **item 5** (`listOrgs` indexed `by_org` queries), **rate limiting** (Postgres `jpay_rate_limit_hit` RPC, migration `0013`, in-memory fallback), **C3 closed** (`glob@^14.0.4`, `minimatch@^11.0.7`, `zod@^4.6.7` overrides; `npm audit --omit=dev` = **0**; production build verified, `.next` removed).
+
+| Audit Metadata (re-check) | Value |
+| :--- | :--- |
+| **Tree digest (pruned scanner)** | `8b9b034ab7be7803…` (source changes expected vs `d0abd148…`; zero unintended drift — `git status` clean at commit) |
+| **Gates** | `npm test` fail 0 · `npx tsc --noEmit` clean · consistency PASS · mermaid PASS · `npm run build` exit 0 · `npm audit --omit=dev` **0 vulnerabilities** |
+| **Revised counts** | P1: **1** (unapplied migrations / deploy-order, B5 residual) · P2: **3** (`/privacy` DRAFT, incremental-install registry unverified, e2e lane self-skips) · P3 ≈ 7 |
+| **Revised score** | `D_raw ≈ 26` → **S_health ≈ 87 / 100** (formula-literal). Risk: **MODERATE, conditional** — LOW by score, but no environment runs the migrated schema yet; the number is not deployable evidence until Phase 0 completes |
+| **Mutation basis** | 4/36→5/36 negative-signal files (write-set telemetry adds an assertion class); `M_kill ≈ 55–60%` still soft |
+
+### Still owner-gated (unchanged)
+Migrations `0002`–`0013` unapplied · `/api/health/db` green pending apply · `/privacy` DRAFT · CI secrets for nightly e2e · prod round-trip verification. **Do not treat the app as launch-ready on the strength of this report.**

@@ -32,12 +32,12 @@
 
 ## 2. Phase 2 — Hardening (P2)
 
-4. **Rate limiting with teeth.** Move the `session-bootstrap` bucket to a shared store (Postgres atomic upsert with window counter, or Vercel KV/Upstash). Keep the in-memory path as a fallback when the store is unreachable; document which is active in the route. Test: two simulated "instances" (two Map stores) still trip the shared cap.
-5. **`listOrgs` without full-table collects** — SQL view `org_counts` or `rpc`; JS fallback retained. Include `EXPLAIN` before/after in the commit message.
-6. **`paginate()` decide-or-delete.** No callers exist; either implement keyset on `_creationTime` or delete the method. Recommend delete.
+4. **Rate limiting with teeth — DONE (2fd7f0b).** Move the `session-bootstrap` bucket to a shared store (Postgres atomic upsert with window counter, or Vercel KV/Upstash). Keep the in-memory path as a fallback when the store is unreachable; document which is active in the route. Test: two simulated "instances" (two Map stores) still trip the shared cap.
+5. **`listOrgs` without full-table collects — DONE (2fd7f0b, indexed by_org).** — SQL view `org_counts` or `rpc`; JS fallback retained. Include `EXPLAIN` before/after in the commit message.
+6. **`paginate()` — RESOLVED: deleted (grep-verified absent from db.ts).** No callers exist; either implement keyset on `_creationTime` or delete the method. Recommend delete.
 7. **Unrun gates reality check.** Nightly e2e lane exists (`175475f`) but self-skips without CI secrets. Owner: seed secrets or accept and document; do not leave zombie workflows.
-8. **C3 (reopened):** resolve the `@serwist/*` advisory chain — either the breaking `@serwist/next@8.4.4` bump (build + smoke verify) or a scoped `overrides` for `glob`/`minimatch`/`zod` with rationale in the commit message. `npm audit --omit=dev` must print 0 (or the remainder explicitly documented as unfixable-without-major-bump).
-9. **P2-5 (reopened):** replace `MUTATION_TABLE_MAP`/`QUERY_TABLE_MAP` with server-reported write-sets from `/api/backend/call`; delete both maps; add the refetch regression test.
+8. **C3 (reopened) — RESOLVED (2fd7f0b): overrides; npm audit --omit=dev = 0; build verified.** resolve the `@serwist/*` advisory chain — either the breaking `@serwist/next@8.4.4` bump (build + smoke verify) or a scoped `overrides` for `glob`/`minimatch`/`zod` with rationale in the commit message. `npm audit --omit=dev` must print 0 (or the remainder explicitly documented as unfixable-without-major-bump).
+9. **P2-5 (reopened) — RESOLVED (accb9eb): server-reported write-set/read-set; maps deleted; test-write-set.mjs wired.** replace `MUTATION_TABLE_MAP`/`QUERY_TABLE_MAP` with server-reported write-sets from `/api/backend/call`; delete both maps; add the refetch regression test.
 
 ## 3. Phase 3 — Verify, re-audit, close
 
