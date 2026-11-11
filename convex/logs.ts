@@ -101,21 +101,40 @@ export const createLog = mutation({
       }
     }
 
-    const logId = await ctx.db.insert("logs", {
-      userId,
-      siteId: args.siteId,
-      clientReportedTime: args.clientReportedTime,
-      clockSkewMs,
-      status: args.status,
-      latitude: args.latitude,
-      longitude: args.longitude,
-      accuracyMeters: args.accuracyMeters,
-      isWithinGeofence,
-      sideMissionDurationMinutes: args.sideMissionDurationMinutes,
-      deviceMetadata: args.deviceMetadata,
-      idempotencyKey: args.idempotencyKey,
-      impossibleTravelFlag,
-    });
+    // C2 (2026-11-10): the unique(userId, idempotencyKey) index (0002) turns a
+    // concurrent double-fire into ONE row; the loser of the race gets a
+    // duplicate-key error from Postgres instead of writing a second row.
+    // Swallow it into the same shape as the pre-check duplicate path — and
+    // do NOT schedule derivation twice.
+    let logId: string;
+    try {
+      logId = await ctx.db.insert("logs", {
+        userId,
+        siteId: args.siteId,
+        clientReportedTime: args.clientReportedTime,
+        clockSkewMs,
+        status: args.status,
+        latitude: args.latitude,
+        longitude: args.longitude,
+        accuracyMeters: args.accuracyMeters,
+        isWithinGeofence,
+        sideMissionDurationMinutes: args.sideMissionDurationMinutes,
+        deviceMetadata: args.deviceMetadata,
+        idempotencyKey: args.idempotencyKey,
+        impossibleTravelFlag,
+      });
+    } catch (e) {
+      if (/duplicate|unique|23505/i.test(String(e))) {
+        const dup = await ctx.db
+          .query("logs")
+          .withIndex("by_user_idem", (q) =>
+            q.eq("userId", userId).eq("idempotencyKey", args.idempotencyKey)
+          )
+          .first();
+        if (dup) return { logId: dup._id, duplicate: true as const };
+      }
+      throw e;
+    }
 
     await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
 

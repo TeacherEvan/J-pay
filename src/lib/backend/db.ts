@@ -518,19 +518,4 @@ export class QueryBuilder {
     return rows[0];
   }
 
-  async paginate(opts: { numItems: number; cursor?: string | null }): Promise<{
-    page: Doc[];
-    isDone: boolean;
-    continueCursor: string;
-  }> {
-    const rows = await this.run();
-    const start = opts.cursor ? Number(opts.cursor) || 0 : 0;
-    const page = rows.slice(start, start + opts.numItems);
-    const next = start + page.length;
-    return {
-      page,
-      isDone: next >= rows.length,
-      continueCursor: next >= rows.length ? "" : String(next),
-    };
-  }
 }

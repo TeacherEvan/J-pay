@@ -96,7 +96,6 @@ class QB {
   take(n) { const c = this.clone(); c._limit = n; return c.run(); }
   first() { return this.take(1).then((r) => r[0] ?? null); }
   unique() { return this.run().then((r) => r[0]); }
-  paginate() { return this.run().then((rows) => ({ page: rows, isDone: true, continueCursor: "" })); }
   async collect() { return this.run(); }
   async run() {
     let rows = (store[this.table] ?? []).map(clone);
