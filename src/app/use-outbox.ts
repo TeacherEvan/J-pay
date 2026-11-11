@@ -9,7 +9,14 @@ import {
   type OutboxEntry,
 } from "@/lib/outbox";
 
-let flushing = false;
+// Module-global flush lock. Protocol: `flushLock` holds the timestamp (ms) of
+// when the current flush acquired the lock, or null when free. A flush that
+// finds the lock held younger than STALE_MS backs off; an older lock is
+// presumed abandoned (the holder threw/hung between acquire and release) and
+// is stolen. Release happens in `finally`, so a throwing flush can never wedge
+// future flushes — and even a never-settling one ages out within STALE_MS.
+const STALE_MS = 30_000;
+let flushLock: number | null = null;
 
 export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
   const [count, setCount] = useState(0);
@@ -23,8 +30,8 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
   }, []);
 
   const flush = useCallback(async () => {
-    if (flushing) return;
-    flushing = true;
+    if (flushLock !== null && Date.now() - flushLock < STALE_MS) return;
+    flushLock = Date.now();
     setSyncing(true);
     try {
       const items = await outboxAll();
@@ -56,7 +63,7 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
         );
       }
     } finally {
-      flushing = false;
+      flushLock = null;
       setSyncing(false);
       refresh();
     }

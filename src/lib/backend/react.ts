@@ -377,30 +377,52 @@ export function useQuery<T = any>(
 export function useMutation<TArgs = any, TResult = any>(
   ref: FunctionRef | string
 ): (args?: TArgs) => Promise<TResult> {
+  // Anchor the callback identity to the stable refToKey string, not the
+  // Proxy-minted FunctionRef object (new every render) — audit 2026-11-11, P2-D3.
+  const refKey = useMemo(() => {
+    try {
+      return refToKey(ref);
+    } catch {
+      return "";
+    }
+  }, [ref]);
+  const refRef = useRef(ref);
+  refRef.current = ref;
   return useCallback(
     async (args?: TArgs) => {
       const meta: { tablesWritten?: string[] } = {};
-      const result = (await callBackend(ref, (args ?? {}) as unknown, meta)) as TResult;
+      const result = (await callBackend(refRef.current, (args ?? {}) as unknown, meta)) as TResult;
       if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
       else if (meta.tablesWritten === undefined) bump(); // old server: wildcard fallback
       return result;
     },
-    [ref]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refKey]
   );
 }
 
 export function useAction<TArgs = any, TResult = any>(
   ref: FunctionRef | string
 ): (args?: TArgs) => Promise<TResult> {
+  const refKey = useMemo(() => {
+    try {
+      return refToKey(ref);
+    } catch {
+      return "";
+    }
+  }, [ref]);
+  const refRef = useRef(ref);
+  refRef.current = ref;
   return useCallback(
     async (args?: TArgs) => {
       const meta: { tablesWritten?: string[] } = {};
-      const result = (await callBackend(ref, (args ?? {}) as unknown, meta)) as TResult;
+      const result = (await callBackend(refRef.current, (args ?? {}) as unknown, meta)) as TResult;
       if (meta.tablesWritten && meta.tablesWritten.length > 0) bump({ tables: meta.tablesWritten });
       else if (meta.tablesWritten === undefined) bump();
       return result;
     },
-    [ref]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refKey]
   );
 }
 

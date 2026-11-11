@@ -2,7 +2,7 @@
 
 import { useQuery } from "@/lib/backend/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/backend/api";
 import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { ManagerMap } from "./manager-map";
@@ -45,8 +45,14 @@ export default function ManagerPage() {
   const managedSites = useQuery(api.manager.listManagedSites, {}) as SiteRow[] | undefined;
   const travel = useQuery(api.travel.recentForCrew, { limit: 25 }) as TravelRow[] | undefined;
   const userLocale = useUserLocale();
-  // Mount-stable clock for elapsed-time displays (never re-reads Date.now() mid-render).
-  const [nowMs] = useState(() => Date.now());
+  // Ticking clock for elapsed-time displays: a mount-stable Date.now() would
+  // freeze in-transit legs at 0 min for the whole session. 30 s cadence keeps
+  // re-renders modest; cleared on unmount.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const [view, setView] = useState<ViewId>("live");
   const travelPages = usePagination(travel ?? [], 3);
   const crewTable = usePagination(crew ?? [], 6);

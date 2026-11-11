@@ -63,6 +63,8 @@ export interface ShiftClockProps {
   userLocale?: string;
   isLive: boolean;
   siteName?: string;
+  /** Current open segment's startedAt (from deriveSegments), or first event of today. */
+  shiftAnchorMs?: number;
 }
 
 // Shift chronometer display with tabular-nums enforcement
@@ -73,6 +75,7 @@ export function ShiftTimer({
   userLocale,
   isLive,
   siteName,
+  shiftAnchorMs,
 }: ShiftClockProps) {
   // U14: the 1 Hz tick lives HERE, not at the card root, so the timeline and
   // everything else on the card doesn't re-render every second.
@@ -82,7 +85,11 @@ export function ShiftTimer({
     return () => clearInterval(t);
   }, []);
   const clockAnchor = last ? (last.clientReportedTime ?? last._creationTime) : null;
-  const elapsed = phase !== "off" && clockAnchor ? now - clockAnchor : null;
+  // While on shift/break, elapsed and "since" anchor to the open segment's
+  // start (payroll's segment machine), falling back to the last event only
+  // when no anchor was supplied.
+  const shiftAnchor = phase !== "off" ? (shiftAnchorMs ?? clockAnchor) : clockAnchor;
+  const elapsed = phase !== "off" && shiftAnchor != null ? now - shiftAnchor : null;
 
   return (
     <div
@@ -133,9 +140,9 @@ export function ShiftTimer({
           ? "Reading your latest event…"
           : phase === "off"
             ? last
-              ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{clockAnchor ? formatTime(clockAnchor, userLocale) : "—"}</span></>
+              ? <>Last event: {LABEL[last.status as Status]} at <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{shiftAnchor != null ? formatTime(shiftAnchor, userLocale) : "—"}</span></>
               : "Your shift hasn't started yet."
-            : <>{siteName ? `At ${siteName}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{clockAnchor ? formatTime(clockAnchor, userLocale) : "—"}</span></>}
+            : <>{siteName ? `At ${siteName}` : "On shift"} since <span className="tnum font-medium text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]">{shiftAnchor != null ? formatTime(shiftAnchor, userLocale) : "—"}</span></>}
       </p>
     </div>
   );

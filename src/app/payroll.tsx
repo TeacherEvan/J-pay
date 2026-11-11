@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery, useQueryResult } from "@/lib/backend/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatCurrency, formatDateTime, browserLocale } from "../lib/format";
@@ -86,6 +86,15 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   const supported = supportedData === null ? undefined : (supportedData as SupportedStrategy[] | undefined);
   const result = resultData === null ? undefined : (resultData as PayrollResult | undefined);
   const [payStrategyBusy, setPayStrategyBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  // Revoke-timer for the CSV object URL — cleared on unmount (audit 2026-11-11, P3-D20).
+  const revokeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (revokeTimerRef.current !== null) clearTimeout(revokeTimerRef.current);
+    },
+    []
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
@@ -101,7 +110,11 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
     a.download = filename;
     a.click();
     // Defer revocation — revoking synchronously can cancel the download before it starts.
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    if (revokeTimerRef.current !== null) clearTimeout(revokeTimerRef.current);
+    revokeTimerRef.current = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      revokeTimerRef.current = null;
+    }, 10_000);
   }
 
   return (
@@ -168,7 +181,8 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
         {userId && (
           <button
             onClick={async () => {
-              if (!userId) return;
+              if (!userId || exportBusy) return;
+              setExportBusy(true);
               setSaveError(null);
               try {
                 const out = await exportLogsCsv({
@@ -179,9 +193,12 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
                 download(out.filename, out.csv);
               } catch (err) {
                 setSaveError(errMsg(err));
+              } finally {
+                setExportBusy(false);
               }
             }}
-            className="btn-surgical ml-auto min-h-[44px] px-4 py-2 text-xs font-semibold"
+            disabled={exportBusy}
+            className="btn-surgical ml-auto min-h-[44px] px-4 py-2 text-xs font-semibold disabled:opacity-50"
           >
             Export logs CSV
           </button>

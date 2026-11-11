@@ -25,6 +25,7 @@ import {
 import type { Status, Phase, CardLog, CardSite } from "./check-in/types";
 import { StatusIcon } from "./check-in/StatusIcon";
 import { ShiftTimer } from "./check-in/ShiftTimer"; // tabular-nums
+import { deriveSegments } from "@/lib/shift-engine";
 import { SiteSelector } from "./check-in/SiteSelector";
 import { StatusChips } from "./check-in/StatusChips";
 import { LiveSubmit } from "./check-in/live-submit";
@@ -211,11 +212,48 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
   const submitStatus: Status = phase === "off" ? "arrived" : pending;
 
+  // Re-anchor "today" at local midnight so todayLogs doesn't go stale overnight.
+  const [dayKey, setDayKey] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const t = setInterval(() => {
+      setDayKey((prev) => {
+        const next = new Date().toDateString();
+        return next !== prev ? next : prev;
+      });
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
   const todayLogs = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     return logs.filter((l) => (l.clientReportedTime ?? l._creationTime) >= start.getTime());
-  }, [logs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs, dayKey]);
+
+  // Anchor for the shift clock: the latest OPEN segment from the same
+  // segment machine payroll uses (deriveSegments) — not the last event,
+  // which may be a checkpoint/lunch ping mid-shift. Falls back to the first
+  // event of today when no open segment can be identified.
+  const shiftAnchorMs = useMemo(() => {
+    try {
+      const segments = deriveSegments(
+        logs.map((l) => ({
+          _creationTime: l._creationTime,
+          idempotencyKey: l._id,
+          clientReportedTime: l.clientReportedTime ?? l._creationTime,
+          status: l.status,
+          isWithinGeofence: l.isWithinGeofence,
+          impossibleTravelFlag: l.impossibleTravelFlag,
+        }))
+      );
+      const open = [...segments].reverse().find((s) => s.endedAt === undefined);
+      if (open) return open.startedAt;
+    } catch {
+      /* fall through to first-event-of-day anchor */
+    }
+    const firstToday = todayLogs[todayLogs.length - 1];
+    return firstToday ? (firstToday.clientReportedTime ?? firstToday._creationTime) : undefined;
+  }, [logs, todayLogs]);
 
   return (
     <section
@@ -231,6 +269,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         userLocale={userLocale}
         isLive={isLive}
         siteName={siteNameOf(last?.siteId)}
+        shiftAnchorMs={shiftAnchorMs}
       />
 
       {/* Travel tracking status (U2/U6) — live indicator + one-tap revoke */}
