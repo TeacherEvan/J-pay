@@ -197,6 +197,104 @@ export function callBackend(
 
 type QueryState = { key: string; data: unknown; error: Error | null };
 
+export type UseQueryResult<T = any> = {
+  /** The resolved payload (`null` on UNAUTHENTICATED — signed out), undefined while loading/failed. */
+  data: T | null | undefined;
+  /** The query error, if the last attempt failed. UNAUTHENTICATED is folded into data:null. */
+  error: Error | null;
+  /** True until the first attempt for the current key settles. */
+  isLoading: boolean;
+  /** Re-issue the query for the current key/args. */
+  retry: () => void;
+};
+
+/**
+ * useQuery with an honest result surface (audit 2026-11-11, D2).
+ * `useQuery` deliberately collapses loading and failure into `undefined`
+ * (Convex-shaped call-sites stay compiling); that hid every outage behind a
+ * skeleton. Consumers that must not confuse "nothing yet" with "broken"
+ * subscribe through this hook instead and render the error + retry.
+ */
+export function useQueryResult<T = any>(
+  ref: FunctionRef | string,
+  args?: Record<string, unknown> | "skip"
+): UseQueryResult<T> {
+  const [nonce, setNonce] = useState(0);
+  const skip = args === "skip";
+  const refKey = useMemo(() => {
+    try {
+      return refToKey(ref);
+    } catch {
+      return "";
+    }
+  }, [ref]);
+  const key = skip ? "" : `${refKey}::${JSON.stringify(args ?? {})}`;
+  const [tick, setTick] = useState(version);
+  const [state, setState] = useState<QueryState>({ key: "", data: undefined, error: null });
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const callMeta = useRef<{ tablesWritten?: string[]; tablesRead?: string[] }>({});
+  const [reads, setReads] = useState<readonly string[] | undefined>(undefined);
+
+  useEffect(() => {
+    setReads(undefined);
+  }, [key]);
+
+  useEffect(() => {
+    if (reads === undefined) return subscribe(null, () => setTick((v) => v + 1));
+    if (reads.length === 0) return;
+    return subscribe(reads, () => setTick((v) => v + 1));
+  }, [reads]);
+
+  useEffect(() => {
+    if (skip) return;
+    let active = true;
+    callMeta.current = {};
+    callBackend(ref, args, callMeta.current)
+      .then((result) => {
+        if (!active || !mounted.current) return;
+        const learned = callMeta.current.tablesRead;
+        setReads((prev) =>
+          prev && learned && prev.length === learned.length && prev.every((t, i) => t === learned[i])
+            ? prev
+            : learned
+        );
+        setState({ key, data: result, error: null });
+      })
+      .catch((error: unknown) => {
+        if (!active || !mounted.current) return;
+        const resolved = error instanceof Error ? error : new Error(String(error));
+        const code = (resolved as BackendError).code;
+        if (code === "UNAUTHENTICATED" || code === "INACTIVE_ACCOUNT") {
+          setState({ key, data: null, error: null });
+          return;
+        }
+        console.warn("[backend] query failed", refKey, resolved.message);
+        setState({ key, data: undefined, error: resolved });
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, tick, skip, nonce]);
+
+  const isCurrent = !skip && state.key === key;
+  const isLoading = !skip && (!isCurrent || (state.data === undefined && state.error === null));
+  return {
+    data: skip ? undefined : isCurrent ? (state.data as T | null) : undefined,
+    error: isCurrent ? state.error : null,
+    isLoading,
+    retry: () => setNonce((n) => n + 1),
+  };
+}
+
 export function useQuery<T = any>(
   ref: FunctionRef | string,
   args?: Record<string, unknown> | "skip"

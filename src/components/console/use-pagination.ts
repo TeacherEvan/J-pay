@@ -3,9 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 /** Fixed-size client-side pagination — the zero-scroll substitute for overflow. */
+const EMPTY: readonly never[] = Object.freeze([]) as readonly never[];
+
 export function usePagination<T>(items: T[], pageSize: number) {
+  // Stabilise empty arrays: callers pass `x ?? []`, a fresh reference every
+  // render — which defeated the pageItems memo below (audit 2026-11-11, D23).
+  const stable = items.length === 0 ? (EMPTY as unknown as T[]) : items;
   const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(stable.length / pageSize));
   const clamped = Math.min(page, pageCount - 1);
 
   useEffect(() => {
@@ -13,8 +18,8 @@ export function usePagination<T>(items: T[], pageSize: number) {
   }, [page, pageCount]);
 
   const pageItems = useMemo(
-    () => items.slice(clamped * pageSize, clamped * pageSize + pageSize),
-    [items, clamped, pageSize],
+    () => stable.slice(clamped * pageSize, clamped * pageSize + pageSize),
+    [stable, clamped, pageSize],
   );
 
   const setPageClamped = (p: number | ((prev: number) => number)) =>
@@ -23,5 +28,5 @@ export function usePagination<T>(items: T[], pageSize: number) {
       return Math.max(0, Math.min(target, pageCount - 1));
     });
 
-  return { page: clamped, pageCount, pageItems, setPage: setPageClamped, total: items.length };
+  return { page: clamped, pageCount, pageItems, setPage: setPageClamped, total: stable.length };
 }

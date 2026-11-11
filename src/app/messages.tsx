@@ -1,22 +1,27 @@
 "use client";
 
-import { useMutation, useQuery } from "@/lib/backend/react";
+import { useMutation, useQuery, useQueryResult } from "@/lib/backend/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatTime, formatDateTime } from "@/lib/format";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { ConsoleWindow } from "@/components/console/window";
+import { QueryError } from "@/components/console/query-error";
 import { Pager } from "@/components/console/pager";
 import { usePagination } from "@/components/console/use-pagination";
 import { errMsg } from "@/lib/errors";
 
 export function MessagesPanel({ role, className }: { role: "employee" | "moderator"; className?: string }) {
-  const inbox = useQuery(api.messages.myInbox);
-  const modInbox = useQuery(
+  const { data: inboxData, error: inboxError, retry: retryInbox } = useQueryResult<any[]>(api.messages.myInbox);
+  const { data: modInboxData, error: modInboxError, retry: retryModInbox } = useQueryResult<any[]>(
     api.messages.moderatorInbox,
     role === "moderator" ? {} : "skip"
   );
+  const inbox = inboxData === null ? undefined : (inboxData as any[] | undefined);
+  const modInbox = modInboxData === null ? undefined : (modInboxData as any[] | undefined);
+  const inboxErr = inboxError ?? modInboxError;
+  const retryList = role === "moderator" ? retryModInbox : retryInbox;
   const sendToModerators = useMutation(api.messages.sendToModerators);
   const replyToEmployee = useMutation(api.messages.replyToEmployee);
   const broadcast = useMutation(api.messages.broadcast);
@@ -74,6 +79,7 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
           </button>
         </div>
         {msg && <p role="status" aria-live="polite" className="text-sm font-medium text-[var(--paper)]">{msg}</p>}
+        {inboxErr && <QueryError error={inboxErr} onRetry={retryList} label="Messages" />}
         {(inbox ?? []).map((m: any) => (
           <p key={m._id} className={`card-subpanel px-3 py-2 text-sm ${m.isRead ? "text-[var(--fog)]" : "text-[var(--mint)] border-[var(--mint)]/40 bg-[var(--mint)]/10"}`}>
             <span className="tnum mr-2 text-xs opacity-70">{formatTime(m._creationTime, userLocale)}</span>

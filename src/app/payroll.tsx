@@ -1,6 +1,6 @@
 "use client";
 
-import { useAction, useMutation, useQuery } from "@/lib/backend/react";
+import { useAction, useMutation, useQuery, useQueryResult } from "@/lib/backend/react";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -9,6 +9,7 @@ import { errMsg } from "../lib/errors";
 import { useUserLocale } from "../lib/use-user-locale";
 import { ConsoleWindow } from "@/components/console/window";
 import { Pager } from "@/components/console/pager";
+import { QueryError } from "@/components/console/query-error";
 import { usePagination } from "@/components/console/use-pagination";
 
 type PayrollResult = {
@@ -66,13 +67,24 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
     () => (userId ? { userId, fromMs, toMs } : "skip"),
     [userId, fromMs, toMs],
   );
-  const result = useQuery(
+  const {
+    data: resultData,
+    error: resultError,
+    isLoading: resultLoading,
+    retry: retryResult,
+  } = useQueryResult<PayrollResult>(
     api.payroll.calcForEmployee,
     payrollArgs as never,
-  ) as PayrollResult | undefined;
-  const supported = useQuery(
+  );
+  const {
+    data: supportedData,
+    error: supportedError,
+    retry: retrySupported,
+  } = useQueryResult<SupportedStrategy[]>(
     api.payroll.listSupportedStrategies,
-  ) as SupportedStrategy[] | undefined;
+  );
+  const supported = supportedData === null ? undefined : (supportedData as SupportedStrategy[] | undefined);
+  const result = resultData === null ? undefined : (resultData as PayrollResult | undefined);
   const [payStrategyBusy, setPayStrategyBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
@@ -176,6 +188,15 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
         )}
       </div>
       {saveError && <p role="alert" className="flex-none text-xs font-semibold text-[var(--hivis)]">{saveError}</p>}
+      {supportedError && (
+        <QueryError error={supportedError} onRetry={retrySupported} label="Supported strategies" />
+      )}
+      {resultError && (
+        <QueryError error={resultError} onRetry={retryResult} label="Payroll estimate" />
+      )}
+      {resultLoading && !result && !resultError && userId && (
+        <p className="flex-none text-xs text-[var(--fog)]">Loading payroll…</p>
+      )}
       {result && (
         <div className="flex min-h-0 flex-1 flex-col">
           <p className="tnum mb-1.5 flex-none text-xs text-[var(--fog)]">
@@ -230,7 +251,9 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
 }
 
 export function ReviewPanel({ className }: { className?: string }) {
-  const review = useQuery(api.moderator.auditNeedsReview);
+  const { data: reviewData, error: reviewError, retry: retryReview } =
+    useQueryResult<any[]>(api.moderator.auditNeedsReview);
+  const review = reviewData === null ? undefined : (reviewData as any[] | undefined);
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
   const locale = useUserLocale();
@@ -289,6 +312,7 @@ export function ReviewPanel({ className }: { className?: string }) {
           </span>
         </div>
       ))}
+      {reviewError && <QueryError error={reviewError} onRetry={retryReview} label="Needs-review list" />}
       <Pager page={list.page} pageCount={list.pageCount} total={list.total} onPage={list.setPage} label="Flagged shifts" />
       {actionError && <p role="alert" className="mt-1.5 flex-none text-xs font-semibold text-[var(--hivis)]">{actionError}</p>}
     </ConsoleWindow>
