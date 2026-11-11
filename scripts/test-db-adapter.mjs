@@ -72,7 +72,7 @@ const filtered = await db.query("logs").withIndex("by_user_time", (q) => q.eq("u
   .filter((q) => q.eq(q.field("status"), "open"))
   .take(100);
 assert.equal(filtered.length, 97, "take(100) with predicate rejecting 3 newest must return 97 older open rows");
-assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 100), "SQL LIMIT must not be the exact take(n) when predicate exists; oversized window used instead");
+assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 100), "SQL LIMIT must not be the exact take(n) when predicate exists; window loop used instead");
 
 // --- Test 7 (B1): first() with predicate must not return null when a matching row exists beyond the first N
 // Fixture: l1 (newest, sealed), l2...l10 (older, open). order("desc") + filter(open) + first() must return l2 (newest open).
@@ -105,4 +105,22 @@ const u2 = await db.query("logs").withIndex("by_user_time", (q) => q.eq("userId"
 assert.equal(u2._id, "l1", "unique() with predicate must find the single open row (l1), not throw on 0");
 assert.ok(!__pg.calls.some((c) => c.method === "limit" && c.n === 2), "SQL LIMIT must not be 2 for unique() with predicate");
 
-console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact, predicate LIMIT deferral");
+// --- Test 9 (R1): window loop exhausts residual rejections beyond a fixed window
+// Fixture: 300 rows matching push filter; the newest 120 are rejected by the predicate.
+// take(60) must return 60 rows from the older window (loop pages until 60 post-filter
+// rows accumulate), not the ~40 a single oversized window would yield.
+__pg.reset();
+__pg.seed("logs", Array.from({ length: 300 }, (_, i) => ({
+  _id: `w${300 - i}`,
+  _creationTime: 1000 + i,
+  userId: "W",
+  status: i >= 180 ? "sealed" : "open",
+})));
+__pg.calls.length = 0;
+const exhausted = await db.query("logs").withIndex("by_user_time", (q) => q.eq("userId", "W"))
+  .filter((q) => q.eq(q.field("status"), "open"))
+  .take(60);
+assert.equal(exhausted.length, 60, "take(60) must page through windows until 60 post-filter rows accumulate");
+assert.ok(__pg.calls.some((c) => c.method === "range"), "residual path must page via range()");
+
+console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact, predicate LIMIT deferral, window-loop exhaustion");

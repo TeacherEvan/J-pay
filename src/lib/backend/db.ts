@@ -414,35 +414,51 @@ export class QueryBuilder {
 
     const keys = this.sortKey();
     const ascending = this.direction === "asc";
-    let query = this.db.postgrest().from(this.table).select("*");
-    for (const constraint of isNulls) {
-      query = query.is(constraint.field, null); // col=is.null — absent ↔ NULL parity
-    }
-    for (const constraint of pushable) {
-      const value = constraint.value as never;
-      switch (constraint.op) {
-        case "eq": query = query.eq(constraint.field, value); break;
-        case "lt": query = query.lt(constraint.field, value); break;
-        case "lte": query = query.lte(constraint.field, value); break;
-        case "gt": query = query.gt(constraint.field, value); break;
-        case "gte": query = query.gte(constraint.field, value); break;
-        default: break; // neq handled in finish()
+    const buildBaseQuery = () => {
+      let q = this.db.postgrest().from(this.table).select("*");
+      for (const constraint of isNulls) {
+        q = q.is(constraint.field, null); // col=is.null — absent ↔ NULL parity
       }
-    }
-    for (const key of keys) {
-      query = query.order(key, { ascending, nullsFirst: false });
-    }
+      for (const constraint of pushable) {
+        const value = constraint.value as never;
+        switch (constraint.op) {
+          case "eq": q = q.eq(constraint.field, value); break;
+          case "lt": q = q.lt(constraint.field, value); break;
+          case "lte": q = q.lte(constraint.field, value); break;
+          case "gt": q = q.gt(constraint.field, value); break;
+          case "gte": q = q.gte(constraint.field, value); break;
+          default: break; // neq handled in finish()
+        }
+      }
+      for (const key of keys) {
+        q = q.order(key, { ascending, nullsFirst: false });
+      }
+      return q;
+    };
     const hasResidual = this.predicate !== undefined || this.constraints.some((c) => c.op === "neq");
     if (this.limit !== undefined && !hasResidual) {
-      query = query.limit(this.limit);
-    } else if (this.limit !== undefined) {
-      // When residual filtering exists, we must NOT push LIMIT to SQL because
-      // JS filtering happens after SQL execution and would under-fill.
-      // Instead, fetch an oversized window (limit * 2 + 50) and slice in JS.
-      // This bounds network/egress while guaranteeing correct results.
-      const fetchLimit = Math.min(this.limit * 2 + 50, 5000);
-      query = query.limit(fetchLimit);
+      const query = buildBaseQuery().limit(this.limit);
+      const { data, error } = await query;
+      if (error) throw new Error(`${this.table}: ${error.message}`);
+      const rows = (data ?? []).map((row) => this.db.normalise(this.table, row));
+      return this.finish(rows);
     }
+    if (this.limit !== undefined) {
+      // Residual filtering exists: JS filtering happens AFTER SQL execution,
+      // so a pushed LIMIT would under-fill (audit 2026-11-11, R1). Fetch in
+      // windows until post-filter rows reach this.limit or SQL is exhausted.
+      const WINDOW = Math.max(this.limit * 2, 100);
+      const acc: Doc[] = [];
+      for (let offset = 0; ; offset += WINDOW) {
+        const { data, error } = await buildBaseQuery().range(offset, offset + WINDOW - 1);
+        if (error) throw new Error(`${this.table}: ${error.message}`);
+        const batch = (data ?? []).map((row) => this.db.normalise(this.table, row));
+        acc.push(...this.finish(batch));
+        if (acc.length >= this.limit || batch.length < WINDOW) break;
+      }
+      return acc.slice(0, this.limit);
+    }
+    const query = buildBaseQuery();
     const { data, error } = await query;
     if (error) throw new Error(`${this.table}: ${error.message}`);
     const rows = (data ?? []).map((row) => this.db.normalise(this.table, row));
