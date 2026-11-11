@@ -48,6 +48,30 @@ function rateLimited(key: string, windowMs: number, limit: number): boolean {
   return false;
 }
 
+/**
+ * Shared-store limiter backed by Postgres (0013_rate_limit_buckets.sql) via
+ * the atomic `jpay_rate_limit_hit` RPC. When the migration is not yet
+ * applied the RPC errors and we fall back to the per-instance in-memory
+ * limiter — throttling is degraded, never disabled.
+ */
+async function rateLimitedShared(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  key: string,
+  windowMs: number,
+  limit: number
+): Promise<boolean> {
+  const { data, error } = await admin.rpc("jpay_rate_limit_hit", {
+    p_bucket: key,
+    p_window_ms: windowMs,
+    p_limit: limit,
+  });
+  if (error || typeof data !== "boolean") {
+    console.warn("[session-bootstrap] shared rate limiter unavailable, using in-memory fallback", error?.message);
+    return rateLimited(key, windowMs, limit);
+  }
+  return data;
+}
+
 type Body = { kind?: string; email?: string; secret?: string };
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -78,7 +102,7 @@ export async function POST(request: Request): Promise<Response> {
     if (process.env.DEMO_MODE !== "1") {
       return NextResponse.json({ error: "DEMO_DISABLED" }, { status: 403 });
     }
-    if (rateLimited(`demo:${ip}`, WINDOW_DEMO_MS, LIMIT_DEMO)) {
+    if (await rateLimitedShared(admin, `demo:${ip}`, WINDOW_DEMO_MS, LIMIT_DEMO)) {
       return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
     }
     const authEmail = `demo+${Date.now().toString(36)}@jpay.local`;
@@ -135,7 +159,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (body.kind === "master") {
-    if (rateLimited(`master:${ip}`, WINDOW_MASTER_MS, LIMIT_MASTER)) {
+    if (await rateLimitedShared(admin, `master:${ip}`, WINDOW_MASTER_MS, LIMIT_MASTER)) {
       return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
     }
     const masterPassword = process.env.MASTER_PASSWORD;

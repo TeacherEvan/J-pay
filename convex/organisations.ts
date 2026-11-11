@@ -51,16 +51,18 @@ export const listOrgs = query({
   handler: async (ctx) => {
     await requireModerator(ctx);
     const orgs = await ctx.db.query("organisations").collect();
-    const sites = await ctx.db.query("sites").collect();
-    const users = await ctx.db.query("users").collect();
-    return orgs
-      .filter((o) => o.archivedAt === undefined)
-      .map((o) => ({
+    const live = orgs.filter((o) => o.archivedAt === undefined);
+    // Per-org indexed counts instead of two full-table collects (audit
+    // 2026-11-11, item 5). Orgs are few; per-org site/user sets are small.
+    return (await Promise.all(live.map(async (o) => {
+      const orgSites = await ctx.db.query("sites").withIndex("by_org", (q) => q.eq("orgId", o._id)).collect();
+      const orgUsers = await ctx.db.query("users").withIndex("by_org", (q) => q.eq("orgId", o._id)).collect();
+      return {
         _id: o._id,
         name: o.name,
-        siteCount: sites.filter((s) => s.orgId === o._id && s.archivedAt === undefined).length,
-        userCount: users.filter((u) => u.orgId === o._id && u.archivedAt === undefined).length,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+        siteCount: orgSites.filter((s) => s.archivedAt === undefined).length,
+        userCount: orgUsers.filter((u) => u.archivedAt === undefined).length,
+      };
+    }))).sort((a, b) => a.name.localeCompare(b.name));
   },
 });
