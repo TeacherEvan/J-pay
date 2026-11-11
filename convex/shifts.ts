@@ -91,14 +91,22 @@ export const deriveForUser = internalMutation({
       .query("shiftOverrides")
       .withIndex("by_user_key", (q) => q.eq("userId", args.userId))
       .collect();
-    const latest = new Map<number, { createdAt: number; override: ShiftOverride }>();
+    // _id tie-break: _creationTime has millisecond precision and collapses
+    // under fast double-writes; registries insert ids in monotonic-ish order
+    // and no two rows share both _creationTime and _id.
+    const latest = new Map<number, { createdAt: number; id: string; override: ShiftOverride }>();
     for (const row of overrideRows) {
       const key = Number(row.shiftKey);
       if (!Number.isFinite(key)) continue;
       const cur = latest.get(key);
-      if (!cur || row._creationTime > cur.createdAt) {
+      if (
+        !cur ||
+        row._creationTime > cur.createdAt ||
+        (row._creationTime === cur.createdAt && String(row._id) > cur.id)
+      ) {
         latest.set(key, {
           createdAt: row._creationTime,
+          id: String(row._id),
           override: { endedAt: row.endedAt, reason: row.reason, overrideId: row._id },
         });
       }

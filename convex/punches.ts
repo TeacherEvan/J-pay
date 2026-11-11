@@ -6,6 +6,8 @@ import { haversineMeters } from "./geo";
 import { verifyDeviceToken } from "./deviceTokens";
 import { internal } from "./_generated/api";
 import { jpayConfig } from "../src/config/jpay.config";
+import { trailingWorkTimeWindow } from "../src/lib/travel-window";
+import { findUnmatchedInPunch } from "../src/lib/punch-pairing";
 
 const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
 const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
@@ -64,9 +66,9 @@ export const recordPunch = mutation({
         )
         .order("desc")
         .collect();
-      const candidate = punches.find(
-        (p) => p.type === "in" && p.ts < Date.now()
-      );
+      // P2-B14: each `in` pairs at most once — skip ins already consumed
+      // by a later `out`.
+      const candidate = findUnmatchedInPunch(punches, Date.now());
       if (candidate) {
         durationSec = Math.floor((Date.now() - candidate.ts) / 1000);
       }
@@ -86,13 +88,19 @@ export const recordPunch = mutation({
 
     // 9. Impossible travel detection
     let impossibleTravelFlag: boolean | undefined = undefined;
-    const previous = await ctx.db
+    // P2-B13: order by WORK time, not insertion order — the index is
+    // [userId] only, so .order("desc") walks _creationTime and mis-ranks
+    // out-of-order offline replays. No clientReportedTime index exists
+    // (no migrations allowed), so collect and rank in memory.
+    const allPrior = await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(5);
-    const prevFix = previous
-      .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
+      // Bound the read: impossible-travel only needs the working horizon.
+      // The adapter pushes gte into PostgREST (same pattern as the horizon
+      // filter in derivation), so this is a bounded scan, not collect-all.
+      .filter((q) => q.gte(q.field("clientReportedTime"), Date.now() - 48 * 3600 * 1000))
+      .collect();
+    const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
     if (prevFix) {
       const hours = (now - prevFix.clientReportedTime) / 3600000;
       if (hours > 0) {

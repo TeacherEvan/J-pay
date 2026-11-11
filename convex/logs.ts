@@ -10,6 +10,7 @@ import { serverClockSkewMs } from "../src/lib/shift-engine";
 import { purgeExpiredTravelPathsInternal } from "./travel";
 
 import { jpayConfig } from "../src/config/jpay.config";
+import { trailingWorkTimeWindow } from "../src/lib/travel-window";
 
 const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
 const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
@@ -83,13 +84,19 @@ export const createLog = mutation({
     const clockSkewMs = serverClockSkewMs(args.clientReportedTime, args.queuedAt, Date.now());
 
     let impossibleTravelFlag: boolean | undefined = undefined;
-    const previous = await ctx.db
+    // P2-B13: order by WORK time, not insertion order — the index is
+    // [userId] only, so .order("desc") walks _creationTime and mis-ranks
+    // out-of-order offline replays. No clientReportedTime index exists
+    // (no migrations allowed), so collect and rank in memory.
+    const allPrior = await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(5);
-    const prevFix = previous
-      .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
+      // Bound the read: impossible-travel only needs the working horizon.
+      // The adapter pushes gte into PostgREST (same pattern as the horizon
+      // filter in derivation), so this is a bounded scan, not collect-all.
+      .filter((q) => q.gte(q.field("clientReportedTime"), Date.now() - 48 * 3600 * 1000))
+      .collect();
+    const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
     if (prevFix) {
       const aTime = Math.abs(clockSkewMs) <= SKEW_TOLERANCE_MS ? args.clientReportedTime : Date.now();
       const bTime = Math.abs(prevFix.clockSkewMs ?? 0) <= SKEW_TOLERANCE_MS ? prevFix.clientReportedTime : prevFix._creationTime;
@@ -226,13 +233,12 @@ export const createLogAs = internalMutation({
     const clockSkewMs = serverClockSkewMs(args.clientReportedTime, undefined, Date.now());
 
     let impossibleTravelFlag: boolean | undefined = undefined;
-    const previous = await ctx.db
+    const allPrior = await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) => q.eq("userId", args.personaUserId))
-      .order("desc")
-      .take(5);
-    const prevFix = previous
-      .sort((a, b) => b.clientReportedTime - a.clientReportedTime)[0];
+      .filter((q) => q.gte(q.field("clientReportedTime"), Date.now() - 48 * 3600 * 1000))
+      .collect();
+    const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
     if (prevFix) {
       const aTime = Math.abs(clockSkewMs) <= SKEW_TOLERANCE_MS ? args.clientReportedTime : Date.now();
       const bTime = Math.abs(prevFix.clockSkewMs ?? 0) <= SKEW_TOLERANCE_MS ? prevFix.clientReportedTime : prevFix._creationTime;

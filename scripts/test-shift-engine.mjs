@@ -6,6 +6,8 @@ import {
   MAX_SHIFT_MS,
   serverClockSkewMs,
 } from "../src/lib/shift-engine.ts";
+import { trailingWorkTimeWindow } from "../src/lib/travel-window.ts";
+import { findUnmatchedInPunch } from "../src/lib/punch-pairing.ts";
 
 const MIN = 60_000;
 const T0 = Date.UTC(2026, 7, 3, 6); // 08:00 SAST
@@ -310,4 +312,70 @@ test("localDayKey: Europe/London mid-day vs post-transition instants", () => {
   assert.equal(localDayKey(midday, "Europe/London"), "2026-03-29");
   const afterTransition = Date.UTC(2026, 2, 29, 23, 30);
   assert.equal(localDayKey(afterTransition, "Europe/London"), "2026-03-30");
+});
+
+test("P2-B8: lunch deduction clamping below 0 flags lunch_clamped", () => {
+  const logs = [
+    log("arrived", 0),
+    log("lunch", 30),
+    log("day finish", 45), // 45-min span, 60-min lunch deduction → would clamp
+  ];
+  const segs = deriveSegments(logs);
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].totalMinutes, 0);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "lunch_clamped");
+});
+
+test("P2-B12: duplicate idempotency key differing only in sideMissionDurationMinutes flags conflict", () => {
+  const a = log("arrived", 0, { fields: { idempotencyKey: "dup-key-1" } });
+  const b = {
+    ...log("arrived", 0, { fields: { idempotencyKey: "dup-key-1" } }),
+    sideMissionDurationMinutes: 30,
+  };
+  const c = log("day finish", 480);
+  const segs = deriveSegments([a, b, c]);
+  assert.equal(segs[0].needsReview, true);
+  assert.equal(segs[0].reviewReason, "duplicate_key_conflict");
+});
+
+test("P2-B12: identical sideMissionDurationMinutes on retry is NOT a conflict", () => {
+  const a = { ...log("quick side mission", 0, { fields: { idempotencyKey: "dup-key-2" } }), sideMissionDurationMinutes: 30 };
+  const b = { ...log("quick side mission", 0, { fields: { idempotencyKey: "dup-key-2" } }), sideMissionDurationMinutes: 30 };
+  const arr = log("arrived", -60);
+  const end = log("day finish", 480);
+  const segs = deriveSegments([arr, a, b, end]);
+  assert.equal(segs[0].reviewReason === "duplicate_key_conflict", false);
+});
+
+test("P2-B13: trailingWorkTimeWindow ranks by clientReportedTime, not insertion order", () => {
+  const mk = (clientReportedTime, creationTime) => ({ clientReportedTime, _creationTime: creationTime });
+  // Insertion order: newest INSERT first, but its work time is the OLDEST.
+  const logs = [
+    mk(1000, 9000), // inserted last, worked first
+    mk(5000, 8000),
+    mk(3000, 7000),
+    mk(9000, 6000),
+    mk(7000, 5000),
+  ];
+  const win = trailingWorkTimeWindow(logs, 2);
+  assert.deepEqual(win.map((l) => l.clientReportedTime), [9000, 7000]);
+});
+
+test("P2-B14: each `in` pairs at most once across sequential outs", () => {
+  const punches = [
+    { type: "out", ts: 4000 },
+    { type: "in", ts: 3000 },
+    { type: "out", ts: 2000 },
+    { type: "in", ts: 1000 },
+  ];
+  // For a NEW out at now=5000, both prior ins are consumed → no candidate.
+  assert.equal(findUnmatchedInPunch(punches, 5000), undefined);
+  // Sanity: only the newest pair leaves the older in unmatched.
+  const punches2 = [
+    { type: "out", ts: 4000 },
+    { type: "in", ts: 3000 },
+    { type: "in", ts: 1000 },
+  ];
+  assert.equal(findUnmatchedInPunch(punches2, 5000)?.ts, 1000);
 });

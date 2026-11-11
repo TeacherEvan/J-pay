@@ -84,7 +84,7 @@ export function deriveSegments(
       kept.set(log.idempotencyKey, log);
       continue;
     }
-    if (prior.status !== log.status || prior.clientReportedTime !== log.clientReportedTime) {
+    if (prior.status !== log.status || prior.clientReportedTime !== log.clientReportedTime || prior.sideMissionDurationMinutes !== log.sideMissionDurationMinutes) {
       conflicts.add(log.idempotencyKey);
     }
     const earlier =
@@ -136,10 +136,14 @@ export function deriveSegments(
       reason = [...segFlags][0];
     }
     current.endedAt = endedAt;
-    current.totalMinutes = Math.max(
-      0,
-      Math.round((endedAt - current.startedAt) / 60000) - deductionMinutes
-    );
+    const rawMinutes = Math.round((endedAt - current.startedAt) / 60000);
+    if (rawMinutes - deductionMinutes < 0) {
+      // Lunch/side-mission deduction exceeded the shift span: clamp at 0
+      // but flag for review — silently paying 0 minutes hides bad data.
+      review = true;
+      reason = reason ?? "lunch_clamped";
+    }
+    current.totalMinutes = Math.max(0, rawMinutes - deductionMinutes);
     current.needsReview = review;
     current.reviewReason = reason;
     emit(current, deductionMinutes);
@@ -310,6 +314,9 @@ export function deriveSegments(
     } else {
       seg.endedAt = undefined;
     }
+    // Open shifts accrue `now` as their end, so a declared-but-unecommenced
+    // deduction clamping at 0 is normal, not corrupt — only closed segments
+    // flag lunch_clamped (see closeCurrent).
     seg.totalMinutes = Math.max(0, Math.round((end - seg.startedAt) / 60000) - deductionMinutes);
     if (segFlags.size > 0 && !seg.needsReview) {
       seg.needsReview = true;
