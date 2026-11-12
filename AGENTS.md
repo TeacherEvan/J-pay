@@ -27,6 +27,12 @@ name is historical — do NOT create, clone, or reference sibling directories.
 7. **Gates before commit:** run `python3 scripts/check_consistency.py` AND
    `python3 scripts/check_diagrams.py`; both must pass.
 8. **Commits:** scoped conventional commits (`docs(j-pay): ...`). No push without explicit ask.
+9. **Migrations:** never `supabase db push`, never apply `supabase/migrations/archive/`,
+   never re-apply an already-applied file. A migration may be applied only by the owner
+   (SQL editor) or by an agent acting on a **fresh, explicit owner instruction in that
+   session** — then via the Supabase MCP `apply_migration` (records it in the remote
+   history under the local file name), one file at a time, with the file's own pre-flight
+   guards left intact. Production history: `docs/ops/2026-11-12-live-hardening.md`.
 
 ## Convex generated types
 `convex/_generated/` is historical — committed so `tsc` passes without codegen;

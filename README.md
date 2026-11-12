@@ -30,6 +30,13 @@ Never use `supabase db push` — migration names never matched applied history, 
 Do not re-apply `0001_init.sql` to production either. The Convex deployment is retired —
 there is nothing to `npx convex dev` against.
 
+An **owner-authorised agent** may instead apply a single file through the Supabase MCP
+`apply_migration` tool (it records the migration in the remote history under its local
+file name — the SQL editor does not). Same rules: one file at a time, never `db push`,
+never the `archive/` files. The production deployment `dlwlbvhyrvyftpjruqdq` reached
+`0017` this way on 2026-11-12 — see `docs/ops/2026-11-12-live-hardening.md` for the
+audit trail (what was applied, what was wiped, and the probe evidence).
+
 Bootstrap the first moderator (one-time, uses the service-role key on this machine):
 
 ```bash

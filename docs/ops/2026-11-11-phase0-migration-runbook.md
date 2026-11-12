@@ -26,6 +26,15 @@ select table_name from information_schema.tables
 - `0016_rate_limit_fn_lockdown.sql` — locks `jpay_rate_limit_hit` to `service_role` (PUBLIC EXECUTE revoked; pinned `search_path`). Optional hardening; app runs without it via the 0013 grant.
 - `0017_drop_duplicate_idem_index.sql` — drops redundant non-unique `logs_user_idem_idx`; guarded by a uniqueness pre-flight on `logs_user_idem_uniq`.
 
+**Production status update (2026-11-12):** the production deployment
+`dlwlbvhyrvyftpjruqdq` has now applied `0014` → `0015` → `0016` → `0017` (owner-authorised,
+via the Supabase MCP `apply_migration`, so each is recorded in the remote migration
+history under its local file name). The P0 anon-registry read is closed and the
+rate-limit function no longer grants EXECUTE to anon/authenticated. Audit trail and
+verification evidence: `docs/ops/2026-11-12-live-hardening.md`. This runbook still
+governs **forks** (fresh Supabase projects), which start at `0001` and apply every file
+in the order above.
+
 **Quarantined files — do NOT apply:**
 
 - `archive/0003_retention_crons.OWNER_ONLY.sql` — retention crons. Requires pg_cron + pg_net enabled and hand-replaced `__SITE_URL__` / `__CRON_SECRET__`. The app runs fine without them. Only the owner, via SQL editor, after step 1 is done and verified. Never `db push`.
