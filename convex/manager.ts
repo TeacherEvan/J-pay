@@ -54,22 +54,29 @@ async function managedSiteIdSet(
  */
 export async function userIdsForSites(
   ctx: Ctx,
-  siteIds: Set<Id<"sites">>
+  siteIds: Set<Id<"sites">>,
+  orgId: Id<"organisations"> | undefined
 ): Promise<Set<Id<"users">>> {
   const crew = new Set<Id<"users">>();
+  // Fail closed: no org → no crew. Site assignment alone never grants
+  // visibility across an org boundary (stale cross-org rows are ignored).
+  if (orgId === undefined) return crew;
   for (const siteId of siteIds) {
     const rows = await ctx.db
       .query("userSites")
       .withIndex("by_site", (q) => q.eq("siteId", siteId))
       .collect();
-    for (const r of rows) crew.add(r.userId);
+    for (const r of rows) {
+      const u = await ctx.db.get(r.userId);
+      if (u && u.orgId === orgId) crew.add(r.userId);
+    }
   }
   return crew;
 }
 
 async function requireManagerViewer(
   ctx: Ctx
-): Promise<{ managerId: Id<"users">; siteIds: Set<Id<"sites">> } | null> {
+): Promise<{ managerId: Id<"users">; orgId: Id<"organisations">; siteIds: Set<Id<"sites">> } | null> {
   const viewerId = await maybeCurrentUserId(ctx);
   if (!viewerId) return null;
   const viewer = await ctx.db.get(viewerId);
@@ -78,7 +85,9 @@ async function requireManagerViewer(
     return null;
   }
   if (isQaAccount(viewer)) return null;
-  return { managerId: viewerId as Id<"users">, siteIds: await managedSiteIdSet(ctx, viewerId as Id<"users">) };
+  // Fail closed: a manager without an org has no console.
+  if (viewer.orgId === undefined) return null;
+  return { managerId: viewerId as Id<"users">, orgId: viewer.orgId, siteIds: await managedSiteIdSet(ctx, viewerId as Id<"users">) };
 }
 
 /** Sites the current manager covers (active, non-archived, not QA-provisioned). */
@@ -113,7 +122,7 @@ export const managedActiveShifts = query({
     if (!scope) return [];
     if (scope.siteIds.size === 0) return [];
 
-    const crewSet = await userIdsForSites(ctx, scope.siteIds);
+    const crewSet = await userIdsForSites(ctx, scope.siteIds, scope.orgId);
     const crewIds = new Set<string>(crewSet);
     if (crewIds.size === 0) return [];
 
@@ -235,6 +244,7 @@ export const myCrew = query({
     for (const [userId, names] of userSiteNames) {
       const user = await ctx.db.get(userId as Id<"users">);
       if (!user || isQaAccount(user) || !user.isActive || user.archivedAt !== undefined) continue;
+      if (user.orgId !== scope.orgId) continue;
       out.push({
         _id: user._id,
         name: user.name ?? user.email ?? "unknown",
@@ -251,8 +261,8 @@ export const myCrew = query({
 
 /** Moderator: list promoted managers with their managed sites. */
 export const listManagers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
     const modId = await maybeCurrentUserId(ctx);
     if (!modId) return [];
     const mod = await ctx.db.get(modId);
@@ -260,11 +270,11 @@ export const listManagers = query({
 
     const managers = await ctx.db
       .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "manager"))
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
       .collect();
     const out = [];
     for (const m of managers) {
-      if (isQaAccount(m) || m.archivedAt !== undefined) continue;
+      if (m.role !== "manager" || isQaAccount(m) || m.archivedAt !== undefined) continue;
       const rows = (
         await ctx.db
           .query("managerSites")
@@ -365,7 +375,6 @@ export const promoteToManager = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const actorId = await requireModerator(ctx);
-    const actor = await ctx.db.get(actorId);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new ConvexError("USER_NOT_FOUND");
     if (target.role !== "employee") {
@@ -375,11 +384,10 @@ export const promoteToManager = mutation({
     if (target.archivedAt !== undefined || !target.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
     if (isQaAccount(target)) throw new ConvexError("FORBIDDEN");
 
-    // Org boundary check (fail closed): both parties must agree on the org —
-    // same org, or both unscoped. Exactly one side org'd, or different orgs → refuse.
-    if (!orgBoundaryOk(actor?.orgId, target.orgId)) {
-      throw new ConvexError("CROSS_ORG_PROMOTION_FORBIDDEN");
-    }
+    // Moderators are platform-level (no orgId), so the actor's org is not a
+    // boundary. The TARGET must belong to an org (managers are org-bound and
+    // fail closed). Per-site org guards below still apply.
+    if (target.orgId === undefined) throw new ConvexError("ORG_REQUIRED");
 
     // Mid-shift lock: Check if target employee has an active open shift
     const userShifts = await ctx.db

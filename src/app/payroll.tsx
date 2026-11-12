@@ -11,6 +11,7 @@ import { ConsoleWindow } from "@/components/console/window";
 import { Pager } from "@/components/console/pager";
 import { QueryError } from "@/components/console/query-error";
 import { usePagination } from "@/components/console/use-pagination";
+import { useOrg } from "./moderator/org-context";
 
 type PayrollResult = {
   rate: number;
@@ -31,15 +32,40 @@ type SupportedStrategy = {
   displayName: string;
 };
 
-export function PayrollPanel({ employees, role, className }: { employees: { _id: Id<"users">; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee"; className?: string }) {
-  const [userId, setUserId] = useState("");
+type OrgPayrollRow = {
+  userId: Id<"users">;
+  name?: string | null;
+  email?: string | null;
+  role: string;
+  status: "ok" | "no_rate" | "error";
+  rate?: number;
+  currency?: string;
+  locale?: string;
+  strategy?: string;
+  payableMinutes?: number;
+  pay?: number;
+  shiftCount?: number;
+  flaggedCount?: number;
+  error?: string;
+};
+
+export function PayrollPanel({ employees, role, className }: { employees: { _id: Id<"users">; orgId?: string; name?: string | null; email?: string | null; archivedAt?: number; locale?: string }[]; role?: "moderator" | "employee"; className?: string }) {
+  const { orgId, userFilter } = useOrg();
+  const isModerator = role === "moderator";
+  const [userId, setUserId] = useState<string>(userFilter ?? "");
+  useEffect(() => {
+    if (userFilter) setUserId(userFilter);
+  }, [userFilter]);
   // ISO-week-aligned periods (1/2/4 weeks, Mon–Sun). A rolling N-day window straddles
   // two ISO weeks, resetting the BCEA weekly overtime cap for each half and erasing
   // statutory OT the worker already earned (audit 2026-11-11, P1-B1). No free-form
   // window is offered anymore: every selectable period is complete ISO weeks, so the
   // 45h/week cap is always consumed correctly.
   const [weeks, setWeeks] = useState<1 | 2 | 4>(1);
-  const active = employees.filter((e) => !e.archivedAt);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const active = employees.filter(
+    (e) => !e.archivedAt && (!isModerator || !orgId || !e.orgId || e.orgId === orgId),
+  );
   // Re-anchor at local midnight so an open panel never drifts stale across days.
   const dayKey = new Date().toDateString();
   const monday = useMemo(
@@ -47,25 +73,37 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       // Monday=0..Sunday=6 (getDay: Sunday=0)
-      return (d.getDay() + 6) % 7 === 0 ? d.getTime() : d.getTime() - ((d.getDay() + 6) % 7) * 24 * 3600 * 1000;
+      const base = (d.getDay() + 6) % 7 === 0 ? d.getTime() : d.getTime() - ((d.getDay() + 6) % 7) * 24 * 3600 * 1000;
+      const shifted = new Date(base);
+      shifted.setDate(shifted.getDate() + weekOffset * 7);
+      return shifted.getTime();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayKey],
+    [dayKey, weekOffset],
   );
   const fromMs = monday;
   const toMs = useMemo(
     () => {
       const d = new Date(monday);
       d.setHours(0, 0, 0, 0);
-      d.setTime(d.getTime() + weeks * 7 * 24 * 3600 * 1000);
+      d.setDate(d.getDate() + weeks * 7);
       // End-exclusive is not supported by the API; use the last ms of the last day.
       return d.getTime() - 1;
     },
     [monday, weeks],
   );
+  const periodLabel = useMemo(() => {
+    const fmt = (ms: number) =>
+      new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${fmt(fromMs)} – ${fmt(toMs)}`;
+  }, [fromMs, toMs]);
   const payrollArgs = useMemo(
     () => (userId ? { userId, fromMs, toMs } : "skip"),
     [userId, fromMs, toMs],
+  );
+  const orgPayrollArgs = useMemo(
+    () => (isModerator && orgId && !userId ? { orgId, fromMs, toMs } : "skip"),
+    [isModerator, orgId, userId, fromMs, toMs],
   );
   const {
     data: resultData,
@@ -76,6 +114,16 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
     api.payroll.calcForEmployee,
     payrollArgs as never,
   );
+  const {
+    data: orgRowsData,
+    error: orgRowsError,
+    isLoading: orgRowsLoading,
+    retry: retryOrgRows,
+  } = useQueryResult<OrgPayrollRow[]>(
+    api.payroll.calcForOrg,
+    orgPayrollArgs as never,
+  );
+  const orgRows = orgRowsData === null ? undefined : (orgRowsData as OrgPayrollRow[] | undefined);
   const {
     data: supportedData,
     error: supportedError,
@@ -98,7 +146,6 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   const [saveError, setSaveError] = useState<string | null>(null);
   const setPayStrategy = useMutation(api.payroll.setPayStrategy);
   const exportLogsCsv = useAction(api.payroll.exportLogsCsv);
-  const isModerator = role === "moderator";
   const locale = browserLocale();
   const dayPages = usePagination(result?.days ?? [], 6);
 
@@ -120,12 +167,21 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   return (
     <ConsoleWindow title="Payroll" className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-2 p-3">
       <div className="flex flex-none flex-wrap items-center gap-2 text-sm">
+        {isModerator && orgId && userId && (
+          <button
+            type="button"
+            onClick={() => setUserId("")}
+            className="btn-surgical px-3 py-1.5 text-xs font-semibold text-[var(--fog)] hover:text-[var(--paper)]"
+          >
+            ← All employees
+          </button>
+        )}
         <select
           value={userId}
           onChange={(e) => setUserId(e.target.value as Id<"users">)}
           className="input-surgical px-3 py-2"
         >
-          <option value="">Employee…</option>
+          <option value="">{isModerator && orgId ? "All employees…" : "Employee…"}</option>
           {active.map((e) => (
             <option key={e._id} value={e._id}>
               {e.name ?? e.email}
@@ -146,6 +202,34 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
             {w === 1 ? "This week" : `${w} weeks`}
           </button>
         ))}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => o - weeks)}
+            className="btn-surgical px-2.5 py-1.5 text-xs font-semibold text-[var(--fog)]"
+            aria-label="Previous period"
+          >
+            ‹ Prev
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekOffset(0)}
+            disabled={weekOffset === 0}
+            className="btn-surgical px-2.5 py-1.5 text-xs font-semibold text-[var(--fog)] disabled:opacity-40"
+          >
+            Current
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => Math.min(0, o + weeks))}
+            disabled={weekOffset >= 0}
+            className="btn-surgical px-2.5 py-1.5 text-xs font-semibold text-[var(--fog)] disabled:opacity-40"
+            aria-label="Next period"
+          >
+            Next ›
+          </button>
+          <span className="tnum ml-1 text-xs text-[var(--fog)]">{periodLabel}</span>
+        </div>
         {isModerator && userId && (
           <select
             value={result?.strategy ?? ""}
@@ -214,6 +298,76 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
       {resultLoading && !result && !resultError && userId && (
         <p className="flex-none text-xs text-[var(--fog)]">Loading payroll…</p>
       )}
+      {isModerator && orgId && !userId && orgRowsError && (
+        <QueryError error={orgRowsError} onRetry={retryOrgRows} label="Org payroll summary" />
+      )}
+      {isModerator && orgId && !userId && orgRowsLoading && !orgRows && !orgRowsError && (
+        <p className="flex-none text-xs text-[var(--fog)]">Loading org payroll…</p>
+      )}
+      {isModerator && orgId && !userId && orgRows && (
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--line)] bg-[var(--panel-2)]">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[var(--panel)] text-[var(--fog)]">
+              <tr>
+                <th scope="col" className="px-3 py-2 text-xs uppercase tracking-wider">Employee</th>
+                <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Shifts</th>
+                <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Payable</th>
+                <th scope="col" className="px-3 py-2 text-xs uppercase tracking-wider">Strategy</th>
+                <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Flagged</th>
+                <th scope="col" className="px-3 py-2 text-right text-xs uppercase tracking-wider">Est. Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orgRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-center text-[var(--fog)]">
+                    No employees in this organization.
+                  </td>
+                </tr>
+              ) : (
+                orgRows.map((row) => {
+                  const mins = row.payableMinutes ?? 0;
+                  const hrs = (mins / 60).toFixed(1);
+                  return (
+                    <tr
+                      key={row.userId}
+                      onClick={() => setUserId(row.userId)}
+                      className="cursor-pointer border-t border-[var(--line)]/50 transition hover:bg-[var(--panel-elevated)]/40"
+                    >
+                      <td className="px-3 py-1.5 font-medium text-[var(--paper)]">
+                        {row.name ?? row.email ?? row.userId}
+                      </td>
+                      <td className="tnum px-3 py-1.5 text-right text-[var(--text-secondary)]">
+                        {row.shiftCount ?? 0}
+                      </td>
+                      <td className="tnum px-3 py-1.5 text-right text-[var(--text-secondary)]">
+                        {mins}m ({hrs}h)
+                      </td>
+                      <td className="px-3 py-1.5 text-[var(--fog)]">
+                        {row.strategy ?? "—"}
+                      </td>
+                      <td className={`tnum px-3 py-1.5 text-right ${row.flaggedCount ? "font-semibold text-[var(--hivis)]" : "text-[var(--text-secondary)]"}`}>
+                        {row.flaggedCount ?? 0}
+                      </td>
+                      <td className="tnum px-3 py-1.5 text-right font-medium">
+                        {row.status === "no_rate" ? (
+                          <span className="text-[var(--fog)]">no rate set</span>
+                        ) : row.status === "error" ? (
+                          <span className="text-[var(--hivis)]" title={row.error}>error</span>
+                        ) : (
+                          <span className="text-[var(--mint)]">
+                            {formatCurrency(row.pay ?? 0, row.currency ?? "ZAR", row.locale ?? locale)}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
       {result && (
         <div className="flex min-h-0 flex-1 flex-col">
           <p className="tnum mb-1.5 flex-none text-xs text-[var(--fog)]">
@@ -268,9 +422,11 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
 }
 
 export function ReviewPanel({ className }: { className?: string }) {
+  const { orgId, userFilter } = useOrg();
   const { data: reviewData, error: reviewError, retry: retryReview } =
-    useQueryResult<any[]>(api.moderator.auditNeedsReview);
-  const review = reviewData === null ? undefined : (reviewData as any[] | undefined);
+    useQueryResult<any[]>(api.moderator.auditNeedsReview, (orgId ? { orgId } : "skip") as never);
+  const allReview = reviewData === null ? undefined : (reviewData as any[] | undefined);
+  const review = allReview && userFilter ? allReview.filter((s) => s.userId === userFilter) : allReview;
   const resolveShift = useMutation(api.moderator.resolveShift);
   const recompute = useMutation(api.moderator.recomputeEmployeeShifts);
   const locale = useUserLocale();
@@ -278,13 +434,14 @@ export function ReviewPanel({ className }: { className?: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const list = usePagination<any>(review ?? [], 3);
   return (
-    <ConsoleWindow title="Shifts needing review" className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-1 p-3">
+    <ConsoleWindow title={`Shifts needing review${review ? ` · ${review.length}` : ""}`} className={`h-full ${className ?? ""}`} bodyClassName="flex min-h-0 flex-col gap-1 p-3">
       {review === undefined && <p className="text-xs text-[var(--fog)]">Loading…</p>}
       {review !== undefined && (review ?? []).length === 0 && <p className="text-xs text-[var(--fog)]">Nothing flagged.</p>}
-      {list.pageItems.map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null }) => (
+      {list.pageItems.map((s: { _id: Id<"shifts">; startedAt: number; userId: Id<"users">; reviewReason?: string | null; employeeName?: string }) => (
         <div key={s._id} className="flex flex-none flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--line)] p-2 text-xs">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="tnum font-medium text-[var(--paper)]">{formatDateTime(s.startedAt, locale)}</span>
+            <span className="font-semibold text-[var(--paper)]">{s.employeeName ?? "unknown"}</span>
+            <span className="tnum font-medium text-[var(--text-secondary)]">{formatDateTime(s.startedAt, locale)}</span>
             <span className="rounded-full bg-[var(--danger)]/20 px-2 py-0.5 text-xs font-semibold text-[var(--danger)]">{s.reviewReason}</span>
           </span>
           <span className="inline-flex flex-none gap-1.5">

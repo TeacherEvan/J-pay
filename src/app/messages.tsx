@@ -11,12 +11,14 @@ import { QueryError } from "@/components/console/query-error";
 import { Pager } from "@/components/console/pager";
 import { usePagination } from "@/components/console/use-pagination";
 import { errMsg } from "@/lib/errors";
+import { useOrg } from "./moderator/org-context";
 
 export function MessagesPanel({ role, className }: { role: "employee" | "moderator"; className?: string }) {
+  const { orgId } = useOrg();
   const { data: inboxData, error: inboxError, retry: retryInbox } = useQueryResult<any[]>(api.messages.myInbox);
   const { data: modInboxData, error: modInboxError, retry: retryModInbox } = useQueryResult<any[]>(
     api.messages.moderatorInbox,
-    role === "moderator" ? {} : "skip"
+    role === "moderator" && orgId ? { orgId } : "skip"
   );
   const inbox = inboxData === null ? undefined : (inboxData as any[] | undefined);
   const modInbox = modInboxData === null ? undefined : (modInboxData as any[] | undefined);
@@ -106,7 +108,7 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
             if (!broadcastText.trim() || broadcastBusy) return;
             setBroadcastBusy(true);
             try {
-              await broadcast({ content: broadcastText });
+              await broadcast({ content: broadcastText, orgId: orgId as never });
               setBroadcastText("");
               setMsg("Broadcast sent.");
             } catch (e) {
@@ -115,7 +117,7 @@ export function MessagesPanel({ role, className }: { role: "employee" | "moderat
               setBroadcastBusy(false);
             }
           }}
-          disabled={broadcastBusy || !broadcastText.trim()}
+          disabled={broadcastBusy || !broadcastText.trim() || !orgId}
           className="btn-surgical btn-surgical-mint min-h-[44px] flex-none px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
         >
           {broadcastBusy ? "Sending…" : "Broadcast"}

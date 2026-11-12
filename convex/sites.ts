@@ -64,14 +64,12 @@ export const createSite = mutation({
     longitude: v.number(),
     geofenceRadiusMeters: v.number(),
     timezone: v.string(),
-    orgId: v.optional(v.id("organisations")),
+    orgId: v.id("organisations"),
   },
   handler: async (ctx, args) => {
     const moderatorId = await requireModerator(ctx);
-    if (args.orgId !== undefined) {
-      const org = await ctx.db.get(args.orgId);
-      if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
-    }
+    const org = await ctx.db.get(args.orgId);
+    if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
     const name = args.name.trim();
     if (!name || name.length > 100) throw new ConvexError("INVALID_NAME");
     if (

@@ -1,27 +1,52 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useQuery } from "@/lib/backend/react";
+import { api } from "@/lib/backend/api";
 import { usePagination } from "@/components/console/use-pagination";
+import { ReviewPanel } from "../payroll";
+import { ShiftOverridePanel } from "./shift-overrides-panel";
+import { useOrg, type AuditSegment } from "./org-context";
+import { useUserLocale } from "@/lib/use-user-locale";
 import { Pager } from "@/components/console/pager";
 import { ConsoleWindow } from "@/components/console/window";
 import { formatDateTime } from "@/lib/format";
 import type { GeofenceFix } from "./geofence-modal";
 import type { AuditLogRow } from "./types";
 
+type Flag = "all" | "geofence" | "travel" | "skew";
+
 /* ───────────────────────────── Audit log ───────────────────────────── */
 
-export function AuditView({
+function ActivityLog({
   audit,
-  reviewCount,
   userLocale,
   onMapFix,
+  loading,
 }: {
   audit: AuditLogRow[];
-  reviewCount: number;
   userLocale: string;
   onMapFix: (fix: GeofenceFix) => void;
+  loading: boolean;
 }) {
-  const table = usePagination(audit, 7);
-  const cards = usePagination(audit, 4);
+  const { userFilter, clearUserFilter } = useOrg();
+  const [q, setQ] = useState("");
+  const [flag, setFlag] = useState<Flag>("all");
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return audit.filter(
+      (l) =>
+        (!userFilter || (l as { userId?: string }).userId === userFilter) &&
+        (flag === "all" ||
+          (flag === "geofence" && !l.isWithinGeofence) ||
+          (flag === "travel" && l.impossibleTravelFlag) ||
+          (flag === "skew" && Math.abs(l.clockSkewMs) > 30000)) &&
+        (!needle || `${l.employeeName} ${l.siteName} ${l.status}`.toLowerCase().includes(needle)),
+    );
+  }, [audit, q, flag, userFilter]);
+  const chipName = userFilter ? audit.find((l) => (l as { userId?: string }).userId === userFilter)?.employeeName ?? "selected employee" : null;
+  const table = usePagination(rows, 7);
+  const cards = usePagination(rows, 4);
 
   const rowActions = (l: AuditLogRow) => (
     <>
@@ -60,17 +85,43 @@ export function AuditView({
         className="h-full"
         bodyClassName="flex h-full min-h-0 flex-col p-2 sm:p-3"
         aside={
-          reviewCount > 0 ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="rounded-full bg-[var(--danger)]/20 px-2 py-0.5 text-xs font-semibold text-[var(--danger)]"
-            >
-              {reviewCount} need review
-            </span>
-          ) : undefined
+          <span className="text-xs text-[var(--fog)]">{loading ? "Loading…" : `${rows.length} rows`}</span>
         }
       >
+        <div className="mb-2 flex flex-none flex-wrap items-center gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search employee, site, status…"
+            aria-label="Search audit log"
+            className="input-surgical min-w-[12rem] flex-1 px-3 py-1.5 text-xs"
+          />
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by flag">
+            {(["all", "geofence", "travel", "skew"] as Flag[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFlag(f)}
+                aria-pressed={flag === f}
+                className={`btn-surgical min-h-[36px] px-2.5 py-1 text-xs font-semibold ${
+                  flag === f ? "border-[var(--mint)] text-[var(--mint)] bg-[var(--mint)]/10" : "text-[var(--fog)]"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          {chipName && (
+            <button
+              type="button"
+              onClick={clearUserFilter}
+              className="btn-surgical inline-flex min-h-[36px] items-center gap-1.5 border-[var(--cyan)]/40 bg-[var(--cyan)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--cyan)]"
+            >
+              <span>{chipName}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
+        </div>
         {/* Desktop table */}
         <div className="hidden min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--line)] md:block">
           <table className="w-full text-left text-sm">
@@ -122,6 +173,60 @@ export function AuditView({
           <Pager page={cards.page} pageCount={cards.pageCount} total={cards.total} onPage={cards.setPage} label="Audit rows" />
         </div>
       </ConsoleWindow>
+    </div>
+  );
+}
+
+export function AuditView({
+  audit,
+  reviewCount,
+  userLocale,
+  onMapFix,
+}: {
+  audit: AuditLogRow[];
+  reviewCount: number;
+  userLocale: string;
+  onMapFix: (fix: GeofenceFix) => void;
+}) {
+  const { auditSegment, goto } = useOrg();
+  const segments: { id: AuditSegment; label: string; badge?: number }[] = [
+    { id: "activity", label: "Activity log" },
+    { id: "review", label: "Needs review", badge: reviewCount > 0 ? reviewCount : undefined },
+    { id: "corrections", label: "Shift corrections" },
+  ];
+
+  return (
+    <div role="tabpanel" id="tabpanel-audit" aria-labelledby="tab-audit" aria-label="Audit" className="flex h-full min-h-0 flex-col gap-2">
+      <div className="flex flex-none flex-wrap items-center gap-1.5" role="tablist" aria-label="Audit section">
+        {segments.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={auditSegment === s.id}
+            onClick={() => goto("audit", { auditSegment: s.id })}
+            className={`btn-surgical min-h-[40px] px-3 py-1.5 text-xs font-semibold ${
+              auditSegment === s.id
+                ? "border-[var(--mint)] bg-[var(--mint)]/10 text-[var(--mint)]"
+                : "text-[var(--fog)] hover:text-[var(--paper)]"
+            }`}
+          >
+            <span>{s.label}</span>
+            {s.badge !== undefined && (
+              <span className="ml-1.5 rounded-full bg-[var(--danger)]/20 px-1.5 py-0.5 text-xs font-bold text-[var(--danger)]">
+                {s.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1">
+        {auditSegment === "activity" && (
+          <ActivityLog audit={audit} userLocale={userLocale} onMapFix={onMapFix} loading={false} />
+        )}
+        {auditSegment === "review" && <ReviewPanel className="h-full" />}
+        {auditSegment === "corrections" && <ShiftOverridePanel />}
+      </div>
     </div>
   );
 }

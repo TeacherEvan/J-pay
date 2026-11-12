@@ -1,34 +1,56 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId, isQaAccount } from "./access";
+import { requireModerator, maybeCurrentUserId, isQaAccount, orgUsers } from "./access";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+
+/** Moderator + live org, or null (queries degrade to [] for anyone else). */
+async function modOrgScope(ctx: QueryCtx, orgId: Id<"organisations">) {
+  const modId = await maybeCurrentUserId(ctx);
+  if (!modId) return null;
+  const mod = await ctx.db.get(modId);
+  if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return null;
+  const org = await ctx.db.get(orgId);
+  if (!org || org.archivedAt !== undefined) return null;
+  return mod;
+}
+
 
 export const auditRecentLogs = query({
-  args: { limit: v.optional(v.number()) },
+  args: { orgId: v.id("organisations"), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
-    const logs = await ctx.db
-      .query("logs")
-      .withIndex("by_creation_time", (q) =>
-        q.gte("_creationTime", Date.now() - 7 * 24 * 3600 * 1000)
-      )
-      .order("desc")
-      .take(args.limit ?? 100);
-    const lookups = await Promise.all(
-        logs.map((log) => Promise.all([ctx.db.get(log.userId), ctx.db.get(log.siteId)]))
-    );
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
+    const limit = args.limit ?? 100;
+    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    // Filter-then-limit: per org member, newest first, merged. A busier org
+    // can never starve this one (take-before-filter bug, audit F4).
+    const members = await orgUsers(ctx, args.orgId, { includeInactive: true });
+    const byId = new Map(members.map((u) => [u._id as string, u]));
+    const logs = [];
+    for (const u of members) {
+      const rows = await ctx.db
+        .query("logs")
+        .withIndex("by_user_time", (q) => q.eq("userId", u._id))
+        .order("desc")
+        .take(limit);
+      for (const r of rows) if (r._creationTime >= cutoff) logs.push(r);
+    }
+    logs.sort((x, y) => y._creationTime - x._creationTime);
+    const page = logs.slice(0, limit);
+    const siteCache = new Map<string, Awaited<ReturnType<typeof ctx.db.get<"sites">>>>();
     const out = [];
-    for (const [log, [user, site]] of zip(logs, lookups)) {
-      // Owner directive 2026-08-26: real moderator logins must never surface
-      // throwaway QA rows.
-      if (user && isQaAccount(user)) continue;
+    for (const log of page) {
+      const user = byId.get(log.userId as string);
+      let site = siteCache.get(log.siteId as string);
+      if (site === undefined) {
+        site = await ctx.db.get(log.siteId);
+        siteCache.set(log.siteId as string, site);
+      }
       out.push({
         _id: log._id,
+        userId: log.userId,
         status: log.status,
         at: log.clientReportedTime,
         serverAt: log._creationTime,
@@ -50,24 +72,23 @@ export const auditRecentLogs = query({
 });
 
 export const auditNeedsReview = query({
-  args: {},
-  handler: async (ctx) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
+    const members = await orgUsers(ctx, args.orgId, { includeInactive: true });
+    const byId = new Map(members.map((u) => [u._id as string, u]));
     const flagged = await ctx.db
       .query("shifts")
       .withIndex("by_needs_review", (q) => q.eq("needsReview", true))
-      .order("desc")
-      .take(50);
-    const out = [];
-    for (const s of flagged) {
-      const u = await ctx.db.get(s.userId);
-      if (u && isQaAccount(u)) continue;
-      out.push(s);
-    }
-    return out;
+      .collect();
+    return flagged
+      .filter((s) => byId.has(s.userId as string))
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, 50)
+      .map((s) => {
+        const u = byId.get(s.userId as string)!;
+        return { ...s, employeeName: u.name ?? u.email ?? "unknown" };
+      });
   },
 });
 
@@ -76,37 +97,26 @@ function zip<A, B>(a: A[], b: B[]): [A, B][] {
 }
 
 export const listEmployeesWithAssignments = query({
-  args: {},
-  handler: async (ctx) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
-    const employees = await ctx.db
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
+    // The roster is the moderator's MANAGEMENT surface: archived accounts stay
+    // visible so they can be cleaned up. QA rows are excluded from counts/audit
+    // elsewhere; here they are kept only if they belong to this org.
+    const rows = await ctx.db
       .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "employee"))
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
       .collect();
-    const managers = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "manager"))
-      .collect();
-    employees.push(...managers);
-    const allAssignments = await ctx.db.query("userSites").collect();
-    const byUser = new Map<string, Id<"sites">[]>();
-    for (const a of allAssignments) {
-      (byUser.get(a.userId) ?? byUser.set(a.userId, []).get(a.userId)!).push(a.siteId);
-    }
+    const people = rows.filter((u) => u.role === "employee" || u.role === "manager");
     const out = [];
-    for (const e of employees) {
-      // The roster is the moderator's MANAGEMENT surface: every account in the
-      // org has to be visible so it can be assigned, deactivated, archived and
-      // cleaned up. Throwaway QA rows are excluded from workforce COUNTS
-      // (convex/kpi.ts) and from the audit views — not from the roster, where
-      // hiding them would make a stray test account impossible to remove.
-      const assignments = byUser.get(e._id) ?? [];
+    for (const e of people) {
+      const links = await ctx.db
+        .query("userSites")
+        .withIndex("by_user", (q) => q.eq("userId", e._id))
+        .collect();
       const siteNames: string[] = [];
-      for (const siteId of assignments) {
-        const site = await ctx.db.get(siteId);
+      for (const l of links) {
+        const site = await ctx.db.get(l.siteId);
         if (site && "name" in site) siteNames.push(site.name);
       }
       out.push({
@@ -120,29 +130,24 @@ export const listEmployeesWithAssignments = query({
         deviceId: e.deviceId,
         hourlyRateOverride: e.hourlyRateOverride,
         locale: e.locale,
-        assignedSiteIds: assignments,
+        assignedSiteIds: links.map((l) => l.siteId),
         siteNames,
       });
     }
+    out.sort((a, b) => String(a.name ?? a.email).localeCompare(String(b.name ?? b.email)));
     return out;
   },
 });
 
 export const listAllSites = query({
-  args: {},
-  handler: async (ctx) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
-    const sites = await ctx.db.query("sites").collect();
-    const out = [];
-    for (const s of sites) {
-      const creator = await ctx.db.get(s.createdBy);
-      if (creator && isQaAccount(creator)) continue;
-      out.push(s);
-    }
-    return out;
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
+    const sites = await ctx.db
+      .query("sites")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    return sites.filter((s) => s.archivedAt === undefined);
   },
 });
 
@@ -194,38 +199,34 @@ export const setHourlyOverride = mutation({
  * the override mutation refuses them too.
  */
 export const overridableShifts = query({
-  args: {},
-  handler: async (ctx) => {
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
     const cutoff = Date.now() - 14 * 24 * 3600 * 1000;
-    const rows = await ctx.db
-      .query("shifts")
-      .withIndex("by_started", (q) => q.gte("startedAt", cutoff))
-      .order("desc")
-      .take(60);
+    const members = await orgUsers(ctx, args.orgId);
     const out = [];
-    for (const shift of rows) {
-      if (shift.sealed === true) continue;
-      const user = await ctx.db.get(shift.userId);
-      if (!user || isQaAccount(user)) continue;
-      if (!user.isActive || user.archivedAt !== undefined) continue;
-      out.push({
-        _id: shift._id,
-        userId: shift.userId,
-        employeeName: user.name ?? user.email ?? "unknown",
-        startedAt: shift.startedAt,
-        endedAt: shift.endedAt,
-        totalMinutes: shift.totalMinutes,
-        needsReview: shift.needsReview,
-        reviewReason: shift.reviewReason,
-        hasOverride: (shift.reviewReason ?? "").startsWith("moderator_override"),
-      });
+    for (const user of members) {
+      const rows = await ctx.db
+        .query("shifts")
+        .withIndex("by_user_start", (q) => q.eq("userId", user._id).gte("startedAt", cutoff))
+        .collect();
+      for (const shift of rows) {
+        if (shift.sealed === true) continue;
+        out.push({
+          _id: shift._id,
+          userId: shift.userId,
+          employeeName: user.name ?? user.email ?? "unknown",
+          startedAt: shift.startedAt,
+          endedAt: shift.endedAt,
+          totalMinutes: shift.totalMinutes,
+          needsReview: shift.needsReview,
+          reviewReason: shift.reviewReason,
+          hasOverride: (shift.reviewReason ?? "").startsWith("moderator_override"),
+        });
+      }
     }
     out.sort((a, b) => b.startedAt - a.startedAt);
-    return out;
+    return out.slice(0, 60);
   },
 });
 
@@ -267,14 +268,11 @@ export const endShiftOverride = mutation({
 });
 
 export const activeShifts = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
     // Sibling of auditRecentLogs: moderator-gated, QA-filtered, returns []
     // to non-moderators (the public /api/backend/call door stays harmless).
-    const modId = await maybeCurrentUserId(ctx);
-    if (!modId) return [];
-    const mod = await ctx.db.get(modId);
-    if (!mod || mod.role !== "moderator" || !mod.isActive || mod.archivedAt !== undefined) return [];
+    if (!(await modOrgScope(ctx, args.orgId))) return [];
 
     // Active = no end time (the by_active adapter path pushes IS NULL to SQL).
     const active = await ctx.db
@@ -286,7 +284,7 @@ export const activeShifts = query({
     for (const shift of active) {
       const user = await ctx.db.get(shift.userId);
       // Owner directive 2026-08-26: throwaway QA users never appear.
-      if (!user || isQaAccount(user)) continue;
+      if (!user || isQaAccount(user) || user.orgId !== args.orgId) continue;
 
       // Shifts are derived from logs per site; the session's site comes from
       // the employee's latest log. No logs yet -> no site, no pin (the UI

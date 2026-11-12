@@ -302,6 +302,9 @@ export const forUser = query({
       throw new ConvexError("FORBIDDEN");
     }
     if (role === "manager") {
+      const viewer = await ctx.db.get(viewerId);
+      const target = await ctx.db.get(args.userId);
+      if (!viewer || viewer.orgId === undefined || !target || target.orgId !== viewer.orgId) return [];
       const siteIds = await managedSiteIds(ctx, viewerId);
       if (siteIds.size === 0) return [];
       const assignments = await ctx.db
@@ -360,11 +363,12 @@ export const recentForCrew = query({
       return [];
     }
     if (isQaAccount(viewer)) return [];
+    if (viewer.orgId === undefined) return [];
 
     const siteIds = await managedSiteIds(ctx, viewerId);
     if (siteIds.size === 0) return [];
 
-    const crewSet = await userIdsForSites(ctx, siteIds);
+    const crewSet = await userIdsForSites(ctx, siteIds, viewer.orgId);
     const crewIds = new Set<string>(crewSet);
     if (crewIds.size === 0) return [];
 

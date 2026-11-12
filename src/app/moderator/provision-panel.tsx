@@ -48,7 +48,7 @@ export function ProvisionPanel() {
       <button
         data-loading={busy}
         aria-busy={busy}
-        disabled={busy || !name || !email}
+        disabled={busy || !name || !email || (role === "employee" && !orgId)}
         onClick={async () => {
           setBusy(true);
           setError(null);
@@ -56,7 +56,7 @@ export function ProvisionPanel() {
             const fn = role === "employee" ? provisionEmployeeAction : provisionModeratorAction;
             setCode(
               role === "employee"
-                ? await fn({ name, email, orgId: orgId ?? undefined } as { name: string; email: string })
+                ? await fn({ name, email, orgId: orgId as never } as { name: string; email: string })
                 : await fn({ name, email })
             );
             setName("");

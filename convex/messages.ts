@@ -2,7 +2,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, requireActiveUser, requireManager, isQaAccount } from "./access";
+import { requireModerator, requireActiveUser, requireManager, requireOrgScope, orgUsers, isQaAccount } from "./access";
 
 function validContent(content: string): string {
   const text = content.trim();
@@ -25,9 +25,11 @@ export const sendToModerators = mutation({
 });
 
 export const moderatorInbox = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
     await requireModerator(ctx);
+    await requireOrgScope(ctx, args.orgId);
+    const memberIds = new Set((await orgUsers(ctx, args.orgId, { includeInactive: true })).map((u) => u._id as string));
     const unread = await ctx.db
       .query("messages")
       .withIndex("by_modqueue_unread", (q) => q.eq("modQueue", true).eq("isRead", false))
@@ -50,7 +52,7 @@ export const moderatorInbox = query({
       }
     }
     // Throwaway QA accounts are never part of the real moderator queue.
-    const filtered = merged.filter((m) => !senders.get(m.senderId)?.isQa);
+    const filtered = merged.filter((m) => !senders.get(m.senderId)?.isQa && memberIds.has(m.senderId as string));
     return filtered.map((m) => ({
       _id: m._id,
       senderId: m.senderId,
@@ -117,11 +119,12 @@ export const managerOrgUsers = query({
     const managerId = await requireManager(ctx);
     const me = await ctx.db.get(managerId);
     const orgId = me?.orgId;
-    const users = await ctx.db.query("users").collect();
+    // Fail closed: a manager with no org sees nobody (never "everybody").
+    if (orgId === undefined) return [];
+    const users = await ctx.db.query("users").withIndex("by_org", (q) => q.eq("orgId", orgId)).collect();
     return users
       .filter((u) => {
         if (u._id === managerId) return false;
-        if (orgId !== undefined && u.orgId !== orgId) return false;
         if (!u.isActive || u.archivedAt !== undefined) return false;
         if (isQaAccount(u)) return false;
         return true;
@@ -141,7 +144,7 @@ export const managerMessage = mutation({
     if (!recipient || !recipient.isActive || recipient.archivedAt !== undefined) {
       throw new ConvexError("INVALID_RECIPIENT");
     }
-    if (me?.orgId !== undefined && recipient.orgId !== me.orgId) {
+    if (me?.orgId === undefined || recipient.orgId !== me.orgId) {
       throw new ConvexError("NOT_IN_ORG");
     }
     if (isQaAccount(recipient)) {
@@ -170,11 +173,11 @@ export const managerBroadcast = mutation({
     const text = validContent(args.content);
     const me = await ctx.db.get(managerId);
     const orgId = me?.orgId;
-    const users = await ctx.db.query("users").collect();
+    if (orgId === undefined) throw new ConvexError("NOT_IN_ORG");
+    const users = await ctx.db.query("users").withIndex("by_org", (q) => q.eq("orgId", orgId)).collect();
     let sent = 0;
     for (const u of users) {
       if (u._id === managerId) continue;
-      if (orgId !== undefined && u.orgId !== orgId) continue;
       if (!u.isActive || u.archivedAt !== undefined) continue;
       if (isQaAccount(u)) continue;
       await ctx.db.insert("messages", {
@@ -191,22 +194,13 @@ export const managerBroadcast = mutation({
 });
 
 export const broadcast = mutation({
-  args: { content: v.string() },
+  args: { orgId: v.id("organisations"), content: v.string() },
   handler: async (ctx, args) => {
     const moderatorId = await requireModerator(ctx);
+    await requireOrgScope(ctx, args.orgId);
     const text = validContent(args.content);
-    const employees = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "employee"))
-      .collect();
-    const managers = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "manager"))
-      .collect();
-    employees.push(...managers);
-    for (const e of employees) {
-      if (e.archivedAt !== undefined || !e.isActive) continue;
-      if (isQaAccount(e)) continue;
+    // Only the selected org's active, non-QA people (orgUsers filters all three).
+    for (const e of await orgUsers(ctx, args.orgId)) {
       await ctx.db.insert("messages", {
         senderId: moderatorId,
         recipientId: e._id,

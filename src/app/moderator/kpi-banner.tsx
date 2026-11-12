@@ -2,9 +2,11 @@
 
 import { useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
+import { useOrg } from "./org-context";
 
 export function KpiBanner() {
-  const kpi = useQuery(api.kpi.summary);
+  const { orgId } = useOrg();
+  const kpi = useQuery(api.kpi.summary, orgId ? { orgId } : "skip");
   if (!kpi) {
     // Reserved-bounds skeleton — no layout pop when the query lands (CLS = 0).
     return (

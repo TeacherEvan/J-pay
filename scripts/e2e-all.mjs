@@ -367,7 +367,7 @@ try {
   // into the page, we use it; otherwise the fresh-employee sign-in leg is
   // skipped (the script still ends with the screenshot evidence).
   if (empEmail) {
-    await clickByText("employee view"); await sleep(2000);
+    await p.goto(`${BASE}/`, { waitUntil: "domcontentloaded" }); await sleep(2000);
     await clickByText("Sign out").catch(() => {}); await sleep(3000);
     await p.setViewport({ width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     await p.evaluate((email) => {

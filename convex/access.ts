@@ -97,3 +97,34 @@ export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
 export function orgBoundaryOk(a: string | undefined | null, b: string | undefined | null): boolean {
   return (a ?? null) === (b ?? null);
 }
+
+/**
+ * Org scoping primitives (console revamp, 2026-11-13).
+ *
+ * Moderators are platform-level (no orgId) and work inside ONE selected org;
+ * managers/employees are org-bound and FAIL CLOSED: a missing orgId means
+ * "sees nothing", never "sees everything" (messages.ts used to fail open).
+ */
+export async function requireOrgScope(ctx: Ctx, orgId: Id<"organisations">): Promise<Doc<"organisations">> {
+  const org = await ctx.db.get(orgId);
+  if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
+  return org;
+}
+
+/** Real (non-QA) employees + managers of one org, via the by_org index. */
+export async function orgUsers(
+  ctx: Ctx,
+  orgId: Id<"organisations">,
+  opts: { includeInactive?: boolean } = {}
+): Promise<Doc<"users">[]> {
+  const rows = await ctx.db
+    .query("users")
+    .withIndex("by_org", (q) => q.eq("orgId", orgId))
+    .collect();
+  return rows.filter(
+    (u) =>
+      (u.role === "employee" || u.role === "manager") &&
+      !isQaAccount(u) &&
+      (opts.includeInactive || (u.isActive && u.archivedAt === undefined))
+  );
+}

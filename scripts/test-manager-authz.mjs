@@ -45,6 +45,10 @@ function fixture() {
     { _id: "ms-1", _creationTime: 35, managerId: "mgr-1", siteId: "site-a" },
     { _id: "ms-2", _creationTime: 36, managerId: "mgr-2", siteId: "site-b" },
   ];
+  s.organisations = [{ _id: "org-0", _creationTime: 1, name: "Org 0" }];
+  // Default tenant: everyone except the platform-level moderator lives in org-0.
+  for (const u of s.users) if (u.role !== "moderator") u.orgId = "org-0";
+  for (const x of s.sites) x.orgId = "org-0";
   s.shifts.push(
     { _id: "shift-e1", _creationTime: 40, userId: "emp-1", startedAt: NOW - 3 * H, needsReview: false },
     { _id: "shift-e2", _creationTime: 41, userId: "emp-2", startedAt: NOW - 5 * H, needsReview: false },
@@ -207,7 +211,7 @@ await run("travel:setConsent — grant and revoke roundtrip on the users row", a
 
 await run("moderator:overridableShifts — sealed excluded", async () => {
   __stub.store.shifts.find((s) => s.userId === "emp-1").sealed = true;
-  const rows = await call("moderator", "overridableShifts", {}, asUser("mod-1"));
+  const rows = await call("moderator", "overridableShifts", { orgId: "org-0" }, asUser("mod-1"));
   assert.deepEqual(rows.map((r) => r.userId).sort(), ["emp-2"]);
 });
 
@@ -219,26 +223,28 @@ await run("manager:mid-shift promotion blocked (ACTIVE_SHIFT_IN_PROGRESS)", asyn
   );
 });
 
-await run("manager:cross-org promotion blocked (CROSS_ORG_PROMOTION_FORBIDDEN)", async () => {
-  // Give mod-1 an orgId
+await run("manager:promotion — moderators are platform-level; target org is what matters", async () => {
+  // Moderator org is irrelevant (audit F2): promoting works whether mod-1 has an org or not.
   const mod = __stub.store.users.find((u) => u._id === "mod-1");
   mod.orgId = "org-alpha";
-  // Give emp-2 a completed shift and a different orgId
   const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
   emp2.orgId = "org-beta";
   const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
   if (s2) s2.endedAt = NOW - 1 * H;
-
-  await assert.rejects(
-    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
-    /CROSS_ORG_PROMOTION_FORBIDDEN/
-  );
-
-  // When org matches, promotion succeeds
-  emp2.orgId = "org-alpha";
   const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
   assert.equal(res.ok, true);
   assert.equal(emp2.role, "manager");
+});
+
+await run("manager:promotion refuses an org-less target (ORG_REQUIRED)", async () => {
+  const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
+  emp2.orgId = undefined;
+  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
+  if (s2) s2.endedAt = NOW - 1 * H;
+  await assert.rejects(
+    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
+    /ORG_REQUIRED/
+  );
 });
 
 await run("manager:cross-org site assignment blocked (CROSS_ORG_SITE_ASSIGNMENT_FORBIDDEN)", async () => {
@@ -259,33 +265,6 @@ await run("manager:cross-org site assignment blocked (CROSS_ORG_SITE_ASSIGNMENT_
   // Assigning matching org site succeeds
   const res = await call("manager", "setManagerSites", { managerId: "mgr-1", siteIds: ["site-a"] }, asUser("mod-1"));
   assert.equal(res.total, 1);
-});
-
-await run("org guard fail-closed: unscoped moderator + scoped target refused; both unscoped allowed", async () => {
-  // Default fixture: nobody has an orgId. Assign emp-2 an org, keep mod-1 unscoped.
-  const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
-  emp2.orgId = "org-beta";
-  const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
-  if (s2) s2.endedAt = NOW - 1 * H;
-
-  await assert.rejects(
-    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
-    /CROSS_ORG_PROMOTION_FORBIDDEN/
-  );
-
-  // And the inverse: scoped actor + unscoped target is equally refused.
-  const mod1 = __stub.store.users.find((u) => u._id === "mod-1");
-  mod1.orgId = "org-alpha";
-  emp2.orgId = undefined;
-  await assert.rejects(
-    () => call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1")),
-    /CROSS_ORG_PROMOTION_FORBIDDEN/
-  );
-
-  // Both unscoped (default install) still works.
-  mod1.orgId = undefined;
-  const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
-  assert.equal(res.ok, true);
 });
 
 await run("org guard fail-closed: unscoped manager + scoped site refused", async () => {
@@ -315,18 +294,19 @@ await run("sites:assignEmployee refuses cross-org assignment", async () => {
 });
 
 await run("org guard fail-closed: promotion inheritance skips cross-org sites but does not refuse promotion", async () => {
-  // emp-2 (unscoped) assigned to org-alpha site site-b via userSites; promotion must succeed
+  // emp-2 (org-0) assigned to org-alpha site site-b via userSites; promotion must succeed
   // but the scoped site must NOT be inherited into managerSites.
   const emp2 = __stub.store.users.find((u) => u._id === "emp-2");
   const s2 = __stub.store.shifts.find((s) => s.userId === "emp-2");
   if (s2) s2.endedAt = NOW - 1 * H;
+  emp2.orgId = "org-0";
   const siteB = __stub.store.sites.find((s) => s._id === "site-b");
-  siteB.orgId = "org-alpha"; // scoped site; target unscoped
+  siteB.orgId = "org-alpha"; // site in another org than the target
 
   const res = await call("manager", "promoteToManager", { userId: "emp-2" }, asUser("mod-1"));
   assert.equal(res.ok, true, "promotion itself must succeed");
   const inherited = __stub.store.managerSites.filter((m) => m.managerId === "emp-2" && m.archivedAt === undefined);
-  assert.equal(inherited.length, 0, "scoped site must not be inherited into managerSites for unscoped target");
+  assert.equal(inherited.length, 0, "scoped site must not be inherited into managerSites across orgs");
 });
 
 await run("manager:automatic site inheritance on promotion", async () => {

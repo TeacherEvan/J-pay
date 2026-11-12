@@ -94,6 +94,8 @@ export function LiveCrewMap({
   emptyText,
   footerSegments,
   panHint,
+  onSelectUser,
+  selectedUserId,
 }: {
   rows: CrewShiftRow[] | undefined;
   managedSites?: SiteToDraw[];
@@ -106,7 +108,14 @@ export function LiveCrewMap({
   emptyText: string;
   footerSegments: Array<{ color: string; label: string }>;
   panHint: string;
+  /** Click a pin → select that employee (drawer / roster highlight). */
+  onSelectUser?: (userId: string) => void;
+  selectedUserId?: string | null;
 }) {
+  const onSelectRef = useRef(onSelectUser);
+  useEffect(() => {
+    onSelectRef.current = onSelectUser;
+  }, [onSelectUser]);
   const userLocale = useUserLocale();
   const [L, setL] = useState<typeof LType | null>(null);
   const [mapError, setMapError] = useState(false);
@@ -162,7 +171,7 @@ export function LiveCrewMap({
 
   // Redraw layers on every refresh. fitBounds only on the first populated draw;
   // afterwards we keep the operator's pan/zoom instead of yanking the map.
-  const rowsKey = useMemo(() => JSON.stringify([rows ?? [], managedSites ?? []]), [rows, managedSites]);
+  const rowsKey = useMemo(() => JSON.stringify([rows ?? [], managedSites ?? [], selectedUserId ?? null]), [rows, managedSites, selectedUserId]);
   useEffect(() => {
     if (!L || !mapRef.current || !layerRef.current || rows === undefined) return;
     // U10: never yank an open popup out from under the operator on the 45s
@@ -260,14 +269,18 @@ export function LiveCrewMap({
       const topSpeed = travelling && row.travel?.maxSpeedMps
         ? Math.round(row.travel.maxSpeedMps * 3.6)
         : null;
-      L.circleMarker([lat, lng], {
-        radius: 7,
-        color: color,
+      const selected = selectedUserId != null && row.userId === selectedUserId;
+      const marker = L.circleMarker([lat, lng], {
+        radius: selected ? 11 : 7,
+        color: selected ? "#ffffff" : color,
         fillColor: color,
         fillOpacity: 0.85,
-        weight: 2,
-      })
-        .bindPopup(
+        weight: selected ? 3 : 2,
+      });
+      marker.on("click", () => onSelectRef.current?.(row.userId));
+      // With a selection handler the drawer is the detail surface; a popup would
+      // also freeze redraws (see the open-popup guard above) so the highlight lagged.
+      if (!onSelectRef.current) marker.bindPopup(
           popupElement([
             { text: row.name, strong: true },
             travelling
@@ -280,8 +293,8 @@ export function LiveCrewMap({
               tone: travelling ? ("warn" as const) : inside ? ("good" as const) : ("bad" as const),
             },
           ])
-        )
-        .addTo(layer);
+        );
+      marker.addTo(layer);
       if (Number.isFinite(row.lastLog.accuracyMeters) && row.lastLog.accuracyMeters > 0) {
         L.circle([lat, lng], {
           radius: row.lastLog.accuracyMeters,
@@ -292,6 +305,7 @@ export function LiveCrewMap({
         }).addTo(layer);
       }
       points.push([lat, lng]);
+      if (selected && mapRef.current) mapRef.current.panTo([lat, lng]);
     }
 
     if (!fittedRef.current && points.length > 0 && mapRef.current) {

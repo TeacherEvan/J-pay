@@ -7,6 +7,7 @@ import { ConsoleWindow } from "@/components/console/window";
 import { Pager } from "@/components/console/pager";
 import { usePagination } from "@/components/console/use-pagination";
 import { errMsg } from "@/lib/errors";
+import { useOrg } from "./org-context";
 
 /* ─────────────────────────── Managers panel ─────────────────────────── */
 
@@ -17,7 +18,8 @@ export function ManagersPanel({
   employees: { _id: string; name?: string | null; email?: string | null; archivedAt?: number; role?: string }[];
   sites: { _id: string; name: string }[];
 }) {
-  const managers = useQuery(api.manager.listManagers) as
+  const { orgId } = useOrg();
+  const managers = useQuery(api.manager.listManagers, orgId ? { orgId } : "skip") as
     | { _id: string; name?: string | null; email?: string | null; isActive: boolean; managedSiteIds: string[]; managedSiteNames: string[] }[]
     | undefined;
   const promote = useMutation(api.manager.promoteToManager);

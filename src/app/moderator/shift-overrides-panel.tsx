@@ -9,6 +9,7 @@ import { usePagination } from "@/components/console/use-pagination";
 import { errMsg } from "@/lib/errors";
 import { useUserLocale } from "@/lib/use-user-locale";
 import { formatDateTime } from "@/lib/format";
+import { useOrg } from "./org-context";
 
 /* ─────────────────────────── Shift overrides ─────────────────────────── */
 
@@ -30,7 +31,9 @@ const toLocalInput = (ms: number) => {
 };
 
 export function ShiftOverridePanel() {
-  const shifts = useQuery(api.moderator.overridableShifts) as OverridableShift[] | undefined;
+  const { orgId, userFilter } = useOrg();
+  const allShifts = useQuery(api.moderator.overridableShifts, orgId ? { orgId } : "skip") as (OverridableShift & { userId?: string })[] | undefined;
+  const shifts = allShifts && userFilter ? allShifts.filter((r) => r.userId === userFilter) : allShifts;
   const override = useMutation(api.moderator.endShiftOverride);
   const userLocale = useUserLocale();
   const [openId, setOpenId] = useState<string | null>(null);

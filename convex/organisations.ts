@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { requireModerator } from "./access";
@@ -64,5 +64,14 @@ export const listOrgs = query({
         userCount: orgUsers.filter((u) => u.archivedAt === undefined).length,
       };
     }))).sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
+/** Internal (actions can't read the db): the org if it exists and is live. */
+export const getActive = internalQuery({
+  args: { id: v.id("organisations") },
+  handler: async (ctx, args) => {
+    const org = await ctx.db.get(args.id);
+    return org && org.archivedAt === undefined ? { _id: org._id, name: org.name } : null;
   },
 });

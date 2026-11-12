@@ -44,7 +44,7 @@ node --env-file=.env.local scripts/create-moderator.mjs --email you@example.com 
 ```
 
 The script prints a one-time password exactly once; the app forces a password change on
-first sign-in. Sign in as moderator at `/moderator` → create sites, provision employees
+first sign-in. Sign in as moderator at `/` → `/moderator` → create sites, provision employees
 (one-time `JP-XXXXXXXXXX` ID code), assign employee↔site. Employees sign in with email +
 ID code, then CHECK IN.
 
@@ -53,9 +53,9 @@ ID code, then CHECK IN.
 > to :3001 and serving the wrong app at the canonical URL. Stop the other process, or
 > run `PORT=3001 npm run dev` and open that URL explicitly.
 
-## Fork model — one client per deployment (`jpay-<client>`)
+## Fork model & multi-org deployments
 
-Each client company gets an isolated fork + Supabase project:
+A single deployment may host multiple organisations with server-side org isolation (see [ADR-005](docs/adr/ADR-005-multi-org-per-deployment.md)), or each client company can get an isolated fork + Supabase project (`jpay-<client>`):
 
 1. Fork/copy this repo → `jpay-<client>`. Update `name` in `package.json` and `manifest.webmanifest`.
 2. Create a NEW Supabase project (never share deployments). Apply `supabase/migrations/` **one file at a time in the SQL editor, in this order**: `0001_init.sql` → `0002` → `0004` → `0005` → `0006` → `0007` → `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015` → `0016` → `0017`. Do **not** apply `archive/` and do **not** use `supabase db push` (see above) — and do not skip `0014`, which closes an unauthenticated read on `jpay_id_registry`.

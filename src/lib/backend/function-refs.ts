@@ -54,11 +54,13 @@ export type ApiSurface = {
   "organisations": {
     archiveOrg: FunctionRef;
     createOrg: FunctionRef;
+    getActive: FunctionRef;
     listOrgs: FunctionRef;
     renameOrg: FunctionRef;
   };
   "payroll": {
     calcForEmployee: FunctionRef;
+    calcForOrg: FunctionRef;
     exportLogsCsv: FunctionRef;
     listJurisdictionsForLocale: FunctionRef;
     listSupportedStrategies: FunctionRef;

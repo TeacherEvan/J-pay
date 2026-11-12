@@ -1,7 +1,9 @@
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireActiveUser, requireModerator } from "./access";
+import { requireActiveUser, requireModerator, requireOrgScope, orgUsers } from "./access";
+import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 import { localDayKey } from "../src/lib/shift-engine";
@@ -11,14 +13,7 @@ import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
 import { jpayConfig } from "../src/config/jpay.config";
 
-export const calcForEmployee = query({
-  args: { userId: v.id("users"), fromMs: v.number(), toMs: v.number() },
-  handler: async (ctx, args) => {
-    const { userId: caller, role } = await requireActiveUser(ctx);
-    if (role !== "moderator" && caller !== args.userId) throw new ConvexError("FORBIDDEN");
-
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new ConvexError("USER_NOT_FOUND");
+async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, fromMs: number, toMs: number) {
     // Config integrity (audit P2-B4/B5): a missing rate pays R0.00 in silence, and
     // an unrecognised PAYROLL_STRATEGY silently degrades to flat-rate pay. Fail
     // loudly instead — these are payroll bugs, not inputs.
@@ -42,7 +37,7 @@ export const calcForEmployee = query({
     const shifts = await ctx.db
       .query("shifts")
       .withIndex("by_user_start", (q) =>
-        q.eq("userId", args.userId).gte("startedAt", args.fromMs).lte("startedAt", args.toMs)
+        q.eq("userId", user._id).gte("startedAt", fromMs).lte("startedAt", toMs)
       )
       .collect();
     const inRange = shifts;
@@ -50,7 +45,7 @@ export const calcForEmployee = query({
     let timezone = "UTC";
     const firstAssignment = await ctx.db
       .query("userSites")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
     if (firstAssignment) {
       const site = await ctx.db.get(firstAssignment.siteId);
@@ -100,6 +95,41 @@ export const calcForEmployee = query({
       },
       flagged,
     };
+}
+
+export const calcForEmployee = query({
+  args: { userId: v.id("users"), fromMs: v.number(), toMs: v.number() },
+  handler: async (ctx, args) => {
+    const { userId: caller, role } = await requireActiveUser(ctx);
+    if (role !== "moderator" && caller !== args.userId) throw new ConvexError("FORBIDDEN");
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new ConvexError("USER_NOT_FOUND");
+    return computeEmployeePayroll(ctx, user, args.fromMs, args.toMs);
+  },
+});
+
+/**
+ * Org-wide payroll summary (moderator). One row per active member; a member
+ * with no rate / bad strategy yields a status row instead of failing the table.
+ */
+export const calcForOrg = query({
+  args: { orgId: v.id("organisations"), fromMs: v.number(), toMs: v.number() },
+  handler: async (ctx, args) => {
+    await requireModerator(ctx);
+    await requireOrgScope(ctx, args.orgId);
+    const rows = [];
+    for (const user of await orgUsers(ctx, args.orgId)) {
+      const base = { userId: user._id, name: user.name ?? user.email ?? "unknown", email: user.email, role: user.role };
+      try {
+        const r = await computeEmployeePayroll(ctx, user, args.fromMs, args.toMs);
+        rows.push({ ...base, status: "ok" as const, rate: r.rate, currency: r.currency, locale: r.locale, strategy: r.strategy, ...r.totals });
+      } catch (e) {
+        const msg = e instanceof ConvexError ? String(e.data) : "ERROR";
+        rows.push({ ...base, status: msg === "RATE_NOT_CONFIGURED" ? ("no_rate" as const) : ("error" as const), error: msg });
+      }
+    }
+    rows.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return rows;
   },
 });
 

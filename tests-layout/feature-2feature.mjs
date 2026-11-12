@@ -405,6 +405,6 @@ test("F2F.11: /moderator shows the lock screen for non-mods", async () => {
     assert.match(t, /Moderator access only/i,
       "non-mods must see the lock-screen copy");
     assert.match(t, /Back to check-in/i,
-      "lock screen must offer a way back to the employee view");
+      "lock screen must offer a way back to check-in");
   }
 });

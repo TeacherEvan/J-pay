@@ -46,9 +46,11 @@ async function requireModeratorActionCtx(ctx: import("./_generated/server").Acti
 }
 
 export const provisionEmployee = action({
-  args: { name: v.string(), email: v.string(), orgId: v.optional(v.id("organisations")) },
+  args: { name: v.string(), email: v.string(), orgId: v.id("organisations") },
   handler: async (ctx, args) => {
     await requireModeratorActionCtx(ctx);
+    const org = await ctx.runQuery(internal.organisations.getActive, { id: args.orgId });
+    if (!org) throw new ConvexError("ORG_NOT_FOUND");
     const email = args.email.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ConvexError("INVALID_EMAIL");
     if (!args.name.trim() || args.name.trim().length > 100) throw new ConvexError("INVALID_NAME");

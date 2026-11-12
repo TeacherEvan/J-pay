@@ -57,6 +57,7 @@ const stagesFor = (mode) => {
     { label: "cron jobs map", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-cron-jobs.mjs"] },
     { label: "runtime module census", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-runtime-modules.mjs"] },
     { label: "manager authz + override chain + org guards", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-manager-authz.mjs"] },
+    { label: "multi-org isolation (F1-F5, F9)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-org-isolation.mjs"] },
     { label: "derivation-failure ledger", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-derivation-failure.mjs"] },
     { label: "derivation idempotency (upsert-in-place)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-derivation-idempotent.mjs"] },
     { label: "org list counts", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-list-orgs.mjs"] },

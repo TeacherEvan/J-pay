@@ -1,36 +1,18 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireModerator, isQaAccount } from "./access";
+import { requireModerator, requireOrgScope, orgUsers } from "./access";
 
 export const summary = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.id("organisations") },
+  handler: async (ctx, args) => {
     // H1 fix (2026-08-26 review): this was a bare public query — any client
     // could read workforce counts without authentication. Row-scoped authz
     // per TRD R4/§7.
     await requireModerator(ctx);
+    await requireOrgScope(ctx, args.orgId);
 
-    const modRows = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "moderator"))
-      .collect();
-    const me = modRows.find((m) => m.isActive && m.archivedAt === undefined);
-    if (!me) return null;
-
-    const employees = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "employee"))
-      .collect();
-    const managers = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "manager"))
-      .collect();
-    employees.push(...managers);
-    // Owner directive 2026-08-26: throwaway QA accounts (e2e suite, review
-    // walkthrough) must not count toward real workforce KPIs.
-    const realEmployeeIds = new Set(
-      employees.filter((e) => !isQaAccount(e)).map((e) => e._id as string),
-    );
+    const members = await orgUsers(ctx, args.orgId);
+    const realEmployeeIds = new Set(members.map((e) => e._id as string));
     const isRealUser = (id: { toString(): string }) =>
       realEmployeeIds.has(id.toString());
 

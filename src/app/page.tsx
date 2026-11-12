@@ -3,6 +3,7 @@
 import { useConvexAuth, useQuery, useMutation } from "@/lib/backend/react";
 import { storageGet, storageSet, sessionGet, sessionSet, sessionRemove } from "@/lib/safe-storage";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/backend/api";
 import { SignIn } from "./sign-in";
 import { MessagesPanel } from "./messages";
@@ -35,6 +36,12 @@ export default function Home() {
   const me = useQuery(api.users_queries.me, isAuthenticated ? {} : "skip");
   const { signOut } = useAuthActions();
   const convex = useConvex();
+  const router = useRouter();
+  const isModerator = me?.role === "moderator";
+  // Moderators have no employee surface: straight to the console.
+  useEffect(() => {
+    if (isModerator) router.replace("/moderator");
+  }, [isModerator, router]);
   useEffect(() => {
     if (!isLoading && isAuthenticated && me === null) {
       void signOut().then(() => window.location.reload());
@@ -80,6 +87,14 @@ export default function Home() {
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  if (isAuthenticated && isModerator) {
+    return (
+      <main className="grid min-h-dvh place-items-center text-sm text-[var(--fog)]">
+        <span>Opening moderator console…</span>
+      </main>
+    );
+  }
 
   if (consented === null) {
     return (
@@ -175,7 +190,7 @@ export default function Home() {
                 Install app
               </button>
             )}
-            {me.role !== "moderator" && <EnableNotifications />}
+            <EnableNotifications />
             <span className="rounded-full border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--fog)]">
               {me.role}
             </span>
@@ -212,16 +227,14 @@ export default function Home() {
             </button>
           </div>
         )}
-        {!mustChangePassword && (me.role === "moderator" ? (
-          <ModeratorHome />
-        ) : (
+        {!mustChangePassword && (
           <>
             <CheckInCard />
             {me.role === "manager" && <ManagerCard />}
             <MessagesPanel role="employee" />
             <ChangePassword />
           </>
-        ))}
+        )}
         <footer id="privacy" className="mt-auto pt-8 text-xs leading-relaxed text-[var(--fog)]">
           Location is recorded when you press CHECK IN, and automatically while your shift clock
           is running (never off shift, never during lunch or side missions) so your manager can
@@ -361,34 +374,6 @@ function ManagerCard() {
       >
         Open manager console →
       </a>
-    </section>
-  );
-}
-
-function ModeratorHome() {
-  return (
-    <section className="card-surgical p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
-        Moderator
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
-        You&apos;re running the floor. Check-ins happen on worker accounts — head to the console
-        to provision, assign, and run payroll.
-      </p>
-      <div className="mt-4 flex flex-col gap-2">
-        <a
-          href="/moderator"
-          className="btn-surgical btn-surgical-mint flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold"
-        >
-          Open moderator console →
-        </a>
-        <a
-          href="/dashboard"
-          className="btn-surgical flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium"
-        >
-          Logging dashboard →
-        </a>
-      </div>
     </section>
   );
 }

@@ -90,4 +90,4 @@ console.log("one-time password (shown once, then rotate as forced on first login
 console.log("");
 console.log("    " + oneTimePassword);
 console.log("");
-console.log("sign in at /login with email + password. The app will require an immediate password change.");
+console.log("sign in at / with email + password. The app will require an immediate password change.");
