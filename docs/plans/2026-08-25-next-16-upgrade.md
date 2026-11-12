@@ -82,7 +82,7 @@ flowchart LR
 
 - New workflow `.github/workflows/canary.yml` deploys to a Vercel preview environment when the PR label `next16-canary` is set, gated on all 4 gates + build artifact test passing.
 - Preview URL is posted as a PR comment by the workflow.
-- Manual smoke: the canary URL loads `/`, `/moderator`, `/demo`; the SW registers; the offline outbox still works.
+- Manual smoke: the canary URL loads `/` and `/moderator`; the SW registers; the offline outbox still works.
 
 ### Milestone 5 — TRD R30 closes D2 (Day 3, Wed PM, ~30 min)
 
@@ -131,7 +131,7 @@ PR opened with label "next16-canary"
   -> runs all 5 gates
   -> vercel deploy --target preview (via VERCEL_TOKEN secret)
   -> posts preview URL as PR comment
-  -> manual smoke (owner opens URL, walks /, /moderator, /demo)
+  -> manual smoke (owner opens URL, walks /, /moderator)
   -> PR merged or closed
 ```
 
@@ -472,7 +472,7 @@ echo "Build time: $(($(cat /tmp/build-end.txt) - $(cat /tmp/build-start.txt)))s"
 
 ### M4.2 — Manual canary smoke
 
-**Step:** Open the canary preview URL in a browser. Walk `/`, `/moderator`, `/demo`. Verify:
+**Step:** Open the canary preview URL in a browser. Walk `/` and `/moderator`. Verify:
 - The page loads (no 500s, no hydration errors)
 - The SW registers (DevTools → Application → Service Workers)
 - The offline outbox still works (DevTools → Network → Offline → click CHECK IN → see the queued badge)
@@ -507,7 +507,7 @@ echo "Build time: $(($(cat /tmp/build-end.txt) - $(cat /tmp/build-start.txt)))s"
 If the Next 16 upgrade ships a regression that the canary didn't catch, this is the 30-second rollback path.
 
 ## Symptoms (any one of these is enough to consider rolling back)
-- Vercel prod returns 500s on `/`, `/moderator`, or `/demo`
+- Vercel prod returns 500s on `/` or `/moderator`
 - The SW fails to register (visible in DevTools)
 - The e2e goes red on `main`
 - A user reports a regression in the issue tracker

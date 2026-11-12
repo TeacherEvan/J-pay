@@ -21,7 +21,7 @@
 | 0.1 | Backup, then apply `0002`→`0012` **in numeric order** (now includes `0008` registry refresh, `0009` organisations, `0010` open-leg unique, `0011` system_events, `0012` manager_sites archive) | `\d public.organisations` exists; `select jobname from cron.job;` → 4 rows; parity gate green |
 | 0.2 | After 0.1: `GET /api/health/db` on the deploy → `{ ok: true }` listing all probed tables | 200 with all-present; 503 names missing ones |
 | 0.3 | Verify the **incremental** path on a throwaway copy of the prod dump (or staging): apply only `0008`–`0012` on a DB that already has `0001`–`0007`; confirm no PGRST 404 on `organisations`/`systemEvents` lookups | smoke `scripts/smoke-supabase.mjs` green; id lookups succeed |
-| 0.4 | Set/confirm env: `CRON_SECRET`, `SMOKE_TEST_KEY`, `DEMO_MODE` decision, VAPID | prod responses match policy (403/200 as intended) |
+| 0.4 | Set/confirm env: `CRON_SECRET`, `SMOKE_TEST_KEY`, VAPID | prod responses match policy (403/200 as intended) |
 | 0.5 | **Privacy policy (launch gate):** `/privacy` still serves the DRAFT placeholder linked from the GPS consent gate. Publish counsel-reviewed policy (POPIA/GDPR) before any external rollout | page no longer says DRAFT |
 
 ## 1. Phase 1 — Correctness residuals (backend, one commit series)
@@ -43,7 +43,7 @@
 
 8. Apply 0.1–0.5 on staging/prod; run one full role round-trip each (employee punch → re-derived shift; moderator console loads org tree; manager map shows crew; revoke consent in-app → pin clears + leg flagged `consent_revoked`).
 9. **Re-audit** (`@surgical-audit`) at close: expected `S_health ≥ 85`, `N_P1 = 0`. Update `plans/2026-11-10-implementation-plan.md` score note and mark residual items done or explicitly deferred.
-10. **Explicitly deferred (do not silently expand scope):** `convex/demo/index.ts` demo-module size (env-gated; revisit if demo becomes public); root PNG housekeeping C6 remainder; `.agents` vs `.claude` reconciliation (owner call).
+10. **Explicitly deferred (do not silently expand scope):** root PNG housekeeping C6 remainder; `.agents` vs `.claude` reconciliation (owner call).
 
 ## 4. Do-not-touch
 
@@ -68,6 +68,6 @@ Applied to production Supabase project `dlwlbvhyrvyftpjruqdq` (ref; name "J-pay"
 
 Post-apply verification: `organisations`/`systemEvents`/`jpay_rate_limits` present with RLS on; backfill created 1 default org linked to 6 users / 3 sites; `logs_user_idem_uniq` + `travel_segments_one_open` indexes present; `jpay_rate_limit_hit` self-test first-call `false`, second-call `true` (limit=1) and test bucket deleted; registry view reports 48 rows.
 
-**Deploy:** Vercel Git integration is live — pushes to `main` deploy automatically. `37ac344` deployed 2026-11-11T05:44:29Z, state `success` (GitHub deployment record `7702790027`, environment Production). Live verification on `https://j-pay.vercel.app`: `/api/health/db` → `{"ok":true,"tables":16}`; anonymous POST `users_queries:me` → `{"result":null,"tables":[],"reads":[]}` (safe null, no data); anonymous POST `logs:createLogAs` → `UNKNOWN_FUNCTION` (deny-by-default holds); `GET /api/backend/call` → 403 (smoke-key fail-closed); unknown function → 404.
+**Deploy:** Vercel Git integration is live — pushes to `main` deploy automatically. `37ac344` deployed 2026-11-11T05:44:29Z, state `success` (GitHub deployment record `7702790027`, environment Production). Live verification on `https://j-pay.vercel.app`: `/api/health/db` → `{"ok":true,"tables":16}`; anonymous POST `users_queries:me` → `{"result":null,"tables":[],"reads":[]}` (safe null, no data); anonymous POST to an internal ref → `UNKNOWN_FUNCTION` (deny-by-default holds); `GET /api/backend/call` → 403 (smoke-key fail-closed); unknown function → 404.
 
-**Still open:** (1) `0003` + CRON_SECRET + cron dry-run; (2) `/privacy` counsel policy; (3) `npm ci` on a networked machine; (4) authed post-deploy round-trip (punch → re-derive; consent revoke → `consent_revoked`) needs moderator/employee credentials; (5) deliberate `DEMO_MODE` audit of the production env.
+**Still open:** (1) `0003` + CRON_SECRET + cron dry-run; (2) `/privacy` counsel policy; (3) `npm ci` on a networked machine; (4) authed post-deploy round-trip (punch → re-derive; consent revoke → `consent_revoked`) needs moderator/employee credentials; (5) a deliberate audit of the production env for leftover preview configuration.

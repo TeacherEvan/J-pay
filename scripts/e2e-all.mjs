@@ -1,15 +1,14 @@
 // scripts/e2e-all.mjs
 // Comprehensive end-to-end walkthrough: every user-facing feature + display alignment.
 // Puppeteer (puppeteer-core 25.8.0) — does NOT add Playwright. Mirrors the style of
-// scripts/e2e-full.mjs, scripts/e2e-demo.mjs, scripts/e2e-demo-rich.mjs.
+// scripts/e2e-full.mjs.
 //
 // Run: JPAY_EMAIL=... JPAY_PASSWORD=... node scripts/e2e-all.mjs
 // Requires: dev server on :3000 (JPAY_BASE_URL) + headless Chrome on CDP :9300
 //
-// Scope: this script unifies the three existing e2e legs (employee check-in, moderator
-// walkthrough, demo console) into one file and adds:
+// Scope: this script unifies the employee check-in and moderator walkthrough
+// legs into one file and adds:
 //   - display-alignment assertions (getBoundingClientRect, getComputedStyle)
-//   - content checks on the exported CSV (not just "file exists and is non-empty")
 //   - explicit Weak-GPS and denied-permission branches
 //   - URL assertions (the existing scripts only check body text)
 //
@@ -21,12 +20,11 @@
 //
 // Each section is one testStep(s) call. Test order matches the audit's
 // "what the new e2e test should add" recommendation: moderator first, then the
-// provisioned employee, then /demo. Display-alignment checks are interleaved at
+// provisioned employee. Display-alignment checks are interleaved at
 // the natural pause points (after the page loads, before the first interaction).
 
 import puppeteer from "puppeteer-core";
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 
 const BASE = process.env.JPAY_BASE_URL ?? "http://localhost:3000";
 const MOD_EMAIL = process.env.JPAY_EMAIL;
@@ -59,12 +57,6 @@ const clickByText = (label) =>
     if (el && !el.disabled) { el.click(); return true; }
     return false;
   }, label);
-const clickByTestId = (id) =>
-  p.evaluate((sel) => {
-    const el = document.querySelector(`[data-testid="${sel}"]`);
-    if (el && !el.disabled) { el.click(); return true; }
-    return false;
-  }, id);
 const waitForText = async (regex, timeoutMs = 15_000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
@@ -73,15 +65,6 @@ const waitForText = async (regex, timeoutMs = 15_000) => {
     await sleep(500);
   }
   return null;
-};
-const waitForTestId = async (id, timeoutMs = 15_000) => {
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeoutMs) {
-    const found = await p.evaluate((sel) => !!document.querySelector(`[data-testid="${sel}"]`), id);
-    if (found) return true;
-    await sleep(500);
-  }
-  return false;
 };
 
 // Geometry: assert a bounding rect is within a viewport region.
@@ -129,54 +112,7 @@ try {
   if (!/J-Pay/.test(t)) throw new Error("J-Pay did not serve");
 
   // =========================================================================
-  // SECTION 1: ANONYMOUS DEMO PREVIEW (employee panel, mobile)
-  // =========================================================================
-  let demoClicked = false;
-  for (let i = 0; i < 20 && !demoClicked; i++) { await sleep(1500); demoClicked = await clickByText("Enter demo preview"); }
-  await log("demo preview selectable at login", demoClicked);
-
-  for (let i = 0; i < 25; i++) { await sleep(2000); t = await text(); if (/CHECK IN|Playing as/i.test(t)) break; }
-  await log("demo reviewer lands on employee panel (or /demo)", /CHECK IN/.test(t));
-  await log("demo role badge = employee", /EMPLOYEE/i.test(t));
-  await log("demo reviewer has assigned sites", !/No site assigned/.test(t));
-  await log("demo reviewer: forced password skipped", !/Set your own password/.test(t));
-
-  // Display alignment: mobile (375×812) — CHECK IN button is the primary action.
-  await p.setViewport({ width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  const checkinRect = await rectOf("button.h-16");
-  if (checkinRect) {
-    await log("CHECK IN button is h-16 (>= 64px tall)", checkinRect.h >= 64, `h=${checkinRect.h.toFixed(0)}px`);
-    await log("CHECK IN button is above the fold", checkinRect.bottom <= 812, `bottom=${checkinRect.bottom.toFixed(0)}px (viewport 812px)`);
-    await log("CHECK IN button is inside the content column", checkinRect.left >= 0 && checkinRect.right <= 375, `x=[${checkinRect.left.toFixed(0)},${checkinRect.right.toFixed(0)}]`);
-  } else {
-    await log("CHECK IN button found", false, "no button.h-16 selector");
-  }
-
-  // Status pills: should be a radiogroup.
-  const radiogroupExists = await p.evaluate(() => !!document.querySelector('[role="radiogroup"][aria-label="Check-in status"]'));
-  await log("status pill row is a radiogroup (a11y F1)", radiogroupExists);
-  const pillCount = await p.evaluate(() => document.querySelectorAll('[role="radiogroup"][aria-label="Check-in status"] [role="radio"]').length);
-  await log("status pill row has 7 radios", pillCount === 7, `count=${pillCount}`);
-
-  // Demo check-in happy path.
-  let logged = false;
-  for (let i = 0; i < 12; i++) {
-    await sleep(2000);
-    t = await text();
-    if (/Logged \w+|Weak GPS|denied/i.test(t)) { logged = true; break; }
-  }
-  await log("demo check-in writes a real log (or surfaces GPS state)", logged, t.match(/Logged \w+|Weak GPS[^\n]*|denied[^\n]*/)?.[0] ?? "");
-
-  // Sign out to land back on / for the moderator flow.
-  let signedOut = false;
-  for (let i = 0; i < 10 && !signedOut; i++) {
-    await clickByText("Sign out").catch(() => {});
-    for (let j = 0; j < 8; j++) { await sleep(1500); t = await text(); if (/Sign in/.test(t)) { signedOut = true; break; } }
-  }
-  await log("demo sign out returns to login", signedOut);
-
-  // =========================================================================
-  // SECTION 2: MODERATOR SIGN-IN (desktop)
+  // SECTION 1: MODERATOR SIGN-IN (desktop)
   // =========================================================================
   await p.setViewport({ width: 1280, height: 800 });
   // Find email input, fill, click sign-in.
@@ -210,7 +146,7 @@ try {
   await sleep(2000);
 
   // =========================================================================
-  // SECTION 3: MODERATOR CONSOLE (desktop, 1280×800)
+  // SECTION 2: MODERATOR CONSOLE (desktop, 1280×800)
   // =========================================================================
   await p.setViewport({ width: 1280, height: 800 });
   await p.goto(BASE + "/moderator", { waitUntil: "networkidle2" });
@@ -344,12 +280,12 @@ try {
   await log("employee assigned to JNB Central Depot", /Assigned|already assigned/i.test(await text()));
 
   // =========================================================================
-  // SECTION 4: EMPLOYEE WALKTHROUGH (sign out, sign in as the new employee)
+  // SECTION 3: EMPLOYEE WALKTHROUGH (sign out, sign in as the new employee)
   // =========================================================================
   // The provision flow clears the form, so empEmail is empty in this script's
   // default path. If the dev wires window.__JPAY_LAST_EMPLOYEE_EMAIL = email
-  // into the page, we use it; otherwise we skip the fresh-employee sign-in
-  // and rely on the demo path for the rest of the script.
+  // into the page, we use it; otherwise the fresh-employee sign-in leg is
+  // skipped (the script still ends with the screenshot evidence).
   if (empEmail) {
     await clickByText("employee view"); await sleep(2000);
     await clickByText("Sign out").catch(() => {}); await sleep(3000);
@@ -402,118 +338,7 @@ try {
   }
 
   // =========================================================================
-  // SECTION 5: /demo CONSOLE (desktop, 1280×800)
-  // =========================================================================
-  await p.setViewport({ width: 1280, height: 800 });
-  // Sign out if a moderator session is active, so the demo preview button is visible.
-  await p.goto(BASE + "/", { waitUntil: "networkidle2" });
-  await clickByText("Sign out").catch(() => {});
-  await sleep(2000);
-  await p.goto(BASE + "/", { waitUntil: "networkidle2" });
-  await sleep(2000);
-  await clickByText("Enter demo preview").catch(() => {});
-  for (let i = 0; i < 30; i++) { await sleep(2000); if (p.url().includes("/demo")) break; }
-  await log("/demo route reachable from demo preview click", p.url().includes("/demo"), p.url());
-
-  // Persona header.
-  await waitForTestId("demo-persona-header", 30_000);
-  await log("persona header rendered", true);
-  const personaRect = await rectOf('[data-testid="demo-persona-header"]');
-  if (personaRect) {
-    await log("persona header is at the top of the page (top < 200px)", personaRect.top < 200, `top=${personaRect.top.toFixed(0)}px`);
-    await log("persona header is desktop-wide (>= 400px)", personaRect.w >= 400, `w=${personaRect.w.toFixed(0)}px`);
-  }
-
-  // KPI banner.
-  await waitForTestId("kpi-card", 15_000);
-  const kpiCardCount = await p.evaluate(() => document.querySelectorAll('[data-testid="kpi-card"]').length);
-  await log("/demo KPI banner has >= 4 cards", kpiCardCount >= 4, `count=${kpiCardCount}`);
-
-  // Audit log: >= 5 rows.
-  await waitForTestId("audit-log-row", 15_000);
-  const auditCount = await p.evaluate(() => document.querySelectorAll('[data-testid="audit-log-row"]').length);
-  await log("/demo audit log has >= 5 rows", auditCount >= 5, `count=${auditCount}`);
-
-  // Payroll: >= 5 day rows.
-  await waitForTestId("payroll-day-row", 15_000);
-  const payrollCount = await p.evaluate(() => document.querySelectorAll('[data-testid="payroll-day-row"]').length);
-  await log("/demo payroll has >= 5 day rows", payrollCount >= 5, `count=${payrollCount}`);
-  const payrollTotalRect = await rectOf('[data-testid="payroll-total-row"]');
-  if (payrollTotalRect) {
-    const dayRowRect = await rectOf('[data-testid="payroll-day-row"]');
-    if (dayRowRect) {
-      await log("payroll total row is below the day rows (vertically)", payrollTotalRect.top > dayRowRect.top, `total.top=${payrollTotalRect.top.toFixed(0)} day.top=${dayRowRect.top.toFixed(0)}`);
-    }
-  }
-
-  // Needs review: >= 1 row.
-  await waitForTestId("needs-review-row", 15_000);
-  const reviewCount = await p.evaluate(() => document.querySelectorAll('[data-testid="needs-review-row"]').length);
-  await log("/demo needs-review has >= 1 row", reviewCount >= 1, `count=${reviewCount}`);
-
-  // Check-in as persona.
-  await waitForTestId("demo-checkin-button", 15_000);
-  const checkinBtn = await p.$('[data-testid="demo-checkin-button"]');
-  if (checkinBtn) {
-    await checkinBtn.click();
-    for (let i = 0; i < 10; i++) { await sleep(1500); t = await p.evaluate(() => document.querySelector('[data-testid="demo-checkin-message"]')?.textContent ?? ""); if (/Logged|denied|Weak|error/i.test(t)) break; }
-    await log("/demo check-in message rendered", /Logged|denied|Weak|error/i.test(t), t);
-  }
-
-  // CSV export.
-  await waitForTestId("demo-export", 10_000);
-  const beforeFiles = new Set(readdirSync(DOWNLOAD_DIR));
-  await clickByText("Download CSV");
-  let csvPath = null;
-  for (let i = 0; i < 20; i++) {
-    await sleep(1000);
-    const files = readdirSync(DOWNLOAD_DIR);
-    const fresh = files.find((f) => /^jpay-logs-.*\.csv$/.test(f) && !beforeFiles.has(f));
-    if (fresh && statSync(resolve(DOWNLOAD_DIR, fresh)).size > 0) { csvPath = resolve(DOWNLOAD_DIR, fresh); break; }
-  }
-  if (csvPath) {
-    const csv = readFileSync(csvPath, "utf8");
-    const lines = csv.split("\n").filter(Boolean);
-    await log("CSV downloaded and non-empty", lines.length >= 2, `${lines.length} lines, size=${statSync(csvPath).size}B`);
-    // Content checks.
-    const header = lines[0] ?? "";
-    const expectedCols = ["client_time_utc", "server_time_utc", "status", "lat", "lng", "accuracy_m", "geofence", "travel_flag", "skew_s"];
-    const hasAllCols = expectedCols.every((c) => header.includes(c));
-    await log("CSV header has all 9 expected columns", hasAllCols, header);
-    // Formula-injection guard: any cell starting with =/+/-/@ gets ' prefix.
-    const formulaCell = lines.slice(1).find((line) => /[",][=+\-@]/.test(line));
-    if (formulaCell) {
-      await log("CSV formula-injection guard present", /[",]'[=+\-@]/.test(formulaCell), formulaCell.slice(0, 80));
-    } else {
-      await log("CSV has no formula cells (clean)", true);
-    }
-  } else {
-    await log("CSV download landed on disk", false, `download dir=${DOWNLOAD_DIR}`);
-  }
-
-  // Persona switcher.
-  await p.goto(BASE + "/demo/persona", { waitUntil: "networkidle2" });
-  await waitForText(/Pick a persona|Switch persona/i, 10_000);
-  const playButtons = await p.evaluate(() => document.querySelectorAll('[data-testid="persona-play-button"]').length);
-  await log("persona switcher has 5 personas", playButtons === 5, `count=${playButtons}`);
-  if (playButtons > 0) {
-    await p.evaluate(() => {
-      const btns = document.querySelectorAll('[data-testid="persona-play-button"]');
-      const siphoRow = [...btns].find((b) => {
-        const li = b.closest("li") ?? b.closest("div");
-        return (li?.textContent ?? "").includes("Sipho");
-      });
-      siphoRow?.click();
-    });
-    for (let i = 0; i < 20; i++) { await sleep(1500); if (p.url().endsWith("/demo") || p.url().endsWith("/demo/")) break; }
-    await log("persona switch redirects to /demo", p.url().includes("/demo"), p.url());
-    await waitForTestId("demo-persona-name", 10_000);
-    const personaName = await p.evaluate(() => document.querySelector('[data-testid="demo-persona-name"]')?.textContent ?? "");
-    await log("persona name is Sipho after switch", /Sipho/i.test(personaName), personaName);
-  }
-
-  // =========================================================================
-  // SECTION 6: SCREENSHOTS + CLEANUP
+  // SECTION 4: SCREENSHOTS + CLEANUP
   // =========================================================================
   await p.screenshot({ path: `${SCREENSHOT_DIR}/e2e-all-final.png`, fullPage: true });
   await log("final screenshot saved", true, `${SCREENSHOT_DIR}/e2e-all-final.png`);

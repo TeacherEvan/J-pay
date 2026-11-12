@@ -6,5 +6,5 @@ await p.goto("http://localhost:3000/~offline", { waitUntil: "networkidle2" });
 await p.screenshot({ path: "user-review/09-offline.png" });
 await p.goto("http://localhost:3000/moderator", { waitUntil: "networkidle2" });
 await new Promise(r => setTimeout(r, 3500));
-await p.screenshot({ path: "user-review/10-demo-seeded.png" });
+await p.screenshot({ path: "user-review/10-moderator-console.png" });
 await b.disconnect(); process.exit(0);

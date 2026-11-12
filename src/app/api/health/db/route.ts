@@ -33,7 +33,6 @@ const REQUIRED_TABLES = [
   "pushSubscriptions",
   "purgeAudit",
   "reviewResolutions",
-  "demoSessions",
   "managerSites",
   "travelSegments",
   "shiftOverrides",

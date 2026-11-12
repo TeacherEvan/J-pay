@@ -42,11 +42,6 @@ export class AuthPage {
     await this.page.getByTestId('auth-submit-signIn').click();
   }
 
-  /** Demo preview (no account) — gated on demo.status query. */
-  async enterDemoPreview() {
-    await this.page.getByTestId('demo-preview-cta').click();
-  }
-
   async flipToSignUp() {
     await this.page
       .getByRole('button', { name: /First time\? Activate/i })

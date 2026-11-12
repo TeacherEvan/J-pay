@@ -1,7 +1,6 @@
 import { internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
-import { maybeCurrentUserId } from "./access";
-import { isDemoUser } from "./demo/scope";
+import { maybeCurrentUserId, isQaAccount } from "./access";
 
 export const me = query({
   args: {},
@@ -18,14 +17,14 @@ export const listEmployees = query({
   args: {},
   handler: async (ctx) => {
     const viewerId = await maybeCurrentUserId(ctx);
-    const isDemo = process.env.DEMO_MODE === "1";
-    // Security/Zero-Trust: Anonymous callers cannot enumerate employees in production.
-    if (!viewerId && !isDemo) {
+    // Security/Zero-Trust: only a moderator may enumerate the workforce.
+    if (!viewerId) {
       return [];
     }
-
-    const viewer = viewerId ? await ctx.db.get(viewerId) : null;
-    const isModerator = viewer?.role === "moderator";
+    const viewer = await ctx.db.get(viewerId);
+    if (viewer?.role !== "moderator") {
+      return [];
+    }
 
     const rows = await ctx.db
       .query("users")
@@ -39,15 +38,9 @@ export const listEmployees = query({
       .collect();
     rows.push(...managerRows);
 
+    // Throwaway QA accounts are real rows in `users` — never surface them.
     return rows
-      .filter((u) => {
-        // Unauthenticated or non-moderator caller: in demo mode, only surface demo personas
-        if (!isModerator) {
-          return isDemo && isDemoUser(u);
-        }
-        // Moderator viewer: in production, hide demo personas; in demo mode, show all
-        return isDemo ? true : !isDemoUser(u);
-      })
+      .filter((u) => !isQaAccount(u))
       .map((u) => ({
         _id: u._id,
         name: u.name,

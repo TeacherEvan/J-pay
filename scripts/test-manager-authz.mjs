@@ -3,8 +3,8 @@
  * Stubs the DB in-memory and exercises the real invoked handlers through
  * src/lib/backend/runtime.ts — same pattern as test-invoke-gate.mjs.
  * Covers the scope guarantees the UI relies on: managers see only crews on
- * their managed sites (site-scoped auto-crew), demo personas never surface,
- * non-manager viewers get nothing, the override chain re-derives from logs,
+ * their managed sites (site-scoped auto-crew), non-manager viewers get
+ * nothing, the override chain re-derives from logs,
  * and sealed (payroll-finalized) shifts refuse end-time overrides.
  */
 import assert from "node:assert/strict";
@@ -27,10 +27,9 @@ function fixture() {
   s.users.push(
     { _id: "mgr-1", _creationTime: 11, role: "manager", email: "mgr1@x", name: "Mana G", isActive: true },
     { _id: "mgr-2", _creationTime: 12, role: "manager", email: "mgr2@x", name: "Mana H", isActive: true },
-    { _id: "mgr-demo", _creationTime: 13, role: "manager", email: "persona.demo@jpay.local", name: "Persona Mgr", isActive: true },
+    { _id: "mgr-3", _creationTime: 13, role: "manager", email: "mgr3@x", name: "Mana I", isActive: true },
     { _id: "emp-1", _creationTime: 14, role: "employee", email: "e1@x", name: "Evan", isActive: true },
     { _id: "emp-2", _creationTime: 15, role: "employee", email: "e2@x", name: "Grace", isActive: true },
-    { _id: "demo-1", _creationTime: 16, role: "employee", email: "persona.demo@jpay.local", name: "Persona", isActive: true },
   );
   s.sites.push(
     { _id: "site-a", _creationTime: 20, name: "Alpha", latitude: -26.0, longitude: 28.0, geofenceRadiusMeters: 150, timezone: "Africa/Johannesburg", createdBy: "mod-1" },
@@ -41,7 +40,6 @@ function fixture() {
     { _id: "us-1", _creationTime: 30, userId: "emp-1", siteId: "site-a" },
     { _id: "us-2", _creationTime: 31, userId: "emp-1", siteId: "site-b" },
     { _id: "us-3", _creationTime: 32, userId: "emp-2", siteId: "site-b" },
-    { _id: "us-4", _creationTime: 33, userId: "demo-1", siteId: "site-a" },
   );
   s.managerSites = [
     { _id: "ms-1", _creationTime: 35, managerId: "mgr-1", siteId: "site-a" },
@@ -50,12 +48,10 @@ function fixture() {
   s.shifts.push(
     { _id: "shift-e1", _creationTime: 40, userId: "emp-1", startedAt: NOW - 3 * H, needsReview: false },
     { _id: "shift-e2", _creationTime: 41, userId: "emp-2", startedAt: NOW - 5 * H, needsReview: false },
-    { _id: "shift-demo", _creationTime: 42, userId: "demo-1", startedAt: NOW - 2 * H, needsReview: false },
   );
   s.logs.push(
     { _id: "log-1", _creationTime: 50, userId: "emp-1", siteId: "site-a", clientReportedTime: NOW - 3 * H, clockSkewMs: 0, status: "arrived", latitude: -26.0001, longitude: 28.0001, accuracyMeters: 10, isWithinGeofence: true, deviceMetadata: "x", idempotencyKey: "l1" },
     { _id: "log-2", _creationTime: 51, userId: "emp-2", siteId: "site-b", clientReportedTime: NOW - 5 * H, clockSkewMs: 0, status: "arrived", latitude: -26.1001, longitude: 28.1001, accuracyMeters: 10, isWithinGeofence: true, deviceMetadata: "x", idempotencyKey: "l2" },
-    { _id: "log-3", _creationTime: 52, userId: "demo-1", siteId: "site-a", clientReportedTime: NOW - 2 * H, clockSkewMs: 0, status: "arrived", latitude: -26.0002, longitude: 28.0002, accuracyMeters: 10, isWithinGeofence: true, deviceMetadata: "x", idempotencyKey: "l3" },
   );
   s.travelSegments = [
     { _id: "leg-1", _creationTime: 55, userId: "emp-1", fromSiteId: "site-a", departedAt: NOW - 1800e3, distanceMeters: 4200, pathSamples: [{ lat: -26.05, lng: 28.05, t: NOW - 600e3, s: 12 }], needsReview: false, lastFixKey: "k1" },
@@ -78,7 +74,7 @@ const run = async (label, fn) => {
 
 const call = (module, fn, args, identity) => invoke({ module, fn }, args, identity, false);
 
-await run("manager:managedActiveShifts scoped — mgr-1 sees only site-a crew (emp-1, travelling), demo excluded", async () => {
+await run("manager:managedActiveShifts scoped — mgr-1 sees only site-a crew (emp-1, travelling)", async () => {
   const rows = await call("manager", "managedActiveShifts", {}, asUser("mgr-1"));
   assert.equal(rows.length, 1);
   assert.equal(rows[0].userId, "emp-1");
@@ -92,18 +88,15 @@ await run("manager:managedActiveShifts scoped — mgr-2 sees site-b crew {emp-1,
   assert.deepEqual(rows.map((r) => r.userId).sort(), ["emp-1", "emp-2"]);
 });
 
-await run("manager queries refuse anonymous / employee / moderator / demo viewers", async () => {
-  for (const mod of ["manager", "manager", "manager", "manager"]) {
-    void mod;
-  }
+await run("manager queries refuse anonymous / employee / moderator / site-less manager viewers", async () => {
   assert.deepEqual(await call("manager", "managedActiveShifts", {}, null), []);
   assert.deepEqual(await call("manager", "managedActiveShifts", {}, asUser("emp-1")), []);
   assert.deepEqual(await call("manager", "managedActiveShifts", {}, asUser("mod-1")), []);
-  assert.deepEqual(await call("manager", "managedActiveShifts", {}, asUser("mgr-demo")), []);
-  assert.deepEqual(await call("manager", "myCrew", {}, asUser("mgr-demo")), []);
+  assert.deepEqual(await call("manager", "managedActiveShifts", {}, asUser("mgr-3")), []);
+  assert.deepEqual(await call("manager", "myCrew", {}, asUser("mgr-3")), []);
 });
 
-await run("manager:myCrew — mgr-1 roster + onShift badge; demo personas never appear", async () => {
+await run("manager:myCrew — mgr-1 roster + onShift badge", async () => {
   const crew = await call("manager", "myCrew", {}, asUser("mgr-1"));
   assert.deepEqual(crew.map((c) => c._id), ["emp-1"]);
   assert.ok(crew[0].onShift);
@@ -212,7 +205,7 @@ await run("travel:setConsent — grant and revoke roundtrip on the users row", a
   assert.equal(__stub.store.users.find((u) => u._id === "emp-1").travelConsentAt, undefined);
 });
 
-await run("moderator:overridableShifts — demo personas excluded, sealed excluded", async () => {
+await run("moderator:overridableShifts — sealed excluded", async () => {
   __stub.store.shifts.find((s) => s.userId === "emp-1").sealed = true;
   const rows = await call("moderator", "overridableShifts", {}, asUser("mod-1"));
   assert.deepEqual(rows.map((r) => r.userId).sort(), ["emp-2"]);

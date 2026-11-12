@@ -3,8 +3,8 @@
 // Shared e2e helpers for the J-Pay walkthrough scripts. Pure ESM, no TypeScript,
 // no external runtime deps beyond puppeteer-core (already in devDependencies).
 //
-// Why this exists: scripts/e2e-full.mjs, scripts/e2e-demo.mjs,
-// scripts/e2e-demo-rich.mjs (and the new e2e legs under development) all open a
+// Why this exists: scripts/e2e-full.mjs and the other e2e legs under
+// development all open a
 // page, wire CDP, set geolocation, run a series of text/testid/URL waits, click
 // buttons, and accumulate a pass/fail log. Before this file each script
 // reinvented the same boilerplate; the third copy diverged (different ignore-

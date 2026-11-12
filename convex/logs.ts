@@ -5,7 +5,6 @@ import { requireEmployee, maybeCurrentUserId } from "./access";
 import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { internal } from "./_generated/api";
-import { isDemoUser } from "./demo/scope";
 import { serverClockSkewMs } from "../src/lib/shift-engine";
 import { purgeExpiredTravelPathsInternal } from "./travel";
 
@@ -167,10 +166,16 @@ export const listMine = query({
   },
 });
 
+/**
+ * Moderator attestation of a check-in (TRD §5.1 weak-GPS override): a
+ * moderator records a log on behalf of an employee whose device fix was too
+ * weak to trust (basement/indoor sites). Internal-only — the browser can
+ * never call it, and the caller must be an active moderator.
+ */
 export const createLogAs = internalMutation({
   args: {
-    reviewerId: v.id("users"),
-    personaUserId: v.id("users"),
+    moderatorId: v.id("users"),
+    employeeUserId: v.id("users"),
     siteId: v.id("sites"),
     clientReportedTime: v.number(),
     status: v.union(
@@ -188,7 +193,6 @@ export const createLogAs = internalMutation({
     sideMissionDurationMinutes: v.optional(
       v.union(v.literal(15), v.literal(30), v.literal(45), v.literal(60), v.literal(120))
     ),
-    deviceToken: v.string(),
     idempotencyKey: v.string(),
     deviceMetadata: v.string(),
   },
@@ -197,25 +201,24 @@ export const createLogAs = internalMutation({
       throw new ConvexError("WEAK_GPS_SIGNAL");
     }
 
-    const persona = await ctx.db.get(args.personaUserId);
-    if (!persona || persona.archivedAt !== undefined || !persona.isActive) {
-      throw new ConvexError("PERSONA_NOT_FOUND");
-    }
-    // SECURITY (2026-09-01): defence-in-depth — refuse to write a moderator-
-    // overridden log against a non-demo (real) user. The reviewer may already
-    // be required to be anonymous, but the persona target must also be demo.
-    if (!isDemoUser(persona)) {
-      throw new ConvexError("FORBIDDEN_DEMO_BOUNDARY");
-    }
-    const reviewer = await ctx.db.get(args.reviewerId);
-    if (!reviewer || reviewer.isAnonymous !== true) {
+    const moderator = await ctx.db.get(args.moderatorId);
+    if (
+      !moderator ||
+      moderator.role !== "moderator" ||
+      !moderator.isActive ||
+      moderator.archivedAt !== undefined
+    ) {
       throw new ConvexError("FORBIDDEN");
+    }
+    const employee = await ctx.db.get(args.employeeUserId);
+    if (!employee || employee.archivedAt !== undefined || !employee.isActive) {
+      throw new ConvexError("EMPLOYEE_NOT_FOUND");
     }
 
     const duplicate = await ctx.db
       .query("logs")
       .withIndex("by_user_idem", (q) =>
-        q.eq("userId", args.personaUserId).eq("idempotencyKey", args.idempotencyKey)
+        q.eq("userId", args.employeeUserId).eq("idempotencyKey", args.idempotencyKey)
       )
       .first();
     if (duplicate) return { logId: duplicate._id, duplicate: true as const };
@@ -224,7 +227,7 @@ export const createLogAs = internalMutation({
     if (!site) throw new ConvexError("SITE_NOT_FOUND");
     const assignments = await ctx.db
       .query("userSites")
-      .withIndex("by_user", (q) => q.eq("userId", args.personaUserId))
+      .withIndex("by_user", (q) => q.eq("userId", args.employeeUserId))
       .collect();
     if (!assignments.some((a) => a.siteId === args.siteId)) {
       throw new ConvexError("SITE_NOT_ASSIGNED");
@@ -239,7 +242,7 @@ export const createLogAs = internalMutation({
     const allPrior = await ctx.db
       .query("logs")
       .withIndex("by_user_time", (q) =>
-        q.eq("userId", args.personaUserId).gte("_creationTime", Date.now() - TRAVEL_WINDOW_MS)
+        q.eq("userId", args.employeeUserId).gte("_creationTime", Date.now() - TRAVEL_WINDOW_MS)
       )
       .collect();
     const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
@@ -255,7 +258,7 @@ export const createLogAs = internalMutation({
     }
 
     const logId = await ctx.db.insert("logs", {
-      userId: args.personaUserId,
+      userId: args.employeeUserId,
       siteId: args.siteId,
       clientReportedTime: args.clientReportedTime,
       clockSkewMs,
@@ -269,11 +272,10 @@ export const createLogAs = internalMutation({
       idempotencyKey: args.idempotencyKey,
       impossibleTravelFlag,
       isModeratorOverride: true,
-      createdByDemoReviewerId: args.reviewerId,
     });
 
     await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, {
-      userId: args.personaUserId,
+      userId: args.employeeUserId,
     });
 
     return { logId, duplicate: false as const };

@@ -31,7 +31,6 @@ The adapter remains the load-bearing wall and is now mostly de-risked: the `isPu
 ### High-Risk File Telemetry Hotspots (this batch)
 | File Path | Eff. LOC | Est. CC / Depth | Silent Catches | Primary Vibe-Debt Signature |
 | :--- | :--- | :--- | :--- | :--- |
-| `convex/demo/index.ts` | 677 | low / 4 | 0 | God module (demo-only; acceptable if demo stays env-gated) |
 | `convex/travel.ts` | 495 | ~12 / 4 | 0 | GPS money-adjacent; now guarded but complex |
 | `src/app/check-in-card.tsx` | ~360 (post-C5) | 16 / 6 | 2 | God component, split by `596d90e`; watch residual |
 | `src/lib/backend/db.ts` | 521 | 33 / 5 | 0 | B1 heuristic window; legacy full-table path retained |
@@ -57,7 +56,7 @@ The adapter remains the load-bearing wall and is now mostly de-risked: the `isPu
 - `useQuery` deps previously fixed; unmount cleanup correct; no new leaks found in the delta. **N/A (delta).**
 
 ### Lens 6 — Security & Trust-Boundary Engineer
-- Session-bootstrap rate limit (`d3e14ab`) — in-memory per-instance bucket; on serverless this is best-effort, not a global guarantee. **[P2-2]** For real brute-force protection on the master path, back the bucket with Postgres (atomic `UPDATE … RETURNING`) or Vercel KV; document the limitation. Demo account minting still allowed when `DEMO_MODE=1` — owner must keep it off in untrusted deploys.
+- Session-bootstrap rate limit (`d3e14ab`) — in-memory per-instance bucket; on serverless this is best-effort, not a global guarantee. **[P2-2]** For real brute-force protection on the master path, back the bucket with Postgres (atomic `UPDATE … RETURNING`) or Vercel KV; document the limitation.
 - P0 gate (`isPublic !== true`) verified intact in-tree. Manager grant/revoke now audited + archived (`6460a33`, `0012`). `/api/backend/call` inventory still dev-only/smoke-key gated per prior item — unchanged.
 
 ### Lens 7 — Reliability, Fault Tolerance & Chaos Engineer
@@ -71,7 +70,7 @@ The adapter remains the load-bearing wall and is now mostly de-risked: the `isPu
 - U9 scroll fix, U10 popup-preserving refresh, U11 tri-state notifications, U12 a11y batch, U14 scoped tick — all landed and consistent with this lens. No new findings.
 
 ### Lens 10 — Cognitive Load & AI-Context Maintainability Engineer
-- God files shrinking (`moderator/page.tsx` decomposed, `check-in-card.tsx` submit paths extracted, shared `LiveCrewMap`). `convex/demo/index.ts` (677 LOC) and `src/lib/backend/db.ts` (521) remain the biggest context sinks; demo module is environment-gated and low-risk.
+- God files shrinking (`moderator/page.tsx` decomposed, `check-in-card.tsx` submit paths extracted, shared `LiveCrewMap`). `src/lib/backend/db.ts` (521) remains the biggest context sink.
 
 ## 3. Existing Test Suite Comparison & Mutation Truth Table (delta)
 - **Verification:** `npm run verify` PASS · consistency PASS · mermaid PASS.

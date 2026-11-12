@@ -21,9 +21,32 @@ for (let i = 0; i < 20; i++) {
   if (/Sign in/.test(t)) { console.log(`  ready in ${i*0.8}s`); break; }
 }
 
-console.log("=== click demo ===");
+console.log("=== sign in ===");
+const email = process.env.JPAY_EMAIL;
+const password = process.env.JPAY_PASSWORD;
+if (!email || !password) {
+  console.log("  set JPAY_EMAIL + JPAY_PASSWORD to probe the signed-in employee flow");
+  await browser.close();
+  process.exit(0);
+}
+await page.evaluate(
+  ([mail, pw]) => {
+    const set = (sel, val) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      setter.call(el, val);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    set('input[type="email"]', mail);
+    set('input[type="password"]', pw);
+  },
+  [email, password],
+);
 await page.evaluate(() => {
-  const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Enter demo preview (no account)");
+  const btn =
+    document.querySelector('[data-testid="auth-submit-signIn"]') ??
+    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Sign in");
   btn?.click();
 });
 for (let i = 0; i < 30; i++) {

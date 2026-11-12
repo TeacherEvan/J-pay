@@ -46,7 +46,6 @@ export type TableName =
   | "pushSubscriptions"
   | "purgeAudit"
   | "reviewResolutions"
-  | "demoSessions"
   | "managerSites"
   | "travelSegments"
   | "shiftOverrides";
@@ -506,12 +505,12 @@ async function signIn(provider: string, params?: SignInParams): Promise<void> {
     return;
   }
 
-  if (provider === "anonymous" || provider === "master") {
+  if (provider === "master") {
     const response = await fetch("/api/auth/session-bootstrap", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind: provider === "anonymous" ? "demo" : "master",
+        kind: "master",
         email: read("email"),
         secret: read("secret"),
       }),

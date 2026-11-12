@@ -22,7 +22,7 @@ J-Pay is a well-separated Next.js + Convex PWA: authz helpers are centralised in
 | :--- | :--- | :--- | :--- |
 | **P0 — Critical** | 1 | −18 | Out-of-geofence check-ins are recorded but never gate pay (`convex/logs.ts` + `src/lib/shift-engine.ts`) |
 | **P1 — High** | 9 | −72 | Offline replay loses hours; master-temp identity collision; permanent bootstrap key mint; stale-temp cron kills live sessions; export window on server time; public geocode proxy; silent `resolveShift`; retention backlog; unbounded master-password attempts |
-| **P2 — Medium** | 10 | −30 | Two attendance models (`punches` vs `logs`); unbounded re-derivation; paired-lunch gap; God files; non-unique email; dead `isDemoSite`; weak tz validation |
+| **P2 — Medium** | 9 | −30 | Two attendance models (`punches` vs `logs`); unbounded re-derivation; paired-lunch gap; God files; non-unique email; weak tz validation |
 | **P3 — Low** | 5 | −5 | Magic numbers, `Date.now()` inside a pure engine, README version drift, unused export |
 
 ### High-Risk File Telemetry Hotspots
@@ -30,7 +30,6 @@ J-Pay is a well-separated Next.js + Convex PWA: authz helpers are centralised in
 | File | Eff. LOC | CC / density | Silent catches | Signature |
 | :--- | :--- | :--- | :--- | :--- |
 | `src/app/check-in-card.tsx` | 830 | high | 0 | God component: timer, GPS, token, outbox, render in one file |
-| `convex/demo/index.ts` | 719 | high | 0 | God module: 20+ demo endpoints |
 | `src/app/moderator/page.tsx` | 520 | high | 0 | Console monolith |
 | `convex/users.ts` | 388 | med-high | 1 (`catch { /* ignore */ }` in sign-out) | Identity + break-glass lifecycle |
 | `src/lib/shift-engine.ts` | 224 | high | 0 | Money grammar (correctly pure) |
@@ -101,10 +100,9 @@ J-Pay is a well-separated Next.js + Convex PWA: authz helpers are centralised in
 4. **`sites.listMine` returned archived sites to moderators** — fixed.
 5. **`issueMyDeviceToken` minted tokens for any role** — fixed (employee-only).
 6. **Non-unique `email` index** in `convex/schema.ts:L33`; uniqueness is enforced only by application code and is now broken by temp rows.
-7. **`isDemoSite()` always returns `false`** (`convex/demo/scope.ts:L38-L44`) — a dead guard with a misleading name; callers use the `…WithDb` variant.
-8. **God files:** `check-in-card.tsx` (830), `demo/index.ts` (719), `moderator/page.tsx` (520). Split on the next feature touch, not now.
-9. **`createSite` timezone validation is `includes("/")`** (`convex/sites.ts:L83`) — accepts `Foo/Bar`; an invalid IANA name silently falls back to UTC in `localDayKey`.
-10. **`punches.getPunchHistory`** filters after the index and the index name (`by_user_site_time`) promises a time component it does not have (`["userId","siteId"]`).
+7. **God files:** `check-in-card.tsx` (830), `moderator/page.tsx` (520). Split on the next feature touch, not now.
+8. **`createSite` timezone validation is `includes("/")`** (`convex/sites.ts:L83`) — accepts `Foo/Bar`; an invalid IANA name silently falls back to UTC in `localDayKey`.
+9. **`punches.getPunchHistory`** filters after the index and the index name (`by_user_site_time`) promises a time component it does not have (`["userId","siteId"]`).
 
 ### P3 notes
 - `30_000` skew threshold duplicated in `convex/logs.ts:L83` instead of `jpayConfig.laborRules.skewToleranceMs`.
@@ -153,13 +151,12 @@ J-Pay is a well-separated Next.js + Convex PWA: authz helpers are centralised in
 | 10 | Archived sites hidden from moderator list | `convex/sites.ts` |
 | 11 | Device token employee-only | `convex/users.ts` |
 | 12 | Message inbox/send require an active account | `convex/messages.ts` |
-| 13 | `demo/page.tsx` shift id type (was failing `tsc`) | `src/app/demo/page.tsx` |
 
 **Gate results after the fix series**
 
 | Gate | Before | After |
 | :--- | :--- | :--- |
-| `npm run typecheck` | **1 error** (`demo/page.tsx:163`) | ✅ clean |
+| `npm run typecheck` | **1 error** (a `page.tsx` shift-id type) | ✅ clean |
 | `npm test` | 68/70 (2 build-artifact) | ✅ 73/73 after build |
 | `npm run build` | not run | ✅ compiled, 12 routes, SW bundled |
 | `scripts/check_consistency.py` | pass | ✅ pass |

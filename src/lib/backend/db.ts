@@ -59,7 +59,6 @@ const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
   pushSubscriptions: { by_user: ["userId"] },
   purgeAudit: { by_purged_at: ["purgedAt"] },
   reviewResolutions: { by_user_key: ["userId", "shiftKey"] },
-  demoSessions: { by_reviewer: ["reviewerId"], by_persona: ["personaEmail"] },
   managerSites: { by_manager: ["managerId"], by_site: ["siteId"] },
   travelSegments: { by_user: ["userId"], by_departed: ["departedAt"] },
   shiftOverrides: { by_user_key: ["userId", "shiftKey"] },

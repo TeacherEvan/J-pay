@@ -6,55 +6,15 @@
 // queue → replay lane.
 import { test, expect } from './fixtures/employee-page';
 
-// Two paths reach the live check-in card:
-//   1) Real moderator creds sign an employee in (JPAY_EMAIL + JPAY_PASSWORD).
-//   2) Anonymous "Enter demo preview" → /demo, which renders CheckInCard(variant="persona")
-//      with a "Confirm" button and a synthetic site picker — no auth required.
-// We test path 2 by default (no creds needed) and path 1 only when creds exist.
+// The live check-in card is reached by signing in with real moderator creds
+// (JPAY_EMAIL + JPAY_PASSWORD). Legs that need a session skip without them.
 const HAS_MOD_AUTH = Boolean(process.env.JPAY_EMAIL && process.env.JPAY_PASSWORD);
 
 test.describe('J-Pay punch-clock feature (TRD §5.1 / §6.1)', () => {
-  test('landing shows the J-Pay sign-in card and demo CTA (R36)', async ({ employeePage }) => {
+  test('landing shows the J-Pay sign-in card (R36)', async ({ employeePage }) => {
     await employeePage.goto();
     await expect(employeePage.page.getByRole('heading', { name: 'J-Pay', level: 1 }))
       .toBeVisible({ timeout: 15000 });
-  });
-
-  test('demo preview: check-in renders the check-in card with submit button', async ({ employeePage }) => {
-    await employeePage.goto();
-    const cta = employeePage.page.getByTestId('demo-preview-cta');
-    if (!(await cta.isVisible().catch(() => false))) {
-      test.skip(true, 'Demo preview CTA is disabled in this env.');
-      return;
-    }
-    await employeePage.enterDemoPreview();
-    await employeePage.page.waitForURL(/\/demo(\b|$)/, { timeout: 15000 });
-    // /demo renders CheckInCard(variant="persona") with a primary submit.
-    await expect(
-      employeePage.page.getByTestId('demo-checkin'),
-    ).toBeVisible({ timeout: 15000 });
-    await expect(
-      employeePage.page.getByTestId('demo-checkin-button'),
-    ).toBeVisible();
-  });
-
-  test('demo check-in: confirm produces a verdict inside|outside|travel (§6.1)', async ({ employeePage }) => {
-    await employeePage.goto();
-    const cta = employeePage.page.getByTestId('demo-preview-cta');
-    if (!(await cta.isVisible().catch(() => false))) {
-      test.skip(true, 'Demo preview CTA is disabled in this env.');
-      return;
-    }
-    await employeePage.enterDemoPreview();
-    await employeePage.page.waitForURL(/\/demo(\b|$)/, { timeout: 15000 });
-    await expect(employeePage.page.getByTestId('demo-checkin')).toBeVisible({ timeout: 15000 });
-    // Demo provider doesn't ask for permission; submit should fire immediately.
-    await employeePage.clickDemoCheckIn();
-    // Demo verdict uses the same `data-verdict` attribute as the live card.
-    const verdict = employeePage.page.locator('[data-verdict]').first();
-    await expect(verdict).toBeVisible({ timeout: 10000 });
-    const v = await verdict.getAttribute('data-verdict');
-    expect(['inside', 'outside', 'travel']).toContain(v);
   });
 
   test('live check-in: employee can submit a shift-start event (§5.1)', async ({ employeePage }) => {

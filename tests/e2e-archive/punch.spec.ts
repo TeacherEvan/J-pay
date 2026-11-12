@@ -45,8 +45,8 @@ test.describe('J-Pay /punch real implementation (TRD §5.1 / §3.1)', () => {
       test.skip(true, 'No active site assignment for the signed-in user in this env.');
       return;
     }
-    // Mock geolocation: pick coords near JNB Central Depot (the demo site
-    // seed is roughly -26.2041, 28.0473). The site query returns a
+    // Mock geolocation: pick coords near JNB Central Depot (roughly
+    // -26.2041, 28.0473). The site query returns a
     // specific point; we let the test run with a generic 18m-accuracy
     // mock and rely on the page's site-query to render a real radius.
     await punchPage.mockGeolocation({ accuracyMeters: 18, lat: -26.2041, lng: 28.0473 });

@@ -2,16 +2,14 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, hasSupabaseAdminKey } from "@/lib/supabase/admin";
-import { DEMO_SITES, DEMO_SITE_TIMEZONE } from "../../../../../convex/demo/sites";
 
 /**
  * POST /api/auth/session-bootstrap
  *
- * Supabase Auth can only sign a user in from the client, so the two
- * server-authorised entry points create an account with an ephemeral password
- * and hand those credentials back exactly once:
+ * Supabase Auth can only sign a user in from the client, so the one
+ * server-authorised entry point creates an account with an ephemeral password
+ * and hands those credentials back exactly once:
  *
- *   kind: "demo"    — anonymous demo reviewer (requires DEMO_MODE=1)
  *   kind: "master"  — break-glass temp moderator (requires MASTER_PASSWORD)
  *
  * Everything else (employees, moderators) signs in normally with the ID code
@@ -23,10 +21,8 @@ export const dynamic = "force-dynamic";
 
 // B6 fix: in-memory sliding-window rate limit. Serverless instances share no
 // state, but this still throttles per-instance abuse and costs nothing;
-// complements Supabase-side throttles. Demo: 5/min/IP. Master: 5/hour/IP.
-const WINDOW_DEMO_MS = 60_000;
+// complements Supabase-side throttles. Master: 5/hour/IP.
 const WINDOW_MASTER_MS = 3_600_000;
-const LIMIT_DEMO = 5;
 const LIMIT_MASTER = 5;
 const hits = new Map<string, number[]>();
 
@@ -84,7 +80,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 function ephemeralPassword(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  return `JP-${Array.from(bytes, (b) => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[b % 32]).join("")}`;
+  return `JP-${Array.from(bytes, (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("")}`;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -97,66 +93,6 @@ export async function POST(request: Request): Promise<Response> {
   const password = ephemeralPassword();
 
   const ip = clientIp(request);
-
-  if (body.kind === "demo") {
-    if (process.env.DEMO_MODE !== "1") {
-      return NextResponse.json({ error: "DEMO_DISABLED" }, { status: 403 });
-    }
-    if (await rateLimitedShared(admin, `demo:${ip}`, WINDOW_DEMO_MS, LIMIT_DEMO)) {
-      return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
-    const authEmail = `demo+${Date.now().toString(36)}@jpay.local`;
-    const { data, error } = await admin.auth.admin.createUser({
-      email: authEmail,
-      password,
-      email_confirm: true,
-      user_metadata: { demo: true },
-    });
-    if (error || !data.user) {
-      return NextResponse.json({ error: "DEMO_CREATE_FAILED" }, { status: 500 });
-    }
-    const userId = data.user.id;
-    await admin.from("users").insert({
-      _id: userId,
-      name: "Demo reviewer",
-      role: "employee",
-      isActive: true,
-      isAnonymous: true,
-      passwordChangedAt: Date.now(),
-    });
-
-    const now = Date.now();
-    let { data: sites } = await admin
-      .from("sites")
-      .select("_id")
-      .is("archivedAt", null);
-    if (!sites || sites.length === 0) {
-      const seeded = DEMO_SITES.map((site: any) => ({
-        name: site.name,
-        latitude: site.latitude,
-        longitude: site.longitude,
-        geofenceRadiusMeters: site.geofenceRadiusMeters,
-        timezone: DEMO_SITE_TIMEZONE,
-        createdBy: userId,
-      }));
-      const { data: created } = await admin.from("sites").insert(seeded).select("_id");
-      sites = created ?? [];
-    }
-    if (sites.length > 0) {
-      await admin
-        .from("userSites")
-        .insert(sites.map((site: any) => ({ userId, siteId: site._id })));
-    }
-    await admin.from("demoSessions").insert({
-      reviewerId: userId,
-      personaEmail: "thabo.demo@jpay.local",
-      mode: "full",
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return NextResponse.json({ email: authEmail, password });
-  }
 
   if (body.kind === "master") {
     if (await rateLimitedShared(admin, `master:${ip}`, WINDOW_MASTER_MS, LIMIT_MASTER)) {

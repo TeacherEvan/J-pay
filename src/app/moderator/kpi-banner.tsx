@@ -1,14 +1,10 @@
 "use client";
 
-import { useAction, useQuery } from "@/lib/backend/react";
-import { useState } from "react";
+import { useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
-import { jpayConfig } from "../../config/jpay.config";
 
 export function KpiBanner() {
   const kpi = useQuery(api.kpi.summary);
-  const seed = useAction(api.demo.seedDemoData);
-  const [seedMsg, setSeedMsg] = useState<string | null>(null);
   if (!kpi) {
     // Reserved-bounds skeleton — no layout pop when the query lands (CLS = 0).
     return (
@@ -38,28 +34,6 @@ export function KpiBanner() {
           <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-[var(--fog)]">{c.label}</div>
         </div>
       ))}
-      {kpi.demoModeEnabled && (
-        <div className="col-span-full flex flex-wrap items-center gap-3 text-xs text-[var(--fog)]">
-          <span>Demo mode active for {jpayConfig.client.name}</span>
-          <button
-            onClick={async () => {
-              setSeedMsg("Seeding…");
-              try {
-                const r = await seed();
-                setSeedMsg(
-                  `Seeded ${r.sites} sites · ${r.employees} employees · ${r.logsInserted} logs (${r.logsSkippedDuplicates} duplicates skipped)`
-                );
-              } catch (e) {
-                setSeedMsg(`Seed failed: ${String(e).slice(0, 120)}`);
-              }
-            }}
-            className="btn-surgical px-3.5 py-2 text-xs font-semibold text-[var(--mint)] border-[var(--mint)]/40 hover:bg-[var(--mint)]/10"
-          >
-            Seed investor demo
-          </button>
-          {seedMsg && <span className="text-[var(--paper)]">{seedMsg}</span>}
-        </div>
-      )}
     </section>
   );
 }

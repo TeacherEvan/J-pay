@@ -14,14 +14,15 @@
  * Census source: `npx`-equivalent enumeration of the registry, 2026-11-10
  * (120 registered functions; 30 internal; 3 additionally deny-listed by
  * INTERNAL_ONLY_OVERRIDES; 27 reachable from an anonymous browser pre-fix).
+ * 2026-11-12: the anonymous-preview modules were removed from the
+ * registry, so the floor below was lowered from 110 to 100 to stay meaningful
+ * without encoding the retired module count.
  * If the registry grows, re-derive INTERNAL_KEYS from describeFunctions()
  * inspection of convex/*.ts exports and extend this list.
  */
 import assert from "node:assert/strict";
 
 const INTERNAL_KEYS = [
-  "demo/index:_resolveDemoReviewer", "demo/index:ensurePersonaSiteAssignments", "demo/index:purgeStaleReviewers",
-  "demo:_resolveDemoReviewer", "demo:ensurePersonaSiteAssignments", "demo:purgeStaleReviewers", "demo:seedAll",
   "logs:createLogAs", "logs:purgeExpiredCoords", "logs:purgeExpiredCoordsBatch",
   "messages:purgeExpiredMessages",
   "payroll_data:logsForExport",
@@ -40,7 +41,11 @@ const DENY_LISTED = new Set([
 const { invoke, describeFunctions } = await import("../src/lib/backend/runtime.ts");
 
 const registry = describeFunctions();
-assert.ok(registry.length >= 110, `expected >=110 registered functions, got ${registry.length}`);
+// Floor, not a tautology: the registry must not lose whole modules silently.
+// It was 144 before the anonymous-preview removal (47 preview handlers went
+// with it); 90 still catches an accidental mass-deletion while leaving
+// headroom for further feature removals.
+assert.ok(registry.length >= 90, `expected >=90 registered functions, got ${registry.length}`);
 console.log(`registry census: ${registry.length} functions`);
 
 let failures = 0;

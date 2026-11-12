@@ -35,7 +35,6 @@ The trust boundary (`/api/backend/call` + `isPublic !== true` deny-by-default) i
 ### High-Risk File Telemetry Hotspots
 | File Path | Eff. LOC | CC / Depth | Silent Catches | Primary Vibe-Debt Signature |
 | :--- | :--- | :--- | :--- | :--- |
-| `convex/demo/index.ts` | 677 | low / 4 | 0 | Env-gated demo god-module (9 trigger sites) — soundly scoped |
 | `convex/manager.ts` | 535 (in-flight 640) | ~12 / 4 | 1 (attestation JSON) | Airtight logic **except org guards off by default** (P2-C2/P1-C1) · no UI consumer · untested date windows |
 | `src/lib/backend/db.ts` | 447 | 33 / 5 | 0 | Residual-filter window loop (fixed) — but offset paging has no `_id` tiebreaker; `.collect()` full scans remain |
 | `convex/travel.ts` | 404 | ~12 / 4 | 0 | Money-adjacent GPS; offline-replay flags consume payroll — B2 makes this dangerous |
@@ -47,7 +46,6 @@ The trust boundary (`/api/backend/call` + `isPublic !== true` deny-by-default) i
 ### Production (verified live, read-only)
 - `/api/health/db` → `{"ok":true,"tables":16}` ("16" = the hard-coded `REQUIRED_TABLES.length`, **not** the DB's 17 base tables + 1 view; `systemEvents` and `jpay_rate_limits` are absent from the probe).
 - Deny-by-default holds live: `manager:crewTimesheets` / `manager:attestShift` → `404 UNKNOWN_FUNCTION`; `users_queries:me` → `{"result":null}`; `GET /api/backend/call` → `403`.
-- **`DEMO_MODE` is off** (`/api` `demo:status` → `{"enabled":false}`).
 - Privacy policy is a **DRAFT placeholder**, live at `https://j-pay.vercel.app/privacy`, linked from the GPS consent gate as a legal promise.
 - **`jpay_id_registry` returns 48 rows over unauthenticated HTTP** (see P0-F1) — this is the only object the publishable key can reach; all 17 base tables are closed.
 - Deployment of HEAD `6182072` is `success` (Vercel Git integration). **No test ran in that deploy** — `gates.yml` was retired 2026-11-10; `e2e-nightly.yml` was created 2026-11-11 and has never executed.
@@ -69,14 +67,14 @@ The trust boundary (`/api/backend/call` + `isPublic !== true` deny-by-default) i
 - **[P2-C7] `demoteManager` orphan-site detection (`convex/manager.ts:466-499`) logs `manager_demoted_orphan_sites` and then proceeds anyway** — no consumer, no enforcement, no UI surfacing.
 - **[P2-C8] `crewTimesheets` surfaces only the newest attestation per shift** (`.order("desc")` + `.find()`) — earlier verdicts are invisible; supersession has no audit trail.
 - **[P2-A1] `db.ts` window loop (967ed92) is correctly structured but its ordering tiebreaker is `_creationTime` only (no `_id`)** — `db.ts:391-403`. Offset pagination can skip/duplicate rows on equal `_creationTime` under concurrent inserts.
-- **N/A — framework-level** — N/A this lens found no circular imports and no God-object payout path beyond the demo module (accepted as env-gated).
+- **N/A — framework-level** — N/A this lens found no circular imports and no God-object payout path.
 
 ### Lens 2 — Frame-Budget & Performance Engineer
 
 - **[P1-B2-related]** see Lens 4 — a latency/timing defect, not allocation.
 - **[P2-D13] Every screen carries a full-viewport `feTurbulence` noise filter (`src/app/layout.tsx:27-41` × `globals.css:409-421`) re-rasterised on each paint** — on top of a 1 Hz `ShiftTimer` tick and Leaflet animation loops. No measurable benefit, pure runtime cost on the field-worker Android target.
 - **[P2-D10] Manager console "in transit" leg durations are frozen at 0 min** — `manager/page.tsx:49` uses `useState(() => Date.now())` mount-stable clock; legs departed after mount compute `Math.max(0, negative)` = 0 forever.
-- **[P2-D21] `dashboard` renders `audit.slice(0,50)` from a 100-row query** and the server filters demo rows AFTER `.take(limit)` (`moderator.ts:16-26`) — silent truncation.
+- **[P2-D21] `dashboard` renders `audit.slice(0,50)` from a 100-row query** — silent truncation.
 - **Positive evidence:** `1 Hz` tick is correctly confined to `ShiftTimer` (not card root); the 15 s refresh timer reset bug (D3 identity) aside, no per-frame allocations found in hot paths; Leaflet `map.remove()` called in every effect cleanup.
 - **Negative evidence:** `useQuery` does no endless fetch→setState→fetch loop (depends on `[key, tick, skip]`, `react.ts:262`); in-flight dedup correct (`react.ts:123-184`); `bump()` is `O(listeners)`.
 
@@ -151,7 +149,7 @@ The trust boundary (`/api/backend/call` + `isPublic !== true` deny-by-default) i
 - **[P3-F15] `convex/_generated/` is dead and internally inconsistent** — `api.d.ts` imports `../auth.js` (does not exist; `skipLibCheck: true` hides it) and omits `manager`, `organisations`, `travel`. Committed so tsc passes: **but** `src/lib/backend/api.ts:30` exports `internal: any` — the entire internal surface is untyped.
 - **[P3-F5/typing] `x.internal` / any escapes** — `react.ts:269` `useMutation<any, any>`; `payroll.tsx:66`/`ShiftTimer.tsx:41` `as never`/untyped casts — tolerated in this codebase but inconsistent with `strict` intent.
 - **TypeScript strict passes** (`tsc --noEmit` clean) — the defect here is contract-level, not compiler-level.
-- **Contract debt:** TRD §6 is a **strict subset** of `schema.ts`/SQL — missing `punches`, `demoSessions`, and 9 fields (`managerSites.archivedAt` is not even registered in §11 Open Questions), while the docs call §6 "the source of truth".
+- **Contract debt:** TRD §6 is a **strict subset** of `schema.ts`/SQL — missing `punches` and 9 fields (`managerSites.archivedAt` is not even registered in §11 Open Questions), while the docs call §6 "the source of truth".
 
 ### Lens 9 — Platform, Viewport & Portability Engineer
 
@@ -313,4 +311,3 @@ const replayMs     = now - queuedAt;                       // offline delay, com
 - Shift engine: order-invariant dedupe (min `_creationTime`, deterministic tie-break), `localDayKey` with explicit zone + DST test, side-mission `min(declared, wallclock)` policy, 2026-08 device-token matrix correct.
 - `test-manager-authz.mjs` is a genuine invoke-path authz test (not a mock-mirror) — and its gaps are enumerated.
 - `npm audit` = 0; the Serwist override chain resolves at build time only and is API-compatible.
-- Demo-mode is enforced by `requireDemoReviewer` (`DEMO_MODE=1` + anonymous + demo-tagged employee persona) and is off in production.

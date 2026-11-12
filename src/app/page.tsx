@@ -216,7 +216,7 @@ export default function Home() {
           <ModeratorHome />
         ) : (
           <>
-            <CheckInCard variant="live" />
+            <CheckInCard />
             {me.role === "manager" && <ManagerCard />}
             <MessagesPanel role="employee" />
             <ChangePassword />

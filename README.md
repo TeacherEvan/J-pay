@@ -46,8 +46,7 @@ node --env-file=.env.local scripts/create-moderator.mjs --email you@example.com 
 The script prints a one-time password exactly once; the app forces a password change on
 first sign-in. Sign in as moderator at `/moderator` → create sites, provision employees
 (one-time `JP-XXXXXXXXXX` ID code), assign employee↔site. Employees sign in with email +
-ID code, then CHECK IN. When `DEMO_MODE=1` in the deployment env, the login screen also
-offers **"Enter demo preview"**.
+ID code, then CHECK IN.
 
 > **Port note:** `npm run dev` guards its port — if :3000 is already taken by another
 > app (e.g. a sibling project), J-pay **refuses to start** instead of silently drifting
@@ -65,7 +64,7 @@ Each client company gets an isolated fork + Supabase project:
    `MASTER_PASSWORD`, vapid keys if push is wanted).
 4. Create that company's moderator with `scripts/create-moderator.mjs` (forced password change on first sign-in).
 5. (Optional) Retention crons are archived — see `supabase/migrations/archive/0003_retention_crons.OWNER_ONLY.sql`. The app runs without them; they are only relevant if you need 7-day coordinate purging on this client's project, and only the owner may enable them (requires pg_cron + pg_net).
-6. Deploy frontend to Vercel — pushing `main` deploys automatically. Do not push without running `npm run verify && npm run build` first. The same secrets go in the project's env settings (`CRON_SECRET`, `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`, `MASTER_PASSWORD`, VAPID keys if push is wanted; `DEMO_MODE` only if you want the demo preview on this fork).
+6. Deploy frontend to Vercel — pushing `main` deploys automatically. Do not push without running `npm run verify && npm run build` first. The same secrets go in the project's env settings (`CRON_SECRET`, `SMOKE_TEST_KEY`, `BOOTSTRAP_KEY`, `MASTER_PASSWORD`, VAPID keys if push is wanted).
 
 ## Gates
 

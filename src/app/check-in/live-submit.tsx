@@ -253,5 +253,3 @@ export function LiveSubmit({
     </>
   );
 }
-
-/* ── Persona submit (demo): site coords, no GPS/token ──────────────── */

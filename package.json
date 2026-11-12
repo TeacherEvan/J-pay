@@ -9,7 +9,6 @@
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
     "e2e": "node scripts/e2e-full.mjs",
-    "e2e:rich": "node scripts/e2e-demo-rich.mjs",
     "e2e:all": "node scripts/e2e-all.mjs",
     "test": "node scripts/run-gate.mjs test",
     "verify": "node scripts/run-gate.mjs verify",

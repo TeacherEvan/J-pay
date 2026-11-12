@@ -56,7 +56,7 @@ function mkSeed() {
     shifts: [
       { _id: "shift-1", _creationTime: 100, userId: "user-1", startedAt: 100, needsReview: false },
     ],
-    messages: [], pushSubscriptions: [], purgeAudit: [], reviewResolutions: [], demoSessions: [],
+    messages: [], pushSubscriptions: [], purgeAudit: [], reviewResolutions: [],
     _id: undefined,
   };
 }

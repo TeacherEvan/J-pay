@@ -123,7 +123,7 @@ Both slices land behind a single scoped commit; nothing is user-visible until Mi
 4. `npm run typecheck` — `tsc --noEmit` over app + convex
 5. `timeout 110 npx convex dev` — Convex function check (catches circular-inference + index-rule errors the local tsc misses)
 6. New unit test for the action's error mapping (Milestone 1) and the frontend mapper (Milestone 2)
-7. Manual smoke: sign in as the demo employee (or the one-time-code user) and try a wrong + a right current secret
+7. Manual smoke: sign in as the one-time-code user and try a wrong + a right current secret
 
 ---
 
@@ -377,5 +377,4 @@ git commit -m "fix(j-pay): inline error copy for changeMyPassword typed failures
 
 - `convex/users.ts:118-143` `resetPasswordBreakGlass` calls `modifyAccountCredentials` directly (not affected) but the same `retrieveAccount` trap applies if we ever add a "verify old before reset" branch. Add the same `mapRetrieveResult` guard then.
 - The `auth:store` string-literal call in Task 2 is a private-contract dependency. If `@convex-dev/auth` ships a minor that renames or restructures this internal, the action will surface a server error at runtime. Pin the package (already done) and re-verify on upgrade.
-- The demo anonymous path uses `passwordChangedAt: Date.now()` so anonymous users never reach `changeMyPassword`; no test coverage needed for that path, but the mapper is safe to call with any string.
 - Frontend mapper has no client-side unit test infrastructure in this repo. If a client-side gate is desired, add Vitest + jsdom in a separate change.

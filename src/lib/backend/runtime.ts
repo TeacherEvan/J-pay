@@ -25,8 +25,6 @@ import * as push from "../../../convex/push";
 import * as pushSubs from "../../../convex/push_subs";
 import * as deviceTokens from "../../../convex/deviceTokens";
 import * as geocode from "../../../convex/geocode";
-import * as demo from "../../../convex/demo";
-import * as demoIndex from "../../../convex/demo/index";
 
 /**
  * Supabase-backed runtime for the Convex-shaped business logic in convex/*.ts.
@@ -76,8 +74,6 @@ const MODULES: Record<string, unknown> = {
   push_subs: pushSubs,
   deviceTokens,
   geocode,
-  demo,
-  "demo/index": demoIndex,
 };
 
 function isHandler(value: unknown): value is Handler {

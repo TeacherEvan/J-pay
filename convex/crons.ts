@@ -10,12 +10,6 @@ crons.cron(
 );
 
 crons.cron(
-  "purge-stale-demo-reviewers",
-  "0 3 * * *",
-  internal.demo.purgeStaleReviewers
-);
-
-crons.cron(
   "archive-stale-master-temps",
   "0 4 * * *",
   internal.users.archiveStaleMasterTemps

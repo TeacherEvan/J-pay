@@ -18,9 +18,6 @@
 | `/moderator` | `src/app/moderator/page.tsx:17` | authed | moderator only |
 | `/payroll` (route) | (not present — `PayrollPanel` mounted inside `/moderator`) | authed | moderator |
 | `/site-map-picker` (route) | (not present — `SiteMapPicker` is mounted inside the SitePanel inside `/moderator`) | authed | moderator |
-| `/demo` | `src/app/demo/page.tsx:50` | anonymous (Convex) | demo reviewer (plays as persona) |
-| `/demo/persona` | `src/app/demo/persona/page.tsx:37` | anonymous | demo reviewer |
-| `/demo/about` | `src/app/demo/about/page.tsx:5` | anonymous | demo reviewer |
 | `/~offline` | `src/app/~offline/page.tsx:1` | any (SW fallback) | any |
 | `/sign-in` (route) | (not present — `SignIn` component is rendered inline on home when unauthed) | anon | n/a |
 
@@ -34,33 +31,10 @@ Only files exporting `query` / `mutation` / `action` with no `internal` prefix.
 
 | Module | Export | Kind | Args (short) | Called from React at |
 |---|---|---|---|---|
-| `convex/access.ts` | — | helpers only (`currentUserId`, `requireModerator`, `requireDemoReviewer`, …) — not public | — | — |
-| `convex/auth.ts` | re-exports `auth, signIn, signOut, store, isAuthenticated` (from `@convex-dev/auth`) | library | — | `src/app/sign-in.tsx:10`, `src/app/page.tsx:52`, `src/app/demo/layout.tsx:15` |
+| `convex/access.ts` | — | helpers only (`currentUserId`, `requireModerator`, …) — not public | — | — |
+| `convex/auth.ts` | re-exports `auth, signIn, signOut, store, isAuthenticated` (from `@convex-dev/auth`) | library | — | `src/app/sign-in.tsx:10`, `src/app/page.tsx:52` |
 | `convex/changePassword.ts` | — | type-only helpers | — | — |
 | `convex/crons.ts` | (cron definitions only — not callable from UI) | — | — | — |
-| `convex/demo.ts` | `status` | query | — | `src/app/sign-in.tsx:11` |
-| `convex/demo.ts` | `seedDemoData` | action | — | `src/app/moderator/kpi-banner.tsx:10` |
-| `convex/demo.ts` | `bindReviewer` | mutation | `{ personaEmail }` | (not wired to UI; legacy) |
-| `convex/demo.ts` | `getBinding` | query | — | `src/app/demo/layout.tsx:13`, `src/app/demo/page.tsx:51`, `src/app/demo/persona/page.tsx:38` |
-| `convex/demo.ts` | `boundPersonaLogs` | query | — | `src/app/demo/layout.tsx:14`, `src/app/demo/page.tsx:288` |
-| `convex/demo.ts` | `boundPersonaShifts` | query | — | (not called from UI) |
-| `convex/demo.ts` | `boundPersonaPayroll` | query | — | `src/app/demo/page.tsx:53` |
-| `convex/demo.ts` | `demoAudit` | query | `{ limit? }` | `src/app/demo/page.tsx:55` |
-| `convex/demo.ts` | `demoNeedsReview` | query | — | `src/app/demo/page.tsx:54` |
-| `convex/demo.ts` | `demoKpis` | query | — | `src/app/demo/page.tsx:52` |
-| `convex/demo.ts` | `demoEmployeeRoster` | query | — | `src/app/demo/page.tsx:56` |
-| `convex/demo.ts` | `checkInAsPersona` | action | (see schema) | `src/app/demo/page.tsx:287` |
-| `convex/demo.ts` | `switchPersona` | mutation | `{ personaEmail }` | `src/app/demo/persona/page.tsx:39` |
-| `convex/demo.ts` | `demoExportLogsCsv` | action | `{ fromMs, toMs }` | `src/app/demo/page.tsx:417` |
-| `convex/demo.ts` | `demoModeratorInbox` | query | — | `src/app/demo/page.tsx:58` |
-| `convex/demo.ts` | `demoReplyToEmployee` | mutation | `{ recipientId, content }` | (not wired to UI) |
-| `convex/demo.ts` | `demoMarkQueueItemRead` | mutation | `{ messageId }` | `src/app/demo/page.tsx:249` |
-| `convex/demo.ts` | `demoResolveShift` | mutation | `{ shiftId }` | `src/app/demo/page.tsx:142` |
-| `convex/demo.ts` | `demoRecomputeEmployeeShifts` | mutation | `{ userId }` | `src/app/demo/page.tsx:143` |
-| `convex/demo.ts` | `_resolveDemoReviewer` | internalQuery — not public | — | — |
-| `convex/demo.ts` | `purgeStaleReviewers` | internalMutation — not public | — | — |
-| `convex/demo_seed.ts` | `seedAll` | internalMutation — not public | — | — |
-| `convex/demo_sites.ts` | — | constants only | — | — |
 | `convex/deviceTokens.ts` | — | helpers only | — | — |
 | `convex/geo.ts` | — | helper only | — | — |
 | `convex/http.ts` | (HTTP routes only — not callable as api.*) | — | — | — |
@@ -112,41 +86,16 @@ Only files exporting `query` / `mutation` / `action` with no `internal` prefix.
 | `convex/users.ts` | `deactivateEmployee` | mutation | `{ userId }` | `src/app/moderator/page.tsx:407` |
 | `convex/users.ts` | `resetDeviceToken` | mutation | `{ userId }` | `src/app/moderator/page.tsx:466` |
 | `convex/users.ts` | `issueMyDeviceToken` | mutation | — | `src/app/page.tsx:187` |
-| `convex/users_queries.ts` | `me` | query | — | `src/app/page.tsx:51`, `src/app/moderator/page.tsx:18`, `src/app/demo/layout.tsx:12` |
+| `convex/users_queries.ts` | `me` | query | — | `src/app/page.tsx:51`, `src/app/moderator/page.tsx:18` |
 | `convex/users_queries.ts` | `getById` / `getByEmail` / `listByRole` | internal — not public | — | — |
 
 ---
 
 ## 2. Existing data-testids (the harvest)
 
-All `data-testid` values currently in the source (from `grep` over `src/`):
+The `grep` over `src/` finds **no** `data-testid` values in the app.
 
-| testid | Where | Purpose |
-|---|---|---|
-| `demo-page` | `src/app/demo/page.tsx:61` | root of `/demo` |
-| `demo-kpi-banner` | `src/app/demo/page.tsx:64` | KPI section wrapper |
-| `demo-persona-header` | `src/app/demo/page.tsx:87` | persona name + email card |
-| `demo-persona-name` | `src/app/demo/layout.tsx:48` | persona name in header nav |
-| `kpi-card` | `src/app/demo/page.tsx:96` | one KPI tile (×4) |
-| `demo-payroll` | `src/app/demo/page.tsx:106` | payroll section wrapper |
-| `payroll-day-row` | `src/app/demo/page.tsx:122` | one per-day row in payroll table |
-| `payroll-total-row` | `src/app/demo/page.tsx:128` | totals row |
-| `demo-needs-review` | `src/app/demo/page.tsx:146` | review queue section |
-| `needs-review-row` | `src/app/demo/page.tsx:156` | one review queue row |
-| `demo-audit-log` | `src/app/demo/page.tsx:196` | audit log section |
-| `audit-log-row` | `src/app/demo/page.tsx:214` | one audit row |
-| `demo-messages` | `src/app/demo/page.tsx:251` | messages section |
-| `message-row` | `src/app/demo/page.tsx:261` | one message row |
-| `demo-checkin` | `src/app/demo/page.tsx:343` | check-in panel |
-| `demo-checkin-button` | `src/app/demo/page.tsx:393` | the "CHECK IN as persona" button |
-| `demo-checkin-message` | `src/app/demo/page.tsx:397` | result message line |
-| `demo-export` | `src/app/demo/page.tsx:444` | export section |
-| `demo-about` | `src/app/demo/about/page.tsx:8` | about page root |
-| `persona-switcher` | `src/app/demo/persona/page.tsx:57` | persona page root |
-| `persona-row` | `src/app/demo/persona/page.tsx:80` | one persona card |
-| `persona-play-button` | `src/app/demo/persona/page.tsx:92` | per-card "Play as" button |
-
-**Coverage:** Every testid is in the `/demo/*` pages. **Zero** testids exist in the employee home, the moderator console, payroll, the geofence modal, the offline page, or the sign-in form. New e2e work must add testids in those areas.
+**Coverage:** **Zero** testids exist in the employee home, the moderator console, payroll, the geofence modal, the offline page, or the sign-in form. New e2e work must add testids in those areas.
 
 ---
 
@@ -155,13 +104,6 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 | Step | What it drives | File:line |
 |---|---|---|
 | port-collision sentinel | loads `/` and confirms "J-Pay" | `scripts/e2e-full.mjs:103-116` |
-| demo preview selectable at login | clicks "Enter demo preview" | `scripts/e2e-full.mjs:122-127` |
-| demo session → employee panel | waits for `CHECK IN` | `scripts/e2e-full.mjs:128-129` |
-| demo role = employee | text check | `scripts/e2e-full.mjs:130` |
-| demo reviewer has sites | text check | `scripts/e2e-full.mjs:131` |
-| forced password skipped for reviewer | text check | `scripts/e2e-full.mjs:132` |
-| demo check-in writes real log | clicks `CHECK IN` | `scripts/e2e-full.mjs:135-142` |
-| demo sign out returns to login | clicks `Sign out` | `scripts/e2e-full.mjs:144-146` |
 | moderator sign-in + consent | fills creds, accepts consent | `scripts/e2e-full.mjs:151-152` |
 | console loads | visits `/moderator` | `scripts/e2e-full.mjs:154-156` |
 | KPI cards render | queries `[aria-label='Key metrics'] .text-2xl` | `scripts/e2e-full.mjs:158-161` |
@@ -177,8 +119,6 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 | offline finish queued | offline emulation + click `CHECK IN` (status: `day finish`) | `scripts/e2e-full.mjs:274-281` |
 | online replay settled | fires `online` event | `scripts/e2e-full.mjs:283-299` |
 
-`scripts/e2e-demo.mjs` and `scripts/e2e-demo-rich.mjs` cover the `/demo/*` pages using the testid list above.
-
 ---
 
 # A. Authentication
@@ -187,10 +127,8 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 |---|---|---|---|---|---|---|---|---|
 | A1 | Sign in (employee / moderator, password provider) | `/` (SignIn panel) | `src/app/sign-in.tsx:17-42` | `@convex-dev/auth` `signIn("password", formData)` (in `sign-in.tsx:23`) — flows into `auth.createOrUpdateUser` in `convex/auth.ts:31-96` | anon, valid email + secret | re-renders to employee home (`page.tsx:79`) or `ForcedPasswordChange` overlay (page.tsx:88) | NEEDS data-testid (form is found by `[name=email]` and `[type=password]`) | partial — e2e-full.mjs:90-99 covers mod sign-in; employee sign-in covered in `:233` |
 | A2 | Activate account (first-time flow toggles to "signUp" step) | `/` | `src/app/sign-in.tsx:34-37`, toggle at `:42-48` | same as A1 + `createOrUpdateUser` reads role from profile (auth.ts:87-94) | anon, has invite code | same as A1; new "name" input appears | NEEDS data-testid (currently no testid on name input) | not covered (signUp branch never exercised) |
-| A3 | Demo preview entry (anonymous) | `/` → `/demo` | `src/app/sign-in.tsx:56-74` | `@convex-dev/auth` `signIn("anonymous", {})` (`:62`); seeds `demoSessions` in `auth.ts:67-73` | `api.demo.status.enabled === true` | navigates to `/demo` and renders persona console | NEEDS data-testid on the button (text "Enter demo preview" is matched in e2e-full.mjs:124) | yes — e2e-full.mjs:118-146 |
 | A4 | Sign out (header) | `/` | `src/app/page.tsx:115-120` | `@convex-dev/auth` `signOut()` (`:116`) | authed, any role | reloads page, lands on SignIn | NEEDS data-testid (matched by text "Sign out" in e2e-full.mjs:144) | yes — e2e-full.mjs:144-146 |
 | A5 | Sign out (moderator header) | `/moderator` | `src/app/moderator/page.tsx:47-49` (link to `/`) — but logout itself only on home header | (same as A4) | moderator | link to "employee view" | NEEDS data-testid | not covered |
-| A6 | Sign out (demo console header) | `/demo` | `src/app/demo/layout.tsx:57-63` | `@convex-dev/auth` `signOut()` (`:59`) | demo anonymous session | returns to `/` | NEEDS data-testid | not covered (e2e-demo.mjs:101 clicks "Sign out" from /) |
 | A7 | Auto sign-out when authed but no user doc | `/` | `src/app/page.tsx:53-57` | `signOut()` (`:55`) | authed, `me === null` | page reload, lands on SignIn | no testid | not covered |
 | A8 | Force-change-password modal (blocking overlay) | `/` | `src/app/change-password.tsx:81-118` mounted at `src/app/page.tsx:88-90` | `api.users.changeMyPassword` (`:16`) → `convex/users.ts:192-226` | authed, `passwordChangedAt === undefined` | full-screen dialog (z-100); on success → 1.2s reload (`:89-91`) | NEEDS data-testid on the dialog; "Set your own password" is matched in e2e-full.mjs:234 | yes — e2e-full.mjs:233-249 |
 | A9 | Voluntary change password (inline `<details>` expander) | `/` | `src/app/change-password.tsx:68-79` (mount) and `:15-66` (form) | `api.users.changeMyPassword` (`:16`) | authed, employee | inline form, status message in `role="status"` | NEEDS data-testid (matched by placeholders in e2e-full.mjs:238-241) | partial — covered only in forced flow |
@@ -238,8 +176,7 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 
 | # | Feature | Route | React file:line | Convex call | Pre-conditions | Visible state | testid | e2e-full.mjs line |
 |---|---|---|---|---|---|---|---|---|
-| C1 | KPI banner (4 cards + demo seed row) | `/moderator` | `src/app/moderator/kpi-banner.tsx:21-50` | `api.kpi.summary` (`:9`), `api.demo.seedDemoData` (`:10`) | authed moderator | 4 cards: Active on site / Billable hrs / Pending reviews / Anomalies (24h) | NEEDS data-testid (queried in e2e-full.mjs:158-160 by `[aria-label='Key metrics'] .text-2xl`) | yes — e2e-full.mjs:158-161 |
-| C2 | Seed investor demo (button) | `/moderator` (KPI banner) | `src/app/moderator/kpi-banner.tsx:31-46` | `api.demo.seedDemoData` (`:35`) | `kpi.demoModeEnabled === true` | inline message "Seeded N sites · M employees · L logs (D duplicates skipped)" (`:37`) | NEEDS data-testid | not covered |
+| C1 | KPI banner (4 cards) | `/moderator` | `src/app/moderator/kpi-banner.tsx:21-50` | `api.kpi.summary` (`:9`) | authed moderator | 4 cards: Active on site / Billable hrs / Pending reviews / Anomalies (24h) | NEEDS data-testid (queried in e2e-full.mjs:158-160 by `[aria-label='Key metrics'] .text-2xl`) | yes — e2e-full.mjs:158-161 |
 | C3 | Provision employee (form) | `/moderator` (ProvisionPanel) | `src/app/moderator/page.tsx:200-260` | `api.users.provisionEmployee` (`:230`) or `api.users.provisionModerator` (`:231`) | authed moderator, valid email + name | success card with `email` + `JP-XXXX` ID code + copy-to-clipboard (`:245-256`) | NEEDS data-testid on inputs/button | yes — e2e-full.mjs:174-184 |
 | C4 | Provision moderator (form, role select) | `/moderator` | same as C3 but with `role="moderator"`; calls `api.users.provisionModerator` at `:231` | `api.users.provisionModerator` (`:231`) | authed moderator, valid input | same success card | NEEDS data-testid | not covered |
 | C5 | Copy ID-code to clipboard | `/moderator` (ProvisionPanel) | `src/app/moderator/page.tsx:250-255` | n/a (`navigator.clipboard.writeText`) | success card visible | no in-page feedback (silent) | NEEDS data-testid | not covered |
@@ -273,42 +210,6 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 
 ---
 
-# D. Demo features
-
-| # | Feature | Route | React file:line | Convex call | Pre-conditions | Visible state | testid | e2e-full.mjs line |
-|---|---|---|---|---|---|---|---|---|
-| D1 | Demo layout — header (persona name, log count, nav) | `/demo` (layout) | `src/app/demo/layout.tsx:42-65` | `api.users_queries.me` (`:12`); `api.demo.getBinding` (`:13`); `api.demo.boundPersonaLogs` (`:14`) | `me.isAnonymous === true` AND `binding !== null` | header with persona name + "N log rows on file" + nav (Switch persona / About / Exit demo) | `demo-persona-name` (layout:48) — used in e2e-demo-rich.mjs:118 | not in e2e-full |
-| D2 | Demo layout — guard (signed-in non-demo user) | `/demo` | `src/app/demo/layout.tsx:18-22` | `signOut()` | signed in as a non-anonymous user | auto sign-out + redirect to `/` | NEEDS data-testid | not covered |
-| D3 | Demo layout — guard (no binding) | `/demo` | `src/app/demo/layout.tsx:30-38` | n/a | `me.isAnonymous === true` but no `demoSessions` row | "Demo session is not active." + back link | NEEDS data-testid | not covered |
-| D4 | Persona header card | `/demo` (page) | `src/app/demo/page.tsx:85-92` | `api.demo.getBinding` (`:51`) | binding present | `demo-persona-header` card | `demo-persona-header` | yes — e2e-demo-rich.mjs:65 |
-| D5 | KPI cards (persona-scoped) | `/demo` | `src/app/demo/page.tsx:64-72` | `api.demo.demoKpis` (`:52`) | binding present | 4 `kpi-card`s | `demo-kpi-banner`, `kpi-card` | yes — e2e-demo-rich.mjs:74, 85 |
-| D6 | PayrollTable (per-day) | `/demo` | `src/app/demo/page.tsx:103-138` | `api.demo.boundPersonaPayroll` (`:53`) | persona has payroll | table with `payroll-day-row`s and `payroll-total-row` | `demo-payroll`, `payroll-day-row`, `payroll-total-row` | yes — e2e-demo-rich.mjs:76, 89 |
-| D7 | PayrollTable — empty state | `/demo` | `src/app/demo/page.tsx:118-120` | n/a | `payroll.days.length === 0` | "No shifts yet" row | NEEDS data-testid on the empty row | not covered |
-| D8 | PayrollTable — loading state | `/demo` | `src/app/demo/page.tsx:104` | n/a | `payroll === null` | "Loading…" | NEEDS data-testid | not covered |
-| D9 | Needs-review list (with Recompute + Resolve) | `/demo` | `src/app/demo/page.tsx:141-191` | `api.demo.demoNeedsReview` (`:54`); `api.demo.demoRecomputeEmployeeShifts` (`:168`); `api.demo.demoResolveShift` (`:178`) | binding present | `needs-review-row` items with two buttons; busy state per row | `demo-needs-review`, `needs-review-row` | not in e2e-full (e2e-demo-rich.mjs:77 counts them) |
-| D10 | Needs-review — empty state | `/demo` | `src/app/demo/page.tsx:148-149` | n/a | `shifts.length === 0` | "No shifts flagged." | NEEDS data-testid | not covered |
-| D11 | Audit log (persona-scoped) | `/demo` | `src/app/demo/page.tsx:194-229` | `api.demo.demoAudit` (`:55`) | persona has logs | `audit-log-row`s | `demo-audit-log`, `audit-log-row` | yes — e2e-demo-rich.mjs:75, 125 |
-| D12 | Audit log — empty state | `/demo` | `src/app/demo/page.tsx:210-212` | n/a | `logs.length === 0` | "No audit entries in the last 7 days" | NEEDS data-testid | not covered |
-| D13 | Demo personas roster | `/demo` | `src/app/demo/page.tsx:232-245` | `api.demo.demoEmployeeRoster` (`:56`) | binding present | 2-col grid of all employees | NEEDS data-testid | not covered |
-| D14 | MessagesSection (from persona → moderator queue, scoped to persona) | `/demo` | `src/app/demo/page.tsx:248-283` | `api.demo.demoModeratorInbox` (`:58`); `api.demo.demoMarkQueueItemRead` (`:271`) | binding present, persona has sent messages | `message-row`s with "Mark read" button | `demo-messages`, `message-row` | not in e2e-full |
-| D15 | MessagesSection — empty state | `/demo` | `src/app/demo/page.tsx:253-255` | n/a | `inbox.length === 0` | "No messages from this persona to the moderator queue." | NEEDS data-testid | not covered |
-| D16 | CheckInPanel — site + status + duration + button | `/demo` | `src/app/demo/page.tsx:286-413` | `api.sites.listMine` (`:57`); `api.demo.checkInAsPersona` (`:318-329`); `api.demo.boundPersonaLogs` (`:288`) | binding present, site selected | button label "CHECK IN as persona" (`:395`); result line `demo-checkin-message` | `demo-checkin`, `demo-checkin-button`, `demo-checkin-message` | yes — e2e-demo-rich.mjs:133 |
-| D17 | CheckInPanel — "No sites available" error | `/demo` | `src/app/demo/page.tsx:313-316` | n/a (local check) | `personaSites.length === 0` | inline error message | NEEDS data-testid | not covered |
-| D18 | CheckInPanel — duplicate detection message | `/demo` | `src/app/demo/page.tsx:331-333` | `api.demo.checkInAsPersona` returns `{ duplicate: true }` | same idempotencyKey | "Already logged (duplicate ignored)." | NEEDS data-testid | not covered |
-| D19 | ExportPanel — Download CSV (last 14 d) | `/demo` | `src/app/demo/page.tsx:416-456` | `api.demo.demoExportLogsCsv` (`:426`) | binding present | download triggered; inline "Exported <file>." | `demo-export` | not in e2e-full (button clicked in e2e-demo-rich.mjs:148+) |
-| D20 | Persona switcher — list of 5 personas | `/demo/persona` | `src/app/demo/persona/page.tsx:37-105` | `api.demo.getBinding` (`:38`); `api.demo.switchPersona` (`:48`) | binding present | 5 `persona-row` cards with narrative + "Play as" | `persona-switcher`, `persona-row`, `persona-play-button` | yes — e2e-demo-rich.mjs:99-101 |
-| D21 | Persona switcher — current persona highlighting | `/demo/persona` | `src/app/demo/persona/page.tsx:74-79` | n/a | `binding.personaEmail === p.email` | emerald border; button label "Current" | NEEDS data-testid on the highlighted card | not covered |
-| D22 | Persona switcher — error message | `/demo/persona` | `src/app/demo/persona/page.tsx:103` | `api.demo.switchPersona` throws | server error | red error line | NEEDS data-testid | not covered |
-| D23 | Demo About page | `/demo/about` | `src/app/demo/about/page.tsx:5-51` | n/a | binding present | static "About this demo" with caveats | `demo-about` | not covered |
-| D24 | Demo About — back to dashboard | `/demo/about` | `src/app/demo/about/page.tsx:11-18` | n/a | n/a | navigates to `/demo` | NEEDS data-testid | not covered |
-| D25 | Demo Exit (sign out) | `/demo` (layout) | `src/app/demo/layout.tsx:57-63` | `signOut()` | binding present | navigates to `/` | NEEDS data-testid | not covered |
-| D26 | Demo layout — bound log count "N log rows on file" | `/demo` (layout) | `src/app/demo/layout.tsx:49-52` | `api.demo.boundPersonaLogs` (`:14`) | binding present | "N log rows on file" in header | NEEDS data-testid | not covered |
-| D27 | Switch persona — back to dashboard link | `/demo/persona` | `src/app/demo/persona/page.tsx:60-66` | n/a | n/a | navigates to `/demo` | NEEDS data-testid | not covered |
-| D28 | Switch persona — "Switching…" busy state | `/demo/persona` | `src/app/demo/persona/page.tsx:96-98` | `api.demo.switchPersona` in flight | n/a | button text changes; button disabled | NEEDS data-testid on busy state | not covered |
-| D29 | Switch persona — idempotent same persona | `/demo/persona` | `src/app/demo/persona/page.tsx:90-99` | n/a (button disabled when same) | n/a | button disabled, label "Current" | NEEDS data-testid | not covered |
-
----
-
 # E. Edge cases, overlays, and out-of-band
 
 | # | Feature | Route | React file:line | Convex call | Pre-conditions | Visible state | testid | e2e-full.mjs line |
@@ -319,10 +220,7 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 | E4 | Geofence modal (audit-driven) | `/moderator` (overlay) | `src/app/moderator/geofence-modal.tsx:30-172` | n/a | `geofenceFix !== null` (set by audit row "map" button) | full-screen dialog with Leaflet + dl | NEEDS data-testid on dialog + "Close" button | partial — e2e-full.mjs:163-167 (open + Esc) |
 | E5 | Offline page (`/~offline`, SW fallback) | `/~offline` | `src/app/~offline/page.tsx:1-20` | n/a | service worker serves cache when network is down | full-page "You are offline" with Retry link | NEEDS data-testid on Retry link | not covered |
 | E6 | Sign-in form — invalid credentials error | `/` (SignIn) | `src/app/sign-in.tsx:23-25` | `signIn("password", ...)` throws | bad email/code | inline `<p class="text-red-400">` (`:38`) | NEEDS data-testid on the error line | not covered |
-| E7 | Sign-in form — demo anonymous entry while demo disabled | `/` | `src/app/sign-in.tsx:49-79` | n/a (button hidden when `demo?.enabled !== true`) | `api.demo.status.enabled === false` | button not rendered | NEEDS data-testid (negative test) | not covered |
-| E8 | Sign-in form — "Entering preview…" busy state | `/` | `src/app/sign-in.tsx:58, 73` | `signIn("anonymous", ...)` in flight | n/a | button text + disabled | NEEDS data-testid | not covered |
 | E9 | Employee home — authed with no user doc (auto signout) | `/` | `src/app/page.tsx:53-57` | `signOut()` | `me === null` after auth | page reload, lands on SignIn | NEEDS data-testid | not covered |
-| E10 | Sign-out (demo) — auto signout if signed in as non-anonymous | `/demo` (layout) | `src/app/demo/layout.tsx:18-22` | `signOut()` | n/a | redirect to `/` | NEEDS data-testid | not covered |
 | E11 | Loading state — moderator | `/moderator` | `src/app/moderator/page.tsx:25-27` | n/a | `me === undefined` | "Loading…" | NEEDS data-testid | not covered |
 | E12 | "No shifts flagged." empty review panel | `/moderator` | `src/app/payroll.tsx:175` | n/a | `review.length === 0` | inline note (`:175`) | NEEDS data-testid | not covered |
 | E13 | "Nothing flagged." empty state of ReviewPanel | `/moderator` | `src/app/payroll.tsx:175` | n/a | same as E12 | inline note | NEEDS data-testid | not covered |
@@ -333,7 +231,6 @@ All `data-testid` values currently in the source (from `grep` over `src/`):
 | E18 | Notification permission state (off / on / idle) | `/` | `src/app/notifications.tsx:10-16, 47` | n/a | `Notification.permission` | button text + on/off border | NEEDS data-testid on each state | not covered |
 | E19 | `signIn("password")` error path — `ACCOUNT_ARCHIVED` | `/` | `src/app/sign-in.tsx:23-25` → `convex/auth.ts:83-85` throws `ACCOUNT_ARCHIVED` | n/a | archived account | inline error from `errMsg` | NEEDS data-testid | not covered |
 | E20 | `signIn("password")` error path — `INACTIVE_ACCOUNT` | `/` | `src/app/sign-in.tsx:23-25` → `convex/auth.ts:99-103` throws `INACTIVE_ACCOUNT` | n/a | deactivated session | inline error | NEEDS data-testid | not covered |
-| E21 | `signIn("anonymous")` error path — `DEMO_DISABLED` | `/` | `src/app/sign-in.tsx:62-69` → `convex/auth.ts:35` throws | n/a | `DEMO_MODE !== "1"` (button is hidden) | inline error (only if button is forced) | NEEDS data-testid | not covered |
 | E22 | `useOutbox` `lastError` rendering (dropped entry) | `/` | `src/app/page.tsx:409`; `useOutbox.ts:37-39` | n/a (entries with `WEAK_GPS\|DEVICE_TOKEN\|SITE_NOT\|INACTIVE\|FORBIDDEN` are dropped) | dropped item | red line (`:409`) | NEEDS data-testid | not covered |
 | E23 | Outbox: WEAK_GPS in retry → drop + clear queued count | `/` | `src/app/use-outbox.ts:36-39` | `api.logs.createLog` throws `WEAK_GPS_SIGNAL` | server-side rejection | red `lastError`, count drops | NEEDS data-testid | not covered |
 | E24 | Outbox: server unreachable on flush → stops draining (no drop) | `/` | `src/app/use-outbox.ts:34-43` | any transient error | network failure | count stays the same | NEEDS data-testid | not covered |
@@ -382,19 +279,14 @@ Counted above; this is the ordered punch list. **Every row needs a new test** (a
 26. **PayrollPanel: range buttons (C24), strategy select (C25), CSV export (C26), flagged shifts list (C27)** — only "payroll" word in text is checked.
 27. **ReviewPanel: Recompute (C28 partial), empty state (E12)** — only Resolve is asserted.
 28. **Moderator messaging: broadcast (C29), reply (C30), dismiss (C31), empty queue (C32)** — never tested.
-29. **Demo guard rails (D2, D3, D25, E10)** — never tested.
-30. **Demo roster (D13) + messages section mark-read (D14) + empty/loading states (D7, D8, D10, D12, D15)** — never tested.
-31. **Demo persona switcher: current highlighting, error, busy state, same-persona disable (D21, D22, D28, D29)** — only the happy switch is covered.
-32. **Demo About page (D23) + back-to-dashboard links (D24, D27)** — never tested.
-33. **`/~offline` page** (E5) — never tested.
-34. **All `errMsg` paths on sign-in (E6, E19, E20, E21)** — never tested.
-35. **Demo seed button (C2)** — never tested.
-36. **`useOutbox.lastError` (E22, E23, E24)** — never tested.
+29. **`/~offline` page** (E5) — never tested.
+30. **All `errMsg` paths on sign-in (E6, E19, E20)** — never tested.
+31. **`useOutbox.lastError` (E22, E23, E24)** — never tested.
 
 ## Lowest-priority but worth a test (smoke-level only)
 
-- Loading states (A13, E11, D8, E15)
-- Empty results (E26, C32, D7, D10, D12, D15)
+- Loading states (A13, E11, E15)
+- Empty results (E26, C32)
 - Header role chip + `EnableNotifications` visibility per role (E27, E28)
 - Privacy footer (E17)
 - Notifications permission state (E18)
@@ -410,7 +302,7 @@ All `data-testid` should follow `kebab-case` and live on stable elements. Sugges
 
 | Area | Suggested testids |
 |---|---|
-| Sign-in form | `signin-email`, `signin-password`, `signin-submit`, `signin-toggle-mode`, `signin-demo-entry`, `signin-error` |
+| Sign-in form | `signin-email`, `signin-password`, `signin-submit`, `signin-toggle-mode`, `signin-error` |
 | Forced password modal | `forced-pw-modal`, `forced-pw-current`, `forced-pw-new`, `forced-pw-confirm`, `forced-pw-submit`, `forced-pw-message`, `forced-pw-success` |
 | Voluntary password | `change-pw-toggle`, `change-pw-current`, `change-pw-new`, `change-pw-confirm`, `change-pw-submit`, `change-pw-message` |
 | Home header | `role-chip`, `signout-button`, `install-button`, `enable-notifications` |
@@ -430,9 +322,6 @@ All `data-testid` should follow `kebab-case` and live on stable elements. Sugges
 | Review | `review-panel`, `review-row`, `review-recompute`, `review-resolve`, `review-empty` |
 | Moderator messages | `mod-broadcast-input`, `mod-broadcast-submit`, `mod-inbox-empty`, `mod-inbox-row`, `mod-inbox-reply-input`, `mod-inbox-reply-submit`, `mod-inbox-dismiss` |
 | Employee messages | `emp-msg-input`, `emp-msg-send`, `emp-msg-status` |
-| Demo layout | `demo-exit-button`, `demo-switch-persona-link`, `demo-about-link`, `demo-log-count` |
-| Demo personas | `persona-card-current`, `persona-error` |
-| Demo About | `demo-about-back` |
 | Offline | `offline-retry` |
 | `useOutbox` | `outbox-drop-error` |
 
@@ -440,7 +329,7 @@ All `data-testid` should follow `kebab-case` and live on stable elements. Sugges
 
 ## Summary
 
-- **22** existing `data-testid` values, all in `/demo/*` and used by `e2e-demo.mjs` / `e2e-demo-rich.mjs`.
+- **0** existing `data-testid` values — the app ships none.
 - **0** `data-testid` values on the employee home, the moderator console, the sign-in form, the offline page, the geofence modal, or the change-password UI. The `e2e-full.mjs` script finds every UI element by text content, which is fragile against label drift.
-- **~32** of the 130+ enumerated features have at least partial e2e coverage in `e2e-full.mjs`. The remaining **~98 features** — including every notification, install, geofence-modal interaction, every empty/loading state, every error path, every moderator message action, and the entire sign-in error surface — have **no test** today.
+- **~25** of the 96 enumerated features have at least partial e2e coverage in `e2e-full.mjs`. The remaining **~71 features** — including every notification, install, geofence-modal interaction, every empty/loading state, every error path, every moderator message action, and the entire sign-in error surface — have **no test** today.
 - The single highest-leverage change is a testid pass over the 9 React files in the `src/app` and `src/app/moderator` trees, after which the new e2e suite can be written deterministically (no button-text matching).

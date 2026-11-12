@@ -1,9 +1,8 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId } from "./access";
+import { requireModerator, maybeCurrentUserId, isQaAccount } from "./access";
 import { internal } from "./_generated/api";
-import { isDemoUser, isDemoLog } from "./demo/scope";
 import type { Id } from "./_generated/dataModel";
 
 export const auditRecentLogs = query({
@@ -20,16 +19,14 @@ export const auditRecentLogs = query({
       )
       .order("desc")
       .take(args.limit ?? 100);
-    // Owner directive 2026-08-26: real moderator logins must never surface
-    // demo/seeded rows. Filter them out before the N+1 user/site lookups so
-    // the take() limit applies to real rows only.
-    const realLogs = logs.filter((l) => !isDemoLog(l));
     const lookups = await Promise.all(
-        realLogs.map((log) => Promise.all([ctx.db.get(log.userId), ctx.db.get(log.siteId)]))
+        logs.map((log) => Promise.all([ctx.db.get(log.userId), ctx.db.get(log.siteId)]))
     );
     const out = [];
-    for (const [log, [user, site]] of zip(realLogs, lookups)) {
-      if (user && isDemoUser(user)) continue;
+    for (const [log, [user, site]] of zip(logs, lookups)) {
+      // Owner directive 2026-08-26: real moderator logins must never surface
+      // throwaway QA rows.
+      if (user && isQaAccount(user)) continue;
       out.push({
         _id: log._id,
         status: log.status,
@@ -67,7 +64,7 @@ export const auditNeedsReview = query({
     const out = [];
     for (const s of flagged) {
       const u = await ctx.db.get(s.userId);
-      if (u && isDemoUser(u)) continue;
+      if (u && isQaAccount(u)) continue;
       out.push(s);
     }
     return out;
@@ -101,9 +98,9 @@ export const listEmployeesWithAssignments = query({
     }
     const out = [];
     for (const e of employees) {
-      // Owner directive 2026-08-26: demo reviewers, seeded personas, and
-      // e2e-provisioned users never appear in a real moderator's roster.
-      if (isDemoUser(e)) continue;
+      // Owner directive 2026-08-26: throwaway QA-provisioned users never
+      // appear in a real moderator's roster.
+      if (isQaAccount(e)) continue;
       const assignments = byUser.get(e._id) ?? [];
       const siteNames: string[] = [];
       for (const siteId of assignments) {
@@ -140,7 +137,7 @@ export const listAllSites = query({
     const out = [];
     for (const s of sites) {
       const creator = await ctx.db.get(s.createdBy);
-      if (creator && isDemoUser(creator)) continue;
+      if (creator && isQaAccount(creator)) continue;
       out.push(s);
     }
     return out;
@@ -191,8 +188,8 @@ export const setHourlyOverride = mutation({
 
 /**
  * Open or recently-closed, non-sealed shifts a moderator may correct the end
- * of. Demo personas and sealed (payroll-finalized) rows are excluded — the
- * override mutation refuses them too.
+ * of. Throwaway QA accounts and sealed (payroll-finalized) rows are excluded —
+ * the override mutation refuses them too.
  */
 export const overridableShifts = query({
   args: {},
@@ -211,7 +208,7 @@ export const overridableShifts = query({
     for (const shift of rows) {
       if (shift.sealed === true) continue;
       const user = await ctx.db.get(shift.userId);
-      if (!user || isDemoUser(user)) continue;
+      if (!user || isQaAccount(user)) continue;
       if (!user.isActive || user.archivedAt !== undefined) continue;
       out.push({
         _id: shift._id,
@@ -250,7 +247,7 @@ export const endShiftOverride = mutation({
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
     if (shift.sealed === true) throw new ConvexError("PAYROLL_SEALED");
     const target = await ctx.db.get(shift.userId);
-    if (!target || isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+    if (!target || isQaAccount(target)) throw new ConvexError("FORBIDDEN");
     if (args.endedAt < shift.startedAt) throw new ConvexError("ENDED_BEFORE_START");
     if (args.endedAt > Date.now() + 5 * 60 * 1000) throw new ConvexError("ENDED_IN_FUTURE");
     await ctx.db.insert("shiftOverrides", {
@@ -270,7 +267,7 @@ export const endShiftOverride = mutation({
 export const activeShifts = query({
   args: {},
   handler: async (ctx) => {
-    // Sibling of auditRecentLogs: moderator-gated, demo-filtered, returns []
+    // Sibling of auditRecentLogs: moderator-gated, QA-filtered, returns []
     // to non-moderators (the public /api/backend/call door stays harmless).
     const modId = await maybeCurrentUserId(ctx);
     if (!modId) return [];
@@ -286,8 +283,8 @@ export const activeShifts = query({
     const out = [];
     for (const shift of active) {
       const user = await ctx.db.get(shift.userId);
-      // Owner directive 2026-08-26: seeded personas / e2e users never appear.
-      if (!user || isDemoUser(user)) continue;
+      // Owner directive 2026-08-26: throwaway QA users never appear.
+      if (!user || isQaAccount(user)) continue;
 
       // Shifts are derived from logs per site; the session's site comes from
       // the employee's latest log. No logs yet -> no site, no pin (the UI

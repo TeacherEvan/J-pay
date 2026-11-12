@@ -72,15 +72,14 @@ Read every runtime-specific clause as superseded:
 | R32 | §5.2 | One-time forced password change: `users.passwordChangedAt` (undefined = must change); non-dismissable modal on first sign-in for both roles |
 | R33 | §7 | Key-gated break-glass ops: `provisionModerator`, `resetPasswordBreakGlass`, `archiveUserBreakGlass` (BOOTSTRAP_KEY); placeholder owner archived |
 | R34 | §10.1 | Live-auth loop fixed: CORS on `/.well-known/*` (+OPTIONS); anonymous-tolerant queries end UNAUTHENTICATED crashes; dead sessions auto-sign-out |
-| R35 | §6/§5.2/§9 | Investor/fork hardening: `shifts.timezone`+`sealed`, `by_started`/`by_active` indexes; bounded re-derivation (sealed rows immutable, writes windowed); per-site tz day bucketing; pluggable payroll strategies (`src/lib/payroll-strategies.ts`: flat/BCEA/dailyOT, BCEA default 1.5× >45h/wk + 2× Sunday — ⚠ UNVERIFIED citation pending); `src/config/jpay.config.ts` pure-constant contract (engine/logs/crons wired); KPI banner (`convex/kpi.ts`), geofence modal (Leaflet reuse), `/~offline` fallback precached; `DEMO_MODE=1`-gated idempotent demo seeder through real pipeline (`convex/demo*.ts`) |
-| R36 | §5.1/§7 | Demo preview is opt-in at login, not ambient: when `DEMO_MODE=1`, an Anonymous Convex Auth provider is registered and the sign-in screen renders "Enter demo preview" (gated server-side via public `demo.status` query). Anonymous sessions become throwaway `isAnonymous: true` employees auto-assigned to every active site (the 3 demo sites are self-created if none exist); forced password change skipped via `passwordChangedAt`. Daily cron purges reviewers older than 7 days with all dependent rows (logs/shifts/userSites/pushSubscriptions/messages/reviewResolutions). Sign out button added to app header (was absent entirely). Password sign-in path unchanged |
+| R35 | §6/§5.2/§9 | Investor/fork hardening: `shifts.timezone`+`sealed`, `by_started`/`by_active` indexes; bounded re-derivation (sealed rows immutable, writes windowed); per-site tz day bucketing; pluggable payroll strategies (`src/lib/payroll-strategies.ts`: flat/BCEA/dailyOT, BCEA default 1.5× >45h/wk + 2× Sunday — ⚠ UNVERIFIED citation pending); `src/config/jpay.config.ts` pure-constant contract (engine/logs/crons wired); KPI banner (`convex/kpi.ts`), geofence modal (Leaflet reuse), `/~offline` fallback precached |
 | R30 | §5.3 enforcement | Device-token lifecycle aligned to contract: self-serve issuance only when no device bound; re-issue requires moderator reset (`resetDeviceToken`). §11 Q9 opened for `feeling sick` semantics. Build-time postcss/sharp advisories accepted until Next 16 decision (D2) — CI gates added (`.github/workflows/gates.yml`) |
 | R37 | §2/§3/§11 | **Next 16.3.2 upgrade (closes D2).** `next` bumped 15.3 → 16.3.2 clearing the postcss 4 + sharp 4 high-severity advisories that were transitively bundled. `@serwist/next` bumped 9.5.12 → 10.0.0-preview.14 (Next 16 compat; export paths unchanged so `src/app/sw.ts` did not need a code change). `glob` pinned to `^11.1.0` via `overrides` to clear the Serwist-10 transitive GHSA-5j98-mcp5-4vw2 (CLI command injection in a build-time-only tool — not exploitable from this codebase, tracked as Open Question #10). Production build stays on **webpack** (`next build --webpack`) because Serwist 10-preview does not yet support Turbopack SW generation (https://github.com/serwist/serwist/issues/54); Turbopack adoption deferred to Open Question #11. New canary workflow at `.github/workflows/canary.yml` deploys to a Vercel preview on PRs labeled `next16-canary`. Rollback runbook at `docs/ops/next-16-rollback.md`. See `docs/plans/2026-08-25-next-16-upgrade.md` for the full plan + audit before/after snapshots. |
-| R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). Demo fix B2: `ensurePersonaSiteAssignments` called on bind so Thabo has site rows; `boundPersonaSites` query replaces hardcoded `sites.listMine` in demo CheckInPanel. Broadcast filtered to exclude demo users. TRD §6 + §10.2 + §11 updated. |
+| R38 | §6/§10.2/§11 | **Per-feature review fixes + master password + dashboard (owner 2026-08-26).** B1: `changeMyPassword` rewired from raw `auth:store` to high-level `retrieveAccount()` (the previous call omitted the required `{ args: ... }` wrapper so every attempt died with `ArgumentValidationError`). H1: `kpi.summary` now requires moderator auth. H2: `useUserLocale` skips query when unauthenticated. H3: `replyToEmployee` validates recipient is an active employee. H4: push subscription error tracking (auto-prune at ≥5 consecutive failures). H5: `deactivateEmployee` now also sets `isActive: false`. H6: daily message retention purge cron (`messages.retentionDays`). H7: `purgeAudit` table + audit rows for coord/message/temp sweeps. H8: Nominatim geocoding routed through server-side Convex action with proper `User-Agent`. H9: consent dialog surfaces privacy policy link. H11/H12: 44px min-height on all interactive touch targets. Schema: `users.isMasterTemp`, `pushSubscriptions.lastErrorAt/consecutiveErrors`, new `purgeAudit` table, `messages.by_sender` index. Master-password feature: `ConvexCredentials` provider (`id: "master"`) checks `MASTER_PASSWORD` env var; creates temporary moderator on login, archiving on sign-out + daily cron sweep. New `/dashboard` route for moderators (KPIs + audit log + employee roster). TRD §6 + §10.2 + §11 updated. |
 | R39 | §6/§10.2/§11 | Manager feature set, phase A1–A2 groundwork (owner 2026-11-10): `users.role` check relaxed to `moderator|employee|manager` (migration `0004_manager_role.sql`); bulk multi-site assignment replaces one-at-a-time assign/unassign (`sites.setEmployeeSites`, single transaction); manager role + `managerSites` site-scoped assignment model (managers = promoted employees, auto-scoped crew = employees on managed sites; managers get no payroll/provisioning rights); §6/ERD synced |
 | R40 | §6/§10.2/§5.1/§9 | Travel tracking (owner 2026-11-10): on-shift, off-site-only, consent-gated `travelSegments` (server-decided geofence resolution in `travel.recordFix` — device-token verified, idempotency-deduped, sample-capped, impossible-travel/gps-gap flagged); raw `pathSamples` anonymised after `retentionDays` by the purge job; payroll unchanged (shift span already contains in-shift travel); manager + moderator visibility via `travel.forUser` / `manager.recentForCrew`; migration `0006_travel_tracking.sql` |
 | R41 | §6/§6.1/§10.2 | Moderator end-of-shift override (owner 2026-11-10 bonus): `shiftOverrides` table feeds shift derivation (latest row per `shiftKey`); mandatory ≥10-char reason; before-state preserved (`previousEndedAt`, `previousTotalMinutes`); sealed/payroll-finalized shifts REFUSE overrides; needsReview cleared via `moderator_override`; payroll reflects live (calcForEmployee reads shifts); migration `0007_shift_overrides.sql` |
-| R42 | §7/§5 | Role field-staff semantics (owner 2026-11-10): managers (promoted field staff) count as `employee|manager` for deactivation, device-token issuance, messaging recipients/broadcast, KPI crew, `users_queries.listEmployees`, and `logs.listMine` — a logging manager can now check in and see own logs. Demo personas unchanged |
+| R42 | §7/§5 | Role field-staff semantics (owner 2026-11-10): managers (promoted field staff) count as `employee|manager` for deactivation, device-token issuance, messaging recipients/broadcast, KPI crew, `users_queries.listEmployees`, and `logs.listMine` — a logging manager can now check in and see own logs. |
 | R43 | §5.1/§9/§11 | Travel tracking consent model simplified (owner 2026-11-10): standing consent toggle REMOVED; automatic tracking while the shift clock is running, server-enforced phase pause (lunch / `quick side mission` / `feeling sick`) and no off-shift or post-shift fixes; one-time acknowledgment modal stands alone (`travelConsentAt`); new registrations see it right after forced first-login password change; one-time PWA install request follows the password change (iOS: Add-to-Home-Screen instructions). R40's toggle superseded (R40→R43); fix storage still requires `users.travelConsentAt`. Modal is non-blocking: "Not now" snoozes 7 days without enabling tracking |
 
 ---
@@ -202,7 +201,6 @@ export default defineSchema({
     // Vestigial Convex Auth columns retained in SQL for backfilled installs (Convex Auth removed 2026-08-23):
     emailVerificationTime: v.optional(v.number()),
     image: v.optional(v.string()),
-    isAnonymous: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
@@ -272,7 +270,6 @@ export default defineSchema({
     idempotencyKey: v.string(),                // client-generated UUID per button press; mutation dedupes (v1.1)
     isModeratorOverride: v.optional(v.boolean()), // manual attestation for weak-GPS sites (v1.1)
     impossibleTravelFlag: v.optional(v.boolean()), // >200 km/h vs previous fix (v1.1)
-    createdByDemoReviewerId: v.optional(v.id("users")), // DEMO_MODE only: which reviewer triggered this demo log
   })
     .index("by_user_time", ["userId"])  // _creationTime tiebreaker auto-appended
     .index("by_status", ["status"])
@@ -382,16 +379,6 @@ export default defineSchema({
     ts: v.number(),
   })
     .index("by_user_site_time", ["userId", "siteId"]),
-
-  demoSessions: defineTable({                 // DEMO_MODE viewer sessions bound to personas; never payroll-relevant
-    reviewerId: v.id("users"),
-    personaEmail: v.string(),
-    mode: v.union(v.literal("employee"), v.literal("moderator"), v.literal("full")),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_reviewer", ["reviewerId"])
-    .index("by_persona", ["personaEmail"]),
 });
 ```
 
@@ -438,7 +425,6 @@ Money is computed in **integer cents**, never by accumulating floats (`src/lib/p
 ## 7. Security
 
 - **AuthN/AuthZ:** Convex Auth sessions validated via ctx.auth (clients connect direct to Convex — no route-handler proxy hop); role checked in every mutation/query. Moderators provisioned backend-only.
-- **Demo preview sessions (R36):** the Anonymous provider is registered **only** when `DEMO_MODE=1` in the Convex environment — forks without that env var are structurally incapable of anonymous sign-in. Demo reviewers are `isAnonymous: true` employees with no credentials; they never gain moderator capability, and a daily cron garbage-collects them after 7 days.
 - **Row-scoped authz (v1.1 — HARD RULE):** every query and mutation derives the acting `userId` from `ctx.auth` and filters rows by it. A client-supplied `userId` argument is NEVER trusted as an identity or filter input, including on indexed queries like `by_user_time`. Employees read only their own logs/shifts/messages; one unscoped query is a full payroll-data leak.
 - **Device binding:** HMAC-signed token issued inside Convex (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
 - **Impossible-travel heuristic (v1.1):** at write time, compare against the employee's previous fix: if implied speed > 200 km/h, set `impossibleTravelFlag = true` for moderator review. Catches naive GPS spoofing cheaply; advisory flag, not a hard reject.
@@ -516,7 +502,6 @@ erDiagram
     users ||--o{ managerSites : "manages"
     users ||--o{ punches : "punches"
     sites ||--o{ punches : "at"
-    users ||--o{ demoSessions : "reviews"
     sites ||--o{ managerSites : "managed by"
     users ||--o{ travelSegments : "travels"
     users ||--o{ shiftOverrides : "overrides"
@@ -543,7 +528,6 @@ erDiagram
         string locale "OPTIONAL BCP-47 UI locale"
         number emailVerificationTime "OPTIONAL vestigial (Convex Auth removed)"
         string image "OPTIONAL vestigial (Convex Auth removed)"
-        boolean isAnonymous "OPTIONAL vestigial (Convex Auth removed)"
     }
     systemEvents {
         string kind
@@ -585,7 +569,6 @@ erDiagram
         number sideMissionDurationMinutes "OPTIONAL enum 15..120"
         string deviceMetadata
         string ipAddress "ADVISORY"
-        id createdByDemoReviewerId "OPTIONAL DEMO_MODE only"
         string idempotencyKey "DEDUPE"
         boolean isModeratorOverride "OPTIONAL"
         boolean impossibleTravelFlag "OPTIONAL"
@@ -663,13 +646,6 @@ erDiagram
         number lng
         boolean geoPassed
         number ts
-    }
-    demoSessions {
-        id reviewerId
-        string personaEmail
-        string mode "employee|moderator|full"
-        number createdAt
-        number updatedAt
     }
 ```
 
@@ -767,9 +743,8 @@ stateDiagram-v2
 
 13. **Schema drift: `punches` table** (convex/schema.ts) — NOW DOCUMENTED in §6 + §10.2 (2026-11-11). Supports the separate "punch-clock" UI (`/punch` route) with simple in/out semantics (TRD §5.1 only specifies the richer CHECK-IN badge flow). Decision needed from owner: keep both, merge, or remove.
 
-14. **Schema drift: `demoSessions` table** (convex/schema.ts) and `logs.createdByDemoReviewerId` — NOW DOCUMENTED in §6 + §10.2 (2026-11-11). Demo/persona preview mode, guarded by `DEMO_MODE=1`, gated by `requireDemoReviewer`. Decision needed from owner: keep documented-as-demo-only (current state), or remove from production schema.
 
-15. **Schema drift: `users` table fields** — TRD §6 lists mandatory `name: v.string()`, `email: v.string()` but actual schema (via `...authTables` spread from `@convex-dev/auth`) makes them optional and adds `emailVerificationTime`, `image`, `isAnonymous`, plus app-specific `payStrategy`, `locale`. The `authTables` spread is required by Convex Auth; this is a framework constraint. TRD should be updated to reflect the actual generated schema.
+14. **Schema drift: `users` table fields** — TRD §6 lists mandatory `name: v.string()`, `email: v.string()` but actual schema (via `...authTables` spread from `@convex-dev/auth`) makes them optional and adds `emailVerificationTime`, `image`, plus app-specific `payStrategy`, `locale`. The `authTables` spread is required by Convex Auth; this is a framework constraint. TRD should be updated to reflect the actual generated schema.
 
 ---
 

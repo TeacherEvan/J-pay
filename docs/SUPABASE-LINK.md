@@ -65,7 +65,7 @@ keeps reads consistent.
 | Dispatch | `internalQuery` / `internalMutation` / `internalAction` are refused unless the call comes from another backend function (`fromServer`) |
 | Server key | `SUPABASE_SERVICE_ROLE_KEY`, `server-only` module, never in a client bundle |
 
-Role checks (`requireModerator`, `requireEmployee`, demo boundaries) are the
+Role checks (`requireModerator`, `requireEmployee`) are the
 original Convex code and still run inside each handler.
 
 ## Accounts
@@ -76,8 +76,6 @@ original Convex code and still run inside each handler.
   is the initial password (same contract as before).
 - **Break-glass:** `MASTER_PASSWORD` enables the `master` sign-in path;
   `BOOTSTRAP_KEY` gates `provisionModerator` / `resetPasswordBreakGlass`.
-- Demo mode needs `DEMO_MODE=1` (off by default) and uses ephemeral Supabase
-  accounts.
 
 ## Verify
 

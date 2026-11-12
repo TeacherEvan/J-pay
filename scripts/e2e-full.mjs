@@ -14,7 +14,6 @@ import {
   signIn,
   clickByText,
   clickByTestId,
-  waitForText,
   waitForUrl,
 } from "./e2e-helpers.mjs";
 
@@ -62,44 +61,6 @@ await runWithBrowser(async (page, { baseUrl, cdp, assertions }) => {
     console.error(`ABORT: ${baseUrl} is not serving J-Pay.`);
     console.error("Another app likely holds this port and J-pay auto-incremented (try JPAY_BASE_URL=http://localhost:3001).");
     process.exit(3);
-  }
-
-  // ---------- A0. DEMO PREVIEW LEG (R36: demo optional + selectable at login) ----------
-  await wipe(page, cdp, baseUrl);
-  {
-    const t = await waitForText(page, /Enter demo preview/, { timeoutMs: 15_000 }).catch(() => "");
-    const clicked = t ? await clickByTestId(page, "demo-preview-cta") : false;
-    await add("demo preview selectable at login", clicked);
-    let body = "";
-    for (let i = 0; i < 25; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      body = await page.evaluate(() => document.body.innerText.replace(/\n+/g, " | "));
-      if (/CHECK IN/.test(body)) break;
-    }
-    await add("demo session → employee panel", /CHECK IN/.test(body));
-    await add("demo role = employee", /EMPLOYEE/i.test(body));
-    await add("demo reviewer has sites", !/No site assigned/.test(body));
-    await add("forced password skipped for reviewer", !/Set your own password/.test(body));
-    await clickByTestId(page, "consent-acknowledge").catch(() => {});
-    await new Promise((r) => setTimeout(r, 800));
-    await clickByTestId(page, "checkin-submit").catch(() => {});
-    let logged = false;
-    let matchLine = "";
-    for (let i = 0; i < 12; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const cur = await page.evaluate(() => document.body.innerText.replace(/\n+/g, " | "));
-      if (/Logged \w+/.test(cur)) { logged = true; matchLine = cur; break; }
-      if (/Weak GPS|denied/i.test(cur)) { matchLine = cur; break; }
-    }
-    await add("demo check-in writes real log", logged, matchLine.match(/Logged \w+|Weak GPS[^\n]*|denied[^\n]*/)?.[0] ?? "");
-    await page.screenshot({ path: "user-review/00-demo-checkin.png" });
-    await clickByTestId(page, "auth-signout").catch(() => {});
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 1500));
-      const cur = await page.evaluate(() => document.body.innerText.replace(/\n+/g, " | "));
-      if (/Sign in/.test(cur)) break;
-    }
-    await add("demo sign out returns to login", /Sign in/.test(await page.evaluate(() => document.body.innerText.replace(/\n+/g, " | "))));
   }
 
   // ---------- A. MODERATOR LEG ----------

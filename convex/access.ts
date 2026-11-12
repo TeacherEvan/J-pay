@@ -1,10 +1,25 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { isDemoUser } from "./demo/scope";
 
 type Ctx = MutationCtx | QueryCtx;
+
+/**
+ * Throwaway accounts provisioned by the automated QA suites.
+ *
+ * The e2e walkthrough and the review walkthrough create employees whose
+ * addresses carry one of these prefixes. They are real rows in `public.users`,
+ * so without this marker they would surface in a moderator's roster, count
+ * toward workforce KPIs and receive broadcasts. A real login must never see
+ * them.
+ */
+const QA_ACCOUNT_EMAIL_PREFIXES = ["e2e.", "review-emp."];
+
+export function isQaAccount(user: Doc<"users">): boolean {
+  const email = user.email ?? "";
+  return QA_ACCOUNT_EMAIL_PREFIXES.some((prefix) => email.startsWith(prefix));
+}
 
 /**
  * Identity lookup.
@@ -68,32 +83,4 @@ export async function requireEmployee(ctx: Ctx): Promise<Id<"users">> {
  */
 export function orgBoundaryOk(a: string | undefined | null, b: string | undefined | null): boolean {
   return (a ?? null) === (b ?? null);
-}
-
-export async function requireDemoReviewer(
-  ctx: Ctx
-): Promise<{ userId: Id<"users">; personaUserId: Id<"users">; personaEmail: string }> {
-  if (process.env.DEMO_MODE !== "1") throw new ConvexError("FORBIDDEN");
-  const userId = await currentUserId(ctx);
-  const user = await ctx.db.get(userId);
-  if (!user || user.isAnonymous !== true || !user.isActive || user.archivedAt !== undefined) {
-    throw new ConvexError("FORBIDDEN");
-  }
-  const session = await ctx.db
-    .query("demoSessions")
-    .withIndex("by_reviewer", (q) => q.eq("reviewerId", userId))
-    .first();
-  if (!session) throw new ConvexError("DEMO_SESSION_NOT_BOUND");
-  const persona = await ctx.db
-    .query("users")
-    .withIndex("email", (q) => q.eq("email", session.personaEmail))
-    .first();
-  // SECURITY (2026-09-01): require the bound persona to be a demo-tagged user.
-  // Previously only "persona exists, is employee, is not anonymous" was checked,
-  // which let demo reviewers bind to real employees and write attendance against
-  // them with isModeratorOverride: true. See red-team audit F1+F2.
-  if (!persona || persona.role !== "employee" || !isDemoUser(persona) || persona.archivedAt !== undefined || !persona.isActive) {
-    throw new ConvexError("PERSONA_NOT_FOUND");
-  }
-  return { userId, personaUserId: persona._id, personaEmail: session.personaEmail };
 }

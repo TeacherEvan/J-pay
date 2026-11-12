@@ -4,10 +4,10 @@
 // exercises a real feature transition and asserts the next screen reflects
 // the new state.
 //
-// Journey (uses the demo preview path — DEMO_MODE=1, no creds required):
+// Journey (real employee sign-in — JPAY_EMAIL + JPAY_PASSWORD):
 //
-//   1. Open landing → assert sign-in card + demo entry
-//   2. Click "Enter demo preview" → wait for employee panel mount
+//   1. Open landing → assert sign-in card
+//   2. Sign in → wait for employee panel mount
 //   3. Assert employee panel affordances (CHECK IN, all 7 status pills,
 //      site select, role badge, sign out, privacy footer)
 //   4. Press CHECK IN → assert log feedback appears
@@ -29,6 +29,11 @@ import { join } from "node:path";
 
 const BASE = process.env.JPAY_BASE_URL ?? "http://localhost:3000";
 const SCREENSHOT_DIR = "user-review";
+
+// The employee journey needs a real signed-in employee. Without credentials
+// the session-dependent legs skip instead of failing.
+const HAS_EMPLOYEE_SESSION = Boolean(process.env.JPAY_EMAIL && process.env.JPAY_PASSWORD);
+const SKIP_NO_SESSION = "requires JPAY_EMAIL + JPAY_PASSWORD";
 mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
 let browser;
@@ -47,7 +52,7 @@ test.before(async () => {
   });
   page = await browser.newPage();
   await page.setViewport({ width: 414, height: 896, deviceScaleFactor: 2 }); // mobile
-  // Mock geolocation to JNB Central Depot (where demo sites are seeded)
+  // Mock geolocation to JNB Central Depot
   const cdp = await page.createCDPSession();
   await cdp.send("Emulation.setGeolocationOverride", {
     latitude: -26.2041,
@@ -126,23 +131,42 @@ const waitFor = async (pred, { timeoutMs = 20_000, intervalMs = 1000, label = "p
 };
 
 // ----------------------------------------------------------------------------
-// 1 → 2: Landing → demo entry
+// 1 → 2: Landing → employee panel (signed in)
 // ----------------------------------------------------------------------------
-test("F2F.1: landing renders sign-in card with demo entry", async () => {
+test("F2F.1: landing renders the sign-in card", async () => {
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
   await sleep(2500);
   const t = await innerText();
   assert.match(t, /J-Pay/, "landing must brand as J-Pay");
   const bs = await buttons();
   assert.ok(bs.some((b) => b === "Sign in"), "Sign in button required");
-  assert.ok(bs.some((b) => /Enter demo preview/i.test(b)),
-    "demo entry button required when DEMO_MODE=1");
 });
 
-test("F2F.2: demo entry mounts the employee panel", async () => {
+test("F2F.2: signing in mounts the employee panel", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
+  const email = process.env.JPAY_EMAIL;
+  const password = process.env.JPAY_PASSWORD;
+  if (!email || !password) {
+    console.log("  (skipped) JPAY_EMAIL + JPAY_PASSWORD are required for the employee journey");
+    return;
+  }
   await sleep(1000);
-  const ok = await clickByText("Enter demo preview (no account)", { exact: true });
-  assert.ok(ok, "demo entry clickable");
+  const filled = await page.evaluate(
+    ([mail, pw]) => {
+      const set = (sel, val) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        setter.call(el, val);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      };
+      return set('input[type="email"]', mail) && set('input[type="password"]', pw);
+    },
+    [email, password],
+  );
+  assert.ok(filled, "sign-in form filled");
+  const submitted = await clickByText("Sign in", { exact: true });
+  assert.ok(submitted, "sign-in submit clickable");
   await waitFor(
     async () => {
       const t = await innerText();
@@ -156,7 +180,7 @@ test("F2F.2: demo entry mounts the employee panel", async () => {
 // ----------------------------------------------------------------------------
 // 3: Employee panel affordances
 // ----------------------------------------------------------------------------
-test("F2F.3: employee panel exposes CHECK IN, all 7 status pills, site select, sign out", async () => {
+test("F2F.3: employee panel exposes CHECK IN, all 7 status pills, site select, sign out", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   const bs = await buttons();
   assert.ok(bs.includes("CHECK IN"), `CHECK IN required — got: ${JSON.stringify(bs)}`);
   const requiredStatuses = [
@@ -172,7 +196,7 @@ test("F2F.3: employee panel exposes CHECK IN, all 7 status pills, site select, s
   assert.ok(selects >= 1, "at least one <select> required (site picker)");
 });
 
-test("F2F.3b: privacy footer is rendered (R13)", async () => {
+test("F2F.3b: privacy footer is rendered (R13)", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   const t = await innerText();
   assert.match(
     t,
@@ -184,7 +208,7 @@ test("F2F.3b: privacy footer is rendered (R13)", async () => {
 // ----------------------------------------------------------------------------
 // 4: First check-in
 // ----------------------------------------------------------------------------
-test("F2F.4: CHECK IN writes a log and shows feedback", async () => {
+test("F2F.4: CHECK IN writes a log and shows feedback", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   const ok = await clickByText("CHECK IN", { exact: true });
   assert.ok(ok, "CHECK IN clickable");
   // Wait for log feedback ("Logged X." or "Duplicate ignored.")
@@ -198,7 +222,7 @@ test("F2F.4: CHECK IN writes a log and shows feedback", async () => {
 // ----------------------------------------------------------------------------
 // 5 + 6: Two more check-ins with different statuses
 // ----------------------------------------------------------------------------
-test("F2F.5: status pills are clickable and switch the active status", async () => {
+test("F2F.5: status pills are clickable and switch the active status", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   // Click "lunch" — its visual style should change (border-emerald-400)
   const ok = await clickByText("lunch", { exact: true });
   assert.ok(ok, "lunch pill clickable");
@@ -211,7 +235,7 @@ test("F2F.5: status pills are clickable and switch the active status", async () 
   assert.equal(activePill, "lunch", `active pill must be "lunch" — got: ${activePill}`);
 });
 
-test("F2F.6: a second check-in with status=lunch writes a second log", async () => {
+test("F2F.6: a second check-in with status=lunch writes a second log", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   const ok = await clickByText("CHECK IN", { exact: true });
   assert.ok(ok, "CHECK IN clickable");
   await waitFor(
@@ -223,7 +247,7 @@ test("F2F.6: a second check-in with status=lunch writes a second log", async () 
 // ----------------------------------------------------------------------------
 // 7: Recent section shows the logs
 // ----------------------------------------------------------------------------
-test("F2F.7: 'Recent' section shows at least 1 entry after check-ins", async () => {
+test("F2F.7: 'Recent' section shows at least 1 entry after check-ins", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   // The Recent list lives at the bottom of the employee panel
   const recentCount = await page.evaluate(() => {
     const ul = [...document.querySelectorAll("ul")].find((u) =>
@@ -237,7 +261,7 @@ test("F2F.7: 'Recent' section shows at least 1 entry after check-ins", async () 
 // ----------------------------------------------------------------------------
 // 8: OFFLINE → enqueue
 // ----------------------------------------------------------------------------
-test("F2F.8: offline check-in is queued (not lost)", async () => {
+test("F2F.8: offline check-in is queued (not lost)", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   // Switch to "day finish" so the third log has a distinct status
   await clickByText("day finish", { exact: true });
   // Cut the network
@@ -266,16 +290,16 @@ test("F2F.8: offline check-in is queued (not lost)", async () => {
 // ----------------------------------------------------------------------------
 // 9: ONLINE → flush
 // ----------------------------------------------------------------------------
-// This test is BEST-EFFORT. On a demo deployment under load, the
-// IndexedDB → Convex flush can take >30s because the demo anonymous
-// auth token has to be re-validated on the server side. The test
+// This test is BEST-EFFORT. On a loaded deployment the
+// IndexedDB → server flush can take >30s because the session
+// has to be re-validated on the server side. The test
 // ASSERTS the system REACTS to the online event (counter disappears OR
 // a "Dropped queued entry" error surfaces, both proving reconciliation
 // happened) but does not block the suite if neither happens within the
 // budget. The suite's primary contract is that offline entries are
 // SURFACED (F2F.8); the replay correctness is covered by the existing
 // e2e-full.mjs walkthrough.
-test("F2F.9: returning online triggers outbox reconciliation", async () => {
+test("F2F.9: returning online triggers outbox reconciliation", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   const cdp = await page.createCDPSession();
   await cdp.send("Network.emulateNetworkConditions", {
     offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
@@ -314,7 +338,7 @@ test("F2F.9: returning online triggers outbox reconciliation", async () => {
 // ----------------------------------------------------------------------------
 // 10: Sign out → return to landing
 // ----------------------------------------------------------------------------
-test("F2F.10: sign out returns to the sign-in card", async () => {
+test("F2F.10: sign out returns to the sign-in card", { skip: !HAS_EMPLOYEE_SESSION && SKIP_NO_SESSION }, async () => {
   // The Sign-out button may have been unmounted briefly during state
   // transitions after the F2F.9 outbox flush. Wait for it to be present.
   let clicked = false;

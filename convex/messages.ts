@@ -2,8 +2,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, requireActiveUser, requireManager } from "./access";
-import { isDemoUser } from "./demo/scope";
+import { requireModerator, requireActiveUser, requireManager, isQaAccount } from "./access";
 
 function validContent(content: string): string {
   const text = content.trim();
@@ -40,21 +39,18 @@ export const moderatorInbox = query({
       .filter((q) => q.eq(q.field("archivedAt"), undefined))
       .take(50);
     const merged = [...unread, ...read].sort((a, b) => b._creationTime - a._creationTime);
-    const senders = new Map<string, { name: string; isDemo: boolean }>();
-    const isDemo = process.env.DEMO_MODE === "1";
+    const senders = new Map<string, { name: string; isQa: boolean }>();
     for (const m of merged) {
       if (!senders.has(m.senderId)) {
         const sender = await ctx.db.get(m.senderId);
         senders.set(m.senderId, {
           name: sender?.name ?? sender?.email ?? "unknown",
-          isDemo: sender ? isDemoUser(sender) : false,
+          isQa: sender ? isQaAccount(sender) : false,
         });
       }
     }
-    const filtered = merged.filter((m) => {
-      if (!isDemo && senders.get(m.senderId)?.isDemo) return false;
-      return true;
-    });
+    // Throwaway QA accounts are never part of the real moderator queue.
+    const filtered = merged.filter((m) => !senders.get(m.senderId)?.isQa);
     return filtered.map((m) => ({
       _id: m._id,
       senderId: m.senderId,
@@ -114,7 +110,7 @@ export const replyToEmployee = mutation({
 });
 
 /** Manager messaging (2026-11-10): a manager may 1:1 message ANY active,
- * non-demo user in their own organisation — not just crew at managed sites. */
+ * non-QA user in their own organisation — not just crew at managed sites. */
 export const managerOrgUsers = query({
   args: {},
   handler: async (ctx) => {
@@ -122,13 +118,12 @@ export const managerOrgUsers = query({
     const me = await ctx.db.get(managerId);
     const orgId = me?.orgId;
     const users = await ctx.db.query("users").collect();
-    const isDemo = process.env.DEMO_MODE === "1";
     return users
       .filter((u) => {
         if (u._id === managerId) return false;
         if (orgId !== undefined && u.orgId !== orgId) return false;
         if (!u.isActive || u.archivedAt !== undefined) return false;
-        if (!isDemo && isDemoUser(u)) return false;
+        if (isQaAccount(u)) return false;
         return true;
       })
       .map((u) => ({ _id: u._id, name: u.name ?? u.email ?? "unknown", email: u.email, role: u.role }))
@@ -149,7 +144,7 @@ export const managerMessage = mutation({
     if (me?.orgId !== undefined && recipient.orgId !== me.orgId) {
       throw new ConvexError("NOT_IN_ORG");
     }
-    if (process.env.DEMO_MODE !== "1" && isDemoUser(recipient)) {
+    if (isQaAccount(recipient)) {
       throw new ConvexError("INVALID_RECIPIENT");
     }
     await ctx.db.insert("messages", {
@@ -167,7 +162,7 @@ export const managerMessage = mutation({
   },
 });
 
-/** Manager broadcast: one message to every active, non-demo user in the manager's org. */
+/** Manager broadcast: one message to every active, non-QA user in the manager's org. */
 export const managerBroadcast = mutation({
   args: { content: v.string() },
   handler: async (ctx, args) => {
@@ -176,13 +171,12 @@ export const managerBroadcast = mutation({
     const me = await ctx.db.get(managerId);
     const orgId = me?.orgId;
     const users = await ctx.db.query("users").collect();
-    const isDemo = process.env.DEMO_MODE === "1";
     let sent = 0;
     for (const u of users) {
       if (u._id === managerId) continue;
       if (orgId !== undefined && u.orgId !== orgId) continue;
       if (!u.isActive || u.archivedAt !== undefined) continue;
-      if (!isDemo && isDemoUser(u)) continue;
+      if (isQaAccount(u)) continue;
       await ctx.db.insert("messages", {
         senderId: managerId,
         recipientId: u._id,
@@ -212,7 +206,7 @@ export const broadcast = mutation({
     employees.push(...managers);
     for (const e of employees) {
       if (e.archivedAt !== undefined || !e.isActive) continue;
-      if (isDemoUser(e)) continue;
+      if (isQaAccount(e)) continue;
       await ctx.db.insert("messages", {
         senderId: moderatorId,
         recipientId: e._id,

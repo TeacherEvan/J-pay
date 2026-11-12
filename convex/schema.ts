@@ -10,7 +10,6 @@ export default defineSchema({
     email: v.optional(v.string()),
     emailVerificationTime: v.optional(v.number()),
     image: v.optional(v.string()),
-    isAnonymous: v.optional(v.boolean()),
     isMasterTemp: v.optional(v.boolean()),
     role: v.union(v.literal("moderator"), v.literal("employee"), v.literal("manager")),
     isActive: v.boolean(),
@@ -109,7 +108,6 @@ export default defineSchema({
     idempotencyKey: v.string(),
     isModeratorOverride: v.optional(v.boolean()),
     impossibleTravelFlag: v.optional(v.boolean()),
-    createdByDemoReviewerId: v.optional(v.id("users")),
   })
     .index("by_user_time", ["userId"])
     .index("by_status", ["status"])
@@ -205,14 +203,4 @@ export default defineSchema({
     previousEndedAt: v.optional(v.number()),
     previousTotalMinutes: v.optional(v.number()),
   }).index("by_user_key", ["userId", "shiftKey"]),
-
-  demoSessions: defineTable({
-    reviewerId: v.id("users"),
-    personaEmail: v.string(),
-    mode: v.union(v.literal("employee"), v.literal("moderator"), v.literal("full")),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_reviewer", ["reviewerId"])
-    .index("by_persona", ["personaEmail"]),
 });

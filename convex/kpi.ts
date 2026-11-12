@@ -1,7 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireModerator } from "./access";
-import { isDemoUser } from "./demo/scope";
+import { requireModerator, isQaAccount } from "./access";
 
 export const summary = query({
   args: {},
@@ -27,10 +26,10 @@ export const summary = query({
       .withIndex("by_role", (q) => q.eq("role", "manager"))
       .collect();
     employees.push(...managers);
-    // Owner directive 2026-08-26: demo reviewers / seeded personas / e2e
-    // users must not count toward real workforce KPIs.
+    // Owner directive 2026-08-26: throwaway QA accounts (e2e suite, review
+    // walkthrough) must not count toward real workforce KPIs.
     const realEmployeeIds = new Set(
-      employees.filter((e) => !isDemoUser(e)).map((e) => e._id as string),
+      employees.filter((e) => !isQaAccount(e)).map((e) => e._id as string),
     );
     const isRealUser = (id: { toString(): string }) =>
       realEmployeeIds.has(id.toString());
@@ -72,7 +71,6 @@ export const summary = query({
       weeklyBillableMinutes,
       pendingReviews: flagged.length,
       anomalies24h,
-      demoModeEnabled: process.env.DEMO_MODE === "1",
     };
   },
 });

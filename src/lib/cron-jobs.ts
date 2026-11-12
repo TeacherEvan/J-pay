@@ -9,7 +9,6 @@
  */
 export const CRON_JOBS = {
   "purge-expired-coordinates": { module: "logs", fn: "purgeExpiredCoords" },
-  "purge-stale-demo-reviewers": { module: "demo", fn: "purgeStaleReviewers" },
   "archive-stale-master-temps": { module: "users", fn: "archiveStaleMasterTemps" },
   "purge-expired-messages": { module: "messages", fn: "purgeExpiredMessages" },
 } as const;

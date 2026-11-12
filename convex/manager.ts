@@ -1,8 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireModerator, maybeCurrentUserId, orgBoundaryOk } from "./access";
-import { isDemoUser } from "./demo/scope";
+import { requireModerator, maybeCurrentUserId, orgBoundaryOk, isQaAccount } from "./access";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -74,15 +73,15 @@ async function requireManagerViewer(
   const viewerId = await maybeCurrentUserId(ctx);
   if (!viewerId) return null;
   const viewer = await ctx.db.get(viewerId);
-  // Never serve a demo persona a manager console; real managers only.
+  // Never serve a throwaway QA account a manager console; real managers only.
   if (!viewer || viewer.role !== "manager" || !viewer.isActive || viewer.archivedAt !== undefined) {
     return null;
   }
-  if (isDemoUser(viewer)) return null;
+  if (isQaAccount(viewer)) return null;
   return { managerId: viewerId as Id<"users">, siteIds: await managedSiteIdSet(ctx, viewerId as Id<"users">) };
 }
 
-/** Sites the current manager covers (active, non-archived, not demo-provisioned). */
+/** Sites the current manager covers (active, non-archived, not QA-provisioned). */
 export const listManagedSites = query({
   args: {},
   handler: async (ctx) => {
@@ -93,7 +92,7 @@ export const listManagedSites = query({
       const site = await ctx.db.get(siteId);
       if (!site || site.archivedAt !== undefined) continue;
       const creator = await ctx.db.get(site.createdBy);
-      if (creator && isDemoUser(creator)) continue;
+      if (creator && isQaAccount(creator)) continue;
       out.push(site);
     }
     out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
@@ -105,7 +104,7 @@ export const listManagedSites = query({
  * Map payload: active shifts of crew assigned to managed sites.
  * Same site-derivation rule as the moderator map — the shift's site is the
  * employee's latest log site; no logs yet means no pin, never an invented one.
- * Returns [] to anyone who is not an active, real (non-demo) manager.
+ * Returns [] to anyone who is not an active, real (non-QA) manager.
  */
 export const managedActiveShifts = query({
   args: {},
@@ -127,7 +126,7 @@ export const managedActiveShifts = query({
     for (const shift of active) {
       if (!crewIds.has(shift.userId)) continue;
       const user = await ctx.db.get(shift.userId);
-      if (!user || isDemoUser(user) || !user.isActive || user.archivedAt !== undefined) continue;
+      if (!user || isQaAccount(user) || !user.isActive || user.archivedAt !== undefined) continue;
 
       const lastLogs = await ctx.db
         .query("logs")
@@ -235,7 +234,7 @@ export const myCrew = query({
     const out = [];
     for (const [userId, names] of userSiteNames) {
       const user = await ctx.db.get(userId as Id<"users">);
-      if (!user || isDemoUser(user) || !user.isActive || user.archivedAt !== undefined) continue;
+      if (!user || isQaAccount(user) || !user.isActive || user.archivedAt !== undefined) continue;
       out.push({
         _id: user._id,
         name: user.name ?? user.email ?? "unknown",
@@ -265,7 +264,7 @@ export const listManagers = query({
       .collect();
     const out = [];
     for (const m of managers) {
-      if (isDemoUser(m) || m.archivedAt !== undefined) continue;
+      if (isQaAccount(m) || m.archivedAt !== undefined) continue;
       const rows = (
         await ctx.db
           .query("managerSites")
@@ -306,7 +305,7 @@ export const setManagerSites = mutation({
     const manager = await ctx.db.get(args.managerId);
     if (!manager || manager.role !== "manager") throw new ConvexError("NOT_A_MANAGER");
     if (manager.archivedAt !== undefined || !manager.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
-    if (isDemoUser(manager)) throw new ConvexError("FORBIDDEN");
+    if (isQaAccount(manager)) throw new ConvexError("FORBIDDEN");
 
     const uniqueSiteIds = [...new Set(args.siteIds)];
     const wanted = new Set<string>();
@@ -374,7 +373,7 @@ export const promoteToManager = mutation({
       throw new ConvexError("NOT_AN_EMPLOYEE");
     }
     if (target.archivedAt !== undefined || !target.isActive) throw new ConvexError("ACCOUNT_INACTIVE");
-    if (isDemoUser(target)) throw new ConvexError("FORBIDDEN");
+    if (isQaAccount(target)) throw new ConvexError("FORBIDDEN");
 
     // Org boundary check (fail closed): both parties must agree on the org —
     // same org, or both unscoped. Exactly one side org'd, or different orgs → refuse.
@@ -479,7 +478,7 @@ export const demoteManager = mutation({
       for (const sm of siteManagers) {
         if (sm.managerId !== args.userId && sm.archivedAt === undefined) {
           const mUser = await ctx.db.get(sm.managerId);
-          if (mUser && mUser.role === "manager" && mUser.isActive && mUser.archivedAt === undefined && !isDemoUser(mUser)) {
+          if (mUser && mUser.role === "manager" && mUser.isActive && mUser.archivedAt === undefined && !isQaAccount(mUser)) {
             otherActiveCount++;
           }
         }

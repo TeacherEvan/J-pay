@@ -3,7 +3,7 @@
 If the Next 16 upgrade ships a regression that the canary didn't catch, this is the 30-second rollback path.
 
 ## Symptoms (any one of these is enough to consider rolling back)
-- Vercel prod returns 500s on `/`, `/moderator`, or `/demo`
+- Vercel prod returns 500s on `/` or `/moderator`
 - The service worker fails to register (visible in DevTools → Application → Service Workers)
 - The e2e walkthrough goes red on `main`
 - A user reports a regression in the issue tracker

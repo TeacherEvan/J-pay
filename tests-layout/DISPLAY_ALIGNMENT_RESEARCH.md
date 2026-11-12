@@ -59,8 +59,6 @@ Conventions:
 | `src/app/moderator/page.tsx:44` | `<KpiBanner />` — `grid-cols-2 sm:grid-cols-4` (`kpi-banner.tsx:21`). | **2 cols on mobile, 4 cols on sm+.** |
 | `src/app/moderator/geofence-modal.tsx:130-137` | `fixed inset-0 z-[1000] grid place-items-center bg-black/70 p-4` + inner `w-full max-w-lg`. | Max width 512 px. |
 | `src/app/change-password.tsx:93-117` | `ForcedPasswordChange` — `fixed inset-0 z-[100] grid place-items-center bg-black/90 p-6` + inner `w-full max-w-sm`. | Max width 384 px. |
-| `src/app/demo/layout.tsx:42-65` | Demo shell — `max-w-3xl` (768 px), header with "Exit demo" button. | |
-| `src/app/demo/page.tsx:64-72` | KPI banner: `grid-cols-2 sm:grid-cols-4` (4 cells, 2x2 on mobile). | Different from moderator's KpiBanner. |
 | `src/app/sign-in.tsx:18` | `mx-auto flex w-full max-w-sm` — the sign-in card is capped at 384 px. | |
 | `postcss.config.mjs:1-7` | Only `@tailwindcss/postcss` is loaded (no custom plugin, no autoprefixer needed). | |
 
@@ -267,8 +265,8 @@ Conventions:
   - `getComputedStyle(banner).gridTemplateColumns` has 4 tracks (split on
     whitespace, length === 4 on 1280).
   - All 4 cards have width within 2 px of each other.
-  - The seed button is `below` the row (when demo mode is enabled), and
-    is **inside** the same section (not floating to the right).
+  - Any auxiliary control is **inside** the same section (not floating
+    to the right).
 - A11y: `aria-label="Key metrics"`.
 - NOT to test: exact px widths of cards (responsive).
 
@@ -416,137 +414,6 @@ Conventions:
 
 ---
 
-## C. Demo console (`/demo`, viewport 1280x800)
-
-### C.1 Surface: shell (layout)
-- Source: `src/app/demo/layout.tsx:42-65`. `max-w-3xl` (768 px) on a
-  1280 viewport → 256 px gutter on each side.
-- Assert:
-  - `main/wrapper rect.width === 768`.
-  - `(rect.left + rect.right) / 2 === 640`.
-  - Header has the persona name in `<h1>` "J-Pay · Demo console" + a
-    `data-testid="demo-persona-name"` span.
-  - "Switch persona", "About", "Exit demo" all in `<nav>` at the right
-    of the header; all 3 are reachable (in DOM, visible, not hidden).
-  - "Exit demo" is a `<button>` (not a link) and has
-    `getComputedStyle().textTransform !== "uppercase"` (button copy is
-    "Exit demo" mixed case).
-
-### C.2 Surface: PersonaHeader
-- Source: `src/app/demo/page.tsx:85-92`. `data-testid="demo-persona-header"`.
-- Expected: at the **top** of the page, before the KPI banner. Persona's
-  name in `<h2>`; email in smaller text.
-- Assert:
-  - `[data-testid="demo-persona-header"].rect.top === 0` (or just below
-    the shell header's `rect.bottom`).
-  - Sits above `[data-testid="demo-kpi-banner"]`.
-
-### C.3 Surface: **KPI banner (2/4 layout)**
-- Source: `src/app/demo/page.tsx:64-72`. `grid-cols-2 sm:grid-cols-4`
-  with 4 KPI cards inside `[data-testid="demo-kpi-banner"]`.
-- Expected on 1280: **4 columns**. Each card has the
-  `data-testid="kpi-card"`.
-- Assert:
-  - Banner section is below PersonaHeader.
-  - Exactly 4 `[data-testid="kpi-card"]` elements.
-  - All 4 are on the same row (`rect.top` equal within 2 px).
-  - All 4 have equal width.
-  - Each card's `<p class="text-xs text-neutral-500">` shows the label
-    (Active on site / Billable this week / Pending reviews / Anomalies
-    (24h)).
-- NOT to test: whether the value is a number (data-driven).
-
-### C.4 Surface: vertical stack order
-- Source: `src/app/demo/page.tsx:60-82`. Order:
-  PersonaHeader → KPI banner → PayrollTable → ReviewList →
-  AuditTable → MessagesSection → RosterList → CheckInPanel →
-  ExportPanel.
-- Expected: each sits below the previous with no overlap.
-- Assert (data-testids make this easy):
-  - For every consecutive pair (A, B): `A.rect.bottom <= B.rect.top`.
-  - For every panel: `rect.left === 0` (within the column) and
-    `rect.width === 768` (or 768 - 2*24 = 720 if the section has its
-    own padding — most are border-only).
-
-### C.5 Surface: PayrollTable
-- Source: `src/app/demo/page.tsx:103-139`. `data-testid="demo-payroll"`,
-  `data-testid="payroll-day-row"`, `data-testid="payroll-total-row"`.
-- Expected: 3 columns (Day, Minutes, Pay). Total row is bold and
-  bordered.
-- Assert:
-  - 3 `<th>` cells in correct order: Day, Minutes, Pay.
-  - Each `data-testid="payroll-day-row"` `<td>` cells are
-    left/right/right aligned per the source.
-  - `data-testid="payroll-total-row"` is the last `<tr>` in `<tbody>`,
-    has `font-weight: 600` (semibold).
-  - When no shifts: a single row with `colSpan="3"`.
-  - The currency line below the table contains "Rate R X/h · currency
-    ZAR" — visible but not the alignment concern.
-
-### C.6 Surface: ReviewList (needs-review)
-- Source: `src/app/demo/page.tsx:141-192`. `data-testid="demo-needs-review"`,
-  each row `data-testid="needs-review-row"`.
-- Expected: amber-tinted rows; Recompute + Resolve on the right.
-- Assert:
-  - Each row: `display: flex; flex-wrap: wrap; justify-content: space-between`.
-  - Resolve button is to the right of Recompute.
-  - Recompute + Resolve stack vertically when the row is narrow
-    (mobile), horizontally when wide.
-
-### C.7 Surface: AuditTable
-- Source: `src/app/demo/page.tsx:194-230`. `data-testid="demo-audit-log"`,
-  each row `data-testid="audit-log-row"`. 5 columns: Time, Status, ±m,
-  Skew s, Flags.
-- Expected: a separate, simpler audit log (5 cols vs the moderator's
-  7 cols) — assert this to catch accidental copy-paste from the
-  moderator table.
-- Assert:
-  - 5 `<th>` cells in order: Time, Status, ±m, Skew s, Flags.
-  - The Time and Status cells are left-aligned, ±m and Skew s are
-    right-aligned (`text-right` class).
-  - `±m` value is a number; "Skew s" is a number — not the alignment
-    concern, but the headers must be the exact strings.
-- A11y: same as B.9 (no `<caption>`, no `scope` — gap to flag).
-
-### C.8 Surface: MessagesSection
-- Source: `src/app/demo/page.tsx:248-284`. `data-testid="demo-messages"`.
-- Expected: each message row is a card; "Mark read" button only on
-  unread items.
-- Assert:
-  - `data-testid="message-row"` count === inbox count.
-  - Read messages have the "read" label, no button.
-  - Unread messages have the "Mark read" button.
-  - Each row `rect.top` > previous row `rect.bottom` (vertical stack).
-
-### C.9 Surface: RosterList
-- Source: `src/app/demo/page.tsx:232-246`. `grid gap-2 sm:grid-cols-2`.
-- Expected: 2 columns at 1280; single column on mobile.
-
-### C.10 Surface: CheckInPanel
-- Source: `src/app/demo/page.tsx:286-414`. `data-testid="demo-checkin"`,
-  button `data-testid="demo-checkin-button"` (`h-12`).
-- Expected: 7 status pills (same set as employee), the CHECK IN
-  button is **the primary CTA** at the bottom of the panel.
-- Assert:
-  - The 7 status pills appear in this exact order: arrived, checkpoint,
-    lunch, quick side mission, feeling sick, day finish, job finish.
-  - `data-testid="demo-checkin-button"` `rect.height === 48` (h-12).
-  - Button is at the bottom of the panel; its `rect.bottom` is within
-    the panel's `rect.bottom - padding`.
-  - When "quick side mission" is the active status, a Duration
-    `<select>` is **between** the pills and the CTA (conditional
-    element appears in the right slot).
-
-### C.11 Surface: ExportPanel
-- Source: `src/app/demo/page.tsx:416-457`. `data-testid="demo-export"`.
-- Expected: at the **bottom** of the page (last panel).
-- Assert:
-  - `rect.top` > CheckInPanel `rect.bottom`.
-  - The Download button is a `<button>` (not an `<a>` — the click
-    triggers a programmatic anchor creation in JS).
-
----
-
 ## D. Modal centering & focus
 
 ### D.1 Centering helper (all 3 modals)
@@ -623,8 +490,8 @@ modals with destructive actions).
   not overflow the table horizontally (the table is `w-full` inside an
   `overflow-x-auto` wrapper).
 - Assert:
-  - Seed a 60-character employee name in the test fixture (via the
-    `seedDemoData` action or a dedicated fixture).
+  - Seed a 60-character employee name in the test fixture (via a
+    dedicated fixture).
   - The `<td>` `rect.width` equals the column width
     (table total width / 7, ±2 px).
   - The `<td>` `rect.height > 20` (wrapped to 2+ lines).
@@ -688,8 +555,6 @@ The repo uses these utility classes for non-critical text:
   `:149`, `:155` — most audit log table cells.
 - `src/app/payroll.tsx:121` (the "X flagged shift(s) excluded" line).
 - `src/app/messages.tsx:97` (timestamp).
-- `src/app/demo/page.tsx:89`, `:99`, `:104`, `:147`, `:159`,
-  `:235`, `:253` — demo labels and subtext.
 
 Sanity assertion: collect `getComputedStyle(el).color` and
 `getComputedStyle(el).backgroundColor` for every element with a
@@ -748,8 +613,6 @@ Known-good inputs (sanity):
 | Send button | `messages.tsx:52` | `py-2` ≈ 36 px ✓ |
 | Provision inputs | `moderator/page.tsx:209` | `py-2` ≈ 36 px ✓ |
 | Audit map button | `moderator/page.tsx:173` | `py-1 text-xs` ≈ 24 px (borderline) — **flag if < 28** |
-| Demo status pill | `demo/page.tsx:364` | `py-1 text-xs` ≈ 24 px (borderline) — **flag if < 28** |
-| Demo CHECK IN | `demo/page.tsx:392` | `h-12` = 48 px ✓ |
 | RateCell input | `moderator/page.tsx:447` | `w-16 py-0.5` ≈ 20 px ✗ (intentionally compact) — **gap to flag in §11** |
 
 ### G.2 `<select>` shows full text (no clipping)
@@ -854,9 +717,9 @@ const labels = await page.evaluate(() =>
 - **Convex wire latency** (spinner → content transitions) — already
   covered by `waitForHydrated` in `tests-layout/layout-assert.mjs:84-92`.
 - **Auth handshake timing** — same.
-- **Demo data values** (KPI numbers, log counts) — the existing
+- **Live data values** (KPI numbers, log counts) — the existing
   `tests-layout/layout-assert.mjs:184-189` sentinel already catches
-  "wrong app". Demo values are seeded by `kpi.summary` and change.
+  "wrong app". KPI values are seeded by `kpi.summary` and change.
 - **Hover/focus ring colours** — the project uses Tailwind defaults;
   no custom focus ring to test.
 - **`min-h-dvh` fallback to `min-h-screen` in old browsers** — the
@@ -885,16 +748,14 @@ These are alignment-related issues the deliverable surfaced that the
 follow-up test should *not silently pass over* — they should be either
 fixed or noted in the test as a "known issue" expectation:
 
-1. **Audit log tables (both moderator and demo) have no `<caption>` and
-   no `scope` attributes on `<th>`** — see `moderator/page.tsx:128-140`
-   and `demo/page.tsx:199-207`. A11y regression risk; flag.
+1. **The moderator audit log table has no `<caption>` and no `scope`
+   attributes on `<th>`** — see `moderator/page.tsx:128-140`.
+   A11y regression risk; flag.
 2. **RateCell `<input>` is ~20 px tall** — `moderator/page.tsx:447`
    `w-16 py-0.5`. Below the 24 px desktop target and 32 px mobile
    target. Likely intentional (it's an inline edit cell) but the
    current tap-target assertion in G.1 will flag it. Decide policy.
 3. **Audit log "map" button is `py-1 text-xs`** — `moderator/page.tsx:173`
-   ≈ 24 px tall. Borderline; flag if < 28.
-4. **Demo status pills are `py-1 text-xs`** — `demo/page.tsx:364`
    ≈ 24 px tall. Borderline; flag if < 28.
 5. **None of the three modals close on backdrop click** — the
    design intent is unclear. The follow-up test should assert *current
@@ -983,12 +844,11 @@ A single file, e.g. `tests-layout/display-alignment.mjs`, with:
 |---|---|---|
 | A. Mobile employee | 10 | ~55 |
 | B. Desktop moderator | 10 | ~55 |
-| C. Demo console | 11 | ~45 |
 | D. Modals | 3 (shared) | ~20 |
 | E. Text overflow | 4 | ~15 |
 | F. Contrast | 3 | ~10 |
 | G. Form inputs | 5 | ~25 |
-| **Total** | **46** | **~225** |
+| **Total** | **35** | **~180** |
 
 At 5–15 lines per spec, this is ~500 lines of test body (plus ~100
 lines of helpers), which fits the requested budget.

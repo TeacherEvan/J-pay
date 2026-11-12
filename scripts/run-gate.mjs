@@ -31,8 +31,6 @@ const testNodeTest = [
   "scripts/test-payroll-strategies.mjs",
   "scripts/test-change-password-errors.mjs",
   "scripts/test-err-msg.mjs",
-  "scripts/test-demo-access.mjs",
-  "scripts/test-demo-rich.mjs",
   "scripts/test-next-build-artifacts.mjs",
   "scripts/test-punch-mutation.mjs",
   "scripts/test-shift-derivation-bounds.mjs",

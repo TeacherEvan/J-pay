@@ -9,7 +9,7 @@ import { CRON_JOBS, cronJobRef } from "../src/lib/cron-jobs.ts";
 const { describeFunctions } = await import("../src/lib/backend/runtime.ts");
 const registered = new Set(describeFunctions().map((f) => f.key));
 
-assert.equal(Object.keys(CRON_JOBS).length, 4, "expected exactly 4 retention jobs");
+assert.equal(Object.keys(CRON_JOBS).length, 3, "expected exactly 3 retention jobs");
 for (const [job, ref] of Object.entries(CRON_JOBS)) {
   const key = `${ref.module}:${ref.fn}`;
   assert.ok(registered.has(key), `job ${job} maps to unregistered handler ${key}`);
@@ -18,4 +18,4 @@ assert.ok(cronJobRef("purge-expired-coordinates"), "known job resolves");
 assert.equal(cronJobRef("rm -rf /"), null, "unknown job rejected");
 assert.equal(cronJobRef(""), null, "empty job rejected");
 
-console.log("cron jobs OK: 4 jobs, all mapped to registered internal handlers");
+console.log("cron jobs OK: 3 jobs, all mapped to registered internal handlers");

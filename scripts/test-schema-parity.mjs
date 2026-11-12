@@ -120,7 +120,10 @@ function parseMigrationColumns() {
       }
     }
     // Also fold in `alter table ... add column if not exists "col" ...` so
-    // columns introduced by later migrations count as SQL-present.
+    // columns introduced by later migrations count as SQL-present — and fold
+    // out `drop column` / `drop table`, so the model is the FINAL schema
+    // after every migration has been applied (a column created in 0001 and
+    // dropped in 0018 must not linger in the comparison set).
     for (const m of sql.matchAll(/alter table\s+(?:if exists\s+)?public\.(?:"(\w+)"|(\w+))\s+([\s\S]*?)(?:;|$)/gi)) {
       const table = m[1] ?? m[2];
       if (!cols.has(table)) continue; // only evolve tables we already track
@@ -128,6 +131,13 @@ function parseMigrationColumns() {
       for (const am of m[3].matchAll(/add\s+column(?:\s+if\s+not\s+exists)?\s+"?([A-Za-z_][\w$]*)"?/gi)) {
         colSet.add(am[1]);
       }
+      for (const dm of m[3].matchAll(/drop\s+column(?:\s+if\s+exists)?\s+"?([A-Za-z_][\w$]*)"?/gi)) {
+        colSet.delete(dm[1]);
+      }
+    }
+    // `drop table if exists public."x"` removes the table from the final model.
+    for (const m of sql.matchAll(/drop\s+table(?:\s+if\s+exists)?\s+public\.(?:"(\w+)"|(\w+))/gi)) {
+      cols.delete(m[1] ?? m[2]);
     }
   }
   return cols;
@@ -145,16 +155,30 @@ function trdSection6() {
   return blockMatch[1];
 }
 
-/** Extract the union of tables named in the jpay_id_registry view definitions. */
+/** Extract the tables named in the FINAL jpay_id_registry view definition.
+ *  The view is replaced in place by later migrations, so the last definition
+ *  wins — a union of every historical definition would keep naming tables
+ *  that were dropped from the schema (and would hide a view that still
+ *  selects from a dropped table). */
 function registryTables() {
-  const tables = new Set();
-  for (const f of ["0001_init.sql", "0011_system_events.sql"]) {
-    try {
-      const sql = readSrc("supabase/migrations", f);
-      for (const m of sql.matchAll(/'([A-Za-z0-9_]+)' as tbl/g)) tables.add(m[1]);
-    } catch {
-      /* file absent on this snapshot — union from what exists */
-    }
+  const dir = resolve(root, "supabase/migrations");
+  let tables = new Set();
+  let files = [];
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  } catch {
+    /* directory absent on this snapshot */
+  }
+  for (const f of files) {
+    const sql = readFileSync(resolve(dir, f), "utf8");
+    const defs = [
+      ...sql.matchAll(
+        /create\s+(?:or\s+replace\s+)?view\s+(?:if\s+not\s+exists\s+)?public\.jpay_id_registry[\s\S]*?;/gi
+      ),
+    ];
+    if (defs.length === 0) continue;
+    const def = defs[defs.length - 1][0];
+    tables = new Set([...def.matchAll(/'([A-Za-z0-9_]+)' as tbl/g)].map((m) => m[1]));
   }
   return tables;
 }
@@ -260,6 +284,15 @@ for (const t of allMigrationTables) {
 // ---- 5. registry view covers every schema table -----------------------
 for (const t of schema.keys()) {
   if (!regTables.has(t)) fail(`schema.ts table '${t}' missing from jpay_id_registry view definitions`);
+}
+
+// ---- 5b. the registry view must not select from a table that is gone ----
+// (a view still selecting from a dropped table breaks at CREATE OR REPLACE
+//  time — and a stale view definition is how the anon-registry P0 happened)
+for (const t of regTables) {
+  if (!schema.has(t) && !INFRA_TABLES.has(t)) {
+    fail(`jpay_id_registry view references table '${t}' which is not in schema.ts (dropped without recreating the view?)`);
+  }
 }
 
 // ---- report ------------------------------------------------------------

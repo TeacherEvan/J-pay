@@ -6,13 +6,13 @@ Status: BUILD DELIVERED, COMPILE-VERIFIED, RUN-UNVERIFIED (see blockers).
 
 Closed the gap between live J-Pay features and the existing Playwright suite.
 The 2026-08-27 round added a single spec for the punch-clock feature on `/`.
-That round left /punch, /login, /demo, /demo/persona, /demo/about, the
+That round left /punch, /login, the
 moderator console surface (site create / assign / locale / geofence modal /
 review panel), payroll panel, MessagesPanel, EnableNotifications, PWA install
 CTA, the sign-up step, the iOS install hint, and the privacy footer without
 any E2E coverage.
 
-This round added 11 new specs + 7 new fixtures, and removed one spec that
+This round added 9 new specs + 5 new fixtures, and removed one spec that
 had drifted out of sync with the live code.
 
 ## Spec drift found and fixed
@@ -34,16 +34,12 @@ provided by the real specs.
 ```
 tests/e2e/fixtures/punch-page.ts        PunchPage: geolocation mock, GPS gate, geofence helpers
 tests/e2e/fixtures/login-page.ts        LoginPage: employee select, sign-in ID, submit guard
-tests/e2e/fixtures/demo-page.ts         DemoPage: /demo shell + 6 sections (KPI, payroll, audit, etc.)
-tests/e2e/fixtures/persona-page.ts      PersonaPage: 5-persona switcher
 tests/e2e/fixtures/mod-ops-page.ts      ModeratorOpsPage: site create, assign, locale, geofence modal
 tests/e2e/fixtures/payroll-page.ts      PayrollPage: payroll + review panels
 tests/e2e/fixtures/messages-page.ts     MessagesPage: employee send + mod queue/broadcast/reply
 
 tests/e2e/punch.spec.ts                 /punch real page (5 behaviors)
 tests/e2e/login.spec.ts                 /login real page (7 behaviors)
-tests/e2e/demo.spec.ts                  /demo dashboard + /demo/about (6 behaviors)
-tests/e2e/persona.spec.ts               /demo/persona switcher (4 behaviors)
 tests/e2e/moderator-ops.spec.ts         mod console: sites, assign, locale, geofence (6 behaviors)
 tests/e2e/payroll.spec.ts               payroll + review panels (5 behaviors)
 tests/e2e/messages.spec.ts              MessagesPanel employee + mod flows (5 behaviors)
@@ -60,8 +56,8 @@ tests/e2e/chrome-edge-cases.spec.ts     /~offline, consent privacy link, privacy
   pre-existing duplicate-`next` issue in `jpay/next.config.ts` (the
   untracked `jpay/` subdir has its own `node_modules/next` that conflicts
   with the root install). This is unrelated to the work in this round.
-- `npx playwright test --list` — 76 tests across 15 files, all discoverable,
-  no syntax errors. The original 27 + the new 49 (48 new + 1 added for /~offline).
+- `npx playwright test --list` — 66 tests across 13 files, all discoverable,
+  no syntax errors. The original 27 + the new 39 (38 new + 1 added for /~offline).
 - All selectors are derived from the live source (data-testid, label, role).
   No fabricated test IDs.
 
@@ -73,7 +69,7 @@ execute these tests you need:
 1. A running Convex deployment reachable from the dev server
    (`npm run dev` requires `NEXT_PUBLIC_CONVEX_URL` + a Convex backend
    that the Anonymous + Password + Master providers can talk to).
-2. A seeded Convex backend with provisioned employees + 3 demo sites +
+2. A seeded Convex backend with provisioned employees + 3 test sites +
    the master-password env var. The existing puppeteer pipeline
    (`scripts/e2e-full.mjs`) handles this end-to-end; the Playwright
    spec does not.
@@ -84,7 +80,7 @@ execute these tests you need:
 5. `npx playwright install` for browser binaries (Chromium is the only
    project used; Firefox/WebKit projects are not configured).
 
-Tests that don't need real auth (the demo CTA path, the PWA install
+Tests that don't need real auth (the PWA install
 event, the /~offline route, the iOS UA emulation) should run end-to-end
 once the dev server is up.
 
@@ -119,9 +115,6 @@ aren't set, never silently passing.
 | §5.2 MessagesPanel (mod)     | messages.spec.ts           | 2         |
 | §5.2 EnableNotifications     | notifications.spec.ts      | 3         |
 | §5.2 Privacy footer          | chrome-edge-cases.spec.ts  | 1         |
-| R36 /demo dashboard          | demo.spec.ts               | 6         |
-| R36 /demo/persona            | persona.spec.ts            | 4         |
-| R36 /demo/about              | demo.spec.ts               | (rolled in) |
 | §6.1 Punch-clock /           | punch-clock.spec.ts (existing) | 6     |
 | §7 R4 Row-scoped authz       | punch-clock.spec.ts (existing) | (1)  |
 

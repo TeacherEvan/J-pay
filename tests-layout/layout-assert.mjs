@@ -95,7 +95,7 @@ const clearSession = async () => {
   // Return the page to an unauthenticated state. Two strategies:
   //   1. If there's a "Sign out" button, click it (fast, preserves the
   //      Convex auth handshake cache).
-  //   2. Otherwise (e.g. signed in via demo), wipe cookies + localStorage
+  //   2. Otherwise, wipe cookies + localStorage
   //      and reload — slower but reliable.
   const buttons = await dumpButtons().catch(() => []);
   if (buttons.includes("Sign out")) {
@@ -204,18 +204,6 @@ test("layout(/) [unauth]: sign-in card is centered, has email + password + submi
   assert.ok(buttons.some((b) => b === "Sign in"), `submit must read "Sign in" — got: ${JSON.stringify(buttons)}`);
 });
 
-test("layout(/) [unauth]: demo entry visible iff DEMO_MODE is enabled", async () => {
-  await goto("/", 1000);
-  await waitForText(/Sign in/, { label: "sign-in form", timeoutMs: 25_000 });
-  const buttons = await dumpButtons();
-  const hasDemo = buttons.some((b) => /demo preview/i.test(b));
-  assert.equal(typeof hasDemo, "boolean", "demo button presence is a boolean");
-  if (hasDemo) {
-    assert.ok(buttons.some((b) => /Enter demo preview/i.test(b)),
-      `demo button label must be exact: ${JSON.stringify(buttons)}`);
-  }
-});
-
 test("layout(/) [unauth]: switch between Sign in / Sign Up modes is wired", async () => {
   await goto("/", 1000);
   const t = await waitForText(/First time\? Activate/, { label: "sign-in toggle", timeoutMs: 25_000 });
@@ -242,36 +230,39 @@ test("layout(/moderator) [no-auth]: shows lock screen, not the console", async (
 });
 
 // ----------------------------------------------------------------------------
-// 3. SIGNED-IN EMPLOYEE (/) — proven by the demo preview flow
+// 3. SIGNED-IN EMPLOYEE (/) — proven by a real credential sign-in
 // ----------------------------------------------------------------------------
-test("layout(/) [employee demo]: employee panel renders all required affordances", async () => {
-  await goto("/", 1000);
-  // Wait for the sign-in form (so the demo button is in the DOM)
-  await waitForText(/Sign in/, { label: "sign-in form", timeoutMs: 25_000 });
-  const clickByText = async (text) =>
-    page.evaluate(
-      (t) => {
-        const btn = [...document.querySelectorAll("button")].find(
-          (b) => b.textContent?.trim() === t
-        );
-        if (btn) {
-          btn.click();
-          return true;
-        }
-        return false;
-      },
-      text
-    );
-  // Wait up to 12s for the demo button (Convex auth handshake)
-  let entered = false;
-  for (let i = 0; i < 8 && !entered; i++) {
-    if (await clickByText("Enter demo preview (no account)")) entered = true;
-    else await new Promise((r) => setTimeout(r, 1500));
-  }
-  if (!entered) {
-    console.log("  (skipped) demo entry not present in this env");
+test("layout(/) [employee]: employee panel renders all required affordances", async () => {
+  const email = process.env.JPAY_EMAIL;
+  const password = process.env.JPAY_PASSWORD;
+  if (!email || !password) {
+    console.log("  (skipped) JPAY_EMAIL + JPAY_PASSWORD are required for the signed-in employee surface");
     return;
   }
+  await goto("/", 1000);
+  // Wait for the sign-in form to mount
+  await waitForText(/Sign in/, { label: "sign-in form", timeoutMs: 25_000 });
+  // Fill the form (React-aware native setter) and submit.
+  await page.evaluate(
+    ([mail, pw]) => {
+      const set = (sel, val) => {
+        const el = document.querySelector(sel);
+        if (!el) return;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        setter.call(el, val);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      set('input[type="email"]', mail);
+      set('input[type="password"]', pw);
+    },
+    [email, password],
+  );
+  await page.evaluate(() => {
+    const btn =
+      document.querySelector('[data-testid="auth-submit-signIn"]') ??
+      [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Sign in");
+    btn?.click();
+  });
   // Wait for the employee panel to mount
   const t = await waitForText(/CHECK IN/, { label: "employee panel", timeoutMs: 30_000 });
   assert.match(t, /EMPLOYEE/i, "role badge must say EMPLOYEE");

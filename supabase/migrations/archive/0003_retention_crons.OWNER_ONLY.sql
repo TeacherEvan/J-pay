@@ -47,10 +47,6 @@ select cron.schedule('purge-expired-coordinates', '0 2 * * *',
   $$select net.http_post(url := '__SITE_URL__/api/internal/cron?job=purge-expired-coordinates',
                          headers := '{"Authorization":"Bearer __CRON_SECRET__"}'::jsonb)$$);
 
-select cron.schedule('purge-stale-demo-reviewers', '0 3 * * *',
-  $$select net.http_post(url := '__SITE_URL__/api/internal/cron?job=purge-stale-demo-reviewers',
-                         headers := '{"Authorization":"Bearer __CRON_SECRET__"}'::jsonb)$$);
-
 select cron.schedule('archive-stale-master-temps', '0 4 * * *',
   $$select net.http_post(url := '__SITE_URL__/api/internal/cron?job=archive-stale-master-temps',
                          headers := '{"Authorization":"Bearer __CRON_SECRET__"}'::jsonb)$$);

@@ -1,12 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { requireEmployee, maybeCurrentUserId, requireActiveUser } from "./access";
+import { requireEmployee, maybeCurrentUserId, requireActiveUser, isQaAccount } from "./access";
 import { verifyDeviceToken } from "./deviceTokens";
 import { haversineMeters } from "./geo";
 import { serverClockSkewMs } from "../src/lib/shift-engine";
 import { jpayConfig } from "../src/config/jpay.config";
-import { isDemoUser } from "./demo/scope";
 import { managedSiteIds, userIdsForSites } from "./manager";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -349,7 +348,7 @@ export const forUser = query({
 
 /**
  * Manager console feed: recent travel legs across the whole crew (open and
- * closed), newest first, capped. Viewer must be a real (non-demo) manager.
+ * closed), newest first, capped. Viewer must be a real (non-QA) manager.
  */
 export const recentForCrew = query({
   args: { limit: v.optional(v.number()) },
@@ -360,7 +359,7 @@ export const recentForCrew = query({
     if (!viewer || viewer.role !== "manager" || !viewer.isActive || viewer.archivedAt !== undefined) {
       return [];
     }
-    if (isDemoUser(viewer)) return [];
+    if (isQaAccount(viewer)) return [];
 
     const siteIds = await managedSiteIds(ctx, viewerId);
     if (siteIds.size === 0) return [];

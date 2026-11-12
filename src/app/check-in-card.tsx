@@ -29,7 +29,6 @@ import { deriveSegments } from "@/lib/shift-engine";
 import { SiteSelector } from "./check-in/SiteSelector";
 import { StatusChips } from "./check-in/StatusChips";
 import { LiveSubmit } from "./check-in/live-submit";
-import { PersonaSubmit } from "./check-in/persona-submit";
 
 export {
   STATUSES,
@@ -50,10 +49,9 @@ export function formatMinutesShort(m: number): string {
   return h > 0 ? `${h}h ${min.toString().padStart(2, "0")}m` : `${min}m`;
 }
 
-export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
-  const isLive = variant === "live";
-  const logsQuery = useQuery(isLive ? api.logs.listMine : api.demo.boundPersonaLogs);
-  const sitesQuery = useQuery(isLive ? api.sites.listMine : api.demo.boundPersonaSites);
+export function CheckInCard() {
+  const logsQuery = useQuery(api.logs.listMine);
+  const sitesQuery = useQuery(api.sites.listMine);
   const userLocale = useUserLocale();
 
   const logs = (logsQuery ?? []) as unknown as CardLog[];
@@ -71,7 +69,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   const [message, setMessage] = useState<string | null>(null);
   const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null);
   const [userPickedSite, setUserPickedSite] = useState(false);
-  const me = useQuery(api.users_queries.me, isLive ? {} : "skip");
+  const me = useQuery(api.users_queries.me);
   const recordFix = useMutation(api.travel.recordFix);
   const setConsent = useMutation(api.travel.setConsent);
   const lastFixSentRef = useRef(0);
@@ -90,15 +88,15 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     if (phase !== "off") setPickerOpen(false);
   }, [phase]);
 
-  // Best-effort position fix for site distances (live only, silent on failure).
+  // Best-effort position fix for site distances (silent on failure).
   useEffect(() => {
-    if (!isLive || !navigator.geolocation) return;
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (p) => setFix({ lat: p.coords.latitude, lng: p.coords.longitude }),
       () => {},
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 }
     );
-  }, [isLive]);
+  }, []);
 
   const distances = useMemo(() => {
     const map = new Map<string, number | null>();
@@ -127,7 +125,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   // decides what is stored (inside a geofence -> fix dropped); the client only
   // streams high-frequency fixes while off-site. Stops with the shift/consent.
   useEffect(() => {
-    if (!isLive) return;
     // Track ONLY while the shift clock is running (arrived/checkpoint).
     // Lunch, quick side missions and sick leave (PAUSED) never stream fixes;
     // shift end (TERMINAL) never does either. Server enforces the same rule.
@@ -183,7 +180,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
     return () => {
       navigator.geolocation.clearWatch(id);
     };
-  }, [isLive, phase, consentAt, recordFix]);
+  }, [phase, consentAt, recordFix]);
 
   const chips: Status[] = useMemo(() => {
     if (phase === "on") return ["lunch", "quick side mission", "checkpoint", "feeling sick"];
@@ -208,7 +205,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
 
   // Travel tracking status for the employee (U2/U6): show whether fixes are
   // streaming, surface OS-level permission errors, and offer a revoke button.
-  const isTrackingActive = isLive && phase === "on" && consentAt !== undefined;
+  const isTrackingActive = phase === "on" && consentAt !== undefined;
 
   const submitStatus: Status = phase === "off" ? "arrived" : pending;
 
@@ -258,7 +255,7 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
   return (
     <section
       aria-label="Shift clock"
-      data-testid={isLive ? "checkin-card" : "demo-checkin"}
+      data-testid="checkin-card"
       className="flex flex-col gap-3.5"
     >
       {/* ── Shift timer chassis (tabular-nums) ────────────────────── */}
@@ -267,7 +264,6 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         last={last}
         loaded={loaded}
         userLocale={userLocale}
-        isLive={isLive}
         siteName={siteNameOf(last?.siteId)}
         shiftAnchorMs={shiftAnchorMs}
       />
@@ -353,36 +349,23 @@ export function CheckInCard({ variant }: { variant: "live" | "persona" }) {
         </div>
       )}
 
-      {isLive ? (
-        <LiveSubmit
-          phase={phase}
-          status={submitStatus}
-          siteId={siteId}
-          sitesLoading={sitesQuery === undefined}
-          sites={sites}
-          sideMinutes={sideMinutes}
-          label={primaryLabel}
-          busy={busy}
-          setBusy={setBusy}
-          setMessage={setMessage}
-        />
-      ) : (
-        <PersonaSubmit
-          status={submitStatus}
-          siteId={siteId}
-          sites={sites}
-          sideMinutes={sideMinutes}
-          label={primaryLabel}
-          busy={busy}
-          setBusy={setBusy}
-          setMessage={setMessage}
-        />
-      )}
+      <LiveSubmit
+        phase={phase}
+        status={submitStatus}
+        siteId={siteId}
+        sitesLoading={sitesQuery === undefined}
+        sites={sites}
+        sideMinutes={sideMinutes}
+        label={primaryLabel}
+        busy={busy}
+        setBusy={setBusy}
+        setMessage={setMessage}
+      />
 
       {message && (
         <p
           className="text-center text-sm font-medium text-[var(--paper)]"
-          data-testid={isLive ? "checkin-message" : "demo-checkin-message"}
+          data-testid="checkin-message"
           role="status"
         >
           {message}

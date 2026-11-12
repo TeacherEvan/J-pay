@@ -9,8 +9,10 @@
 //
 // Run: node scripts/review-walkthrough.mjs
 // Env: JPAY_EMAIL + JPAY_PASSWORD (moderator), JPAY_BASE_URL (default
-// http://localhost:3000). DEMO_MODE=1 must be set on the Convex deployment
-// (the demo leg needs it). Headless Chrome must be running on :9300.
+// http://localhost:3000). Headless Chrome must be running on :9300.
+//
+// Note: F2 (the anonymous preview opt-in) was removed with that feature.
+// The F-ids below are stable — F2 simply no longer exists.
 
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -24,9 +26,7 @@ import {
   clickByTestId,
   clickByText,
   waitForText,
-  waitForTestId,
   waitForSelector,
-  getTestIdText,
   waitForUrl,
 } from "./e2e-helpers.mjs";
 
@@ -36,6 +36,9 @@ const MOD_PW = process.env.JPAY_PASSWORD;
 // We'll set this dynamically once the F3 forced-password change completes.
 // All moderator-side features (F8-F15) will use this updated password.
 let modPwEffective = MOD_PW;
+// Set by F10 when it provisions the employee account. F4/F5/F6/F17 sign in as
+// that employee to exercise the live employee surface.
+let employeeCreds = null;
 if (!MOD_EMAIL || !MOD_PW) {
   console.error("Set JPAY_EMAIL + JPAY_PASSWORD (moderator creds) before running.");
   process.exit(2);
@@ -94,12 +97,32 @@ async function signOutOfApp() {
   // Try the regular sign-out (page.tsx:122)
   await clickByTestId(page, "auth-signout").catch(() => {});
   await sleep(1500);
-  // Try the demo "Exit demo" button (demo/layout.tsx:62)
+  // Fallback: a plain "Sign out" button on the rendered page.
   await page.evaluate(() => {
-    const btn = [...document.querySelectorAll("button")].find((x) => /exit demo|sign out/i.test(x.textContent || ""));
+    const btn = [...document.querySelectorAll("button")].find((x) => /sign out/i.test(x.textContent || ""));
     btn?.click();
   });
   await sleep(1500);
+}
+
+// Sign in as the employee provisioned by F10 (live employee surface).
+async function signInAsEmployee() {
+  if (!employeeCreds) return false;
+  await signOutOfApp();
+  await wipe(page, cdp, BASE_URL);
+  try {
+    await signIn(page, {
+      email: employeeCreds.email,
+      password: employeeCreds.password,
+      step: "signIn",
+      dismissConsent: true,
+      baseUrl: BASE_URL,
+    });
+  } catch {
+    return false;
+  }
+  await sleep(2500);
+  return true;
 }
 
 async function shot(page, name) {
@@ -147,25 +170,23 @@ async function f1() {
   await safeGoto(BASE_URL + "/");
   // Wait for either the email input OR the "Loading..." state to settle.
   await waitForSelector(page, 'input[type="email"], input[type="password"], main', { timeoutMs: 20_000 }).catch(() => {});
-  // Give the demo-status query a chance to land (Convex first hop can be slow).
+  // Wait for the sign-in form to settle.
   let body = "";
   for (let i = 0; i < 10; i++) {
     await sleep(800);
     body = await bodyText(page);
-    if (/Enter demo preview|signIn|Email/i.test(body)) break;
+    if (/signIn|Email/i.test(body)) break;
   }
   const hasJpay = /J-Pay/.test(body);
   const hasEmailInput = !!(await page.$('input[type="email"]'));
   const hasSignIn = /Sign in|sign in|signIn/i.test(body);
-  const hasDemo = /Enter demo preview/.test(body);
   await shot(page, "f1-01-signin");
   let v = "PASS";
   const notes = [];
   if (!hasJpay) { v = "FAIL"; notes.push("J-Pay sentinel not on home page"); }
   if (!hasEmailInput) { v = "FAIL"; notes.push("email input missing"); }
   if (!hasSignIn) notes.push("sign-in label not found");
-  if (!hasDemo) { v = v === "FAIL" ? "FAIL" : "CAVEAT"; notes.push("'Enter demo preview' not visible (DEMO_MODE=1 should enable)"); }
-  record("1", v, notes.join("; ") || "sign-in form + J-Pay sentinel + demo CTA present");
+  record("1", v, notes.join("; ") || "sign-in form + J-Pay sentinel present");
 
   // consent gate after sign-in (will appear once we sign in below)
   // iOS install hint requires UA spoofing — skip unless on iOS UA
@@ -182,30 +203,6 @@ async function f1() {
   } else {
     record("1.ios", "CAVEAT", "desktop UA — iOS hint branch not exercised in this run");
   }
-}
-
-// ------------------------------------------------------------------
-// F2: Demo preview opt-in
-// ------------------------------------------------------------------
-async function f2() {
-  await wipe(page, cdp, BASE_URL);
-  await safeGoto(BASE_URL + "/");
-  await sleep(2000);
-  const hasCta = await waitForTestId(page, "demo-preview-cta", { timeoutMs: 8000 }).then(() => true).catch(() => false);
-  if (!hasCta) {
-    record("2", "FAIL", "demo-preview-cta testid not found on /");
-    return;
-  }
-  await clickByTestId(page, "demo-preview-cta").catch(() => {});
-  let body = "";
-  for (let i = 0; i < 25; i++) {
-    await sleep(2000);
-    body = await bodyText(page);
-    if (/CHECK IN/.test(body)) break;
-  }
-  await shot(page, "f2-01-demo-session");
-  const v = /CHECK IN/.test(body) ? "PASS" : "FAIL";
-  record("2", v, `demo session reached employee panel after CTA: ${/CHECK IN/.test(body) ? "yes" : "no"}`);
 }
 
 // ------------------------------------------------------------------
@@ -285,93 +282,76 @@ async function f3() {
 }
 
 // ------------------------------------------------------------------
-// F4: GPS check-in + 7 statuses + side-mission picker
-// (Demo session goes to /demo with its own check-in widget. We test BOTH
-// the demo path and the regular employee path for F4.)
+// F4: GPS check-in + 7 statuses + side-mission picker (live employee)
+// (Exercised on the real employee home — the check-in card the live
+// employee sees after signing in. F4 therefore runs after F10, which
+// provisions the employee account.)
 // ------------------------------------------------------------------
 async function f4() {
-  // Always start fresh: sign out of any prior session, then wipe + demo sign-in.
-  await signOutOfApp();
-  await wipe(page, cdp, BASE_URL);
-  await safeGoto(BASE_URL + "/");
-  await sleep(1500);
-  const hasCta = await waitForTestId(page, "demo-preview-cta", { timeoutMs: 8000 }).then(() => true).catch(() => false);
-  if (!hasCta) {
-    record("4", "FAIL", "demo-preview-cta not visible after wipe — cannot reach employee panel");
+  const signedIn = await signInAsEmployee();
+  if (!signedIn) {
+    record("4", "DEFERRED", "employee sign-in unavailable — F10 must provision the employee first");
     return;
   }
-  await clickByTestId(page, "demo-preview-cta").catch(() => {});
-  // The demo CTA navigates to /demo which has the checkin widget.
-  let ok = false;
-  for (let i = 0; i < 30; i++) {
-    await sleep(1500);
-    if (/Demo console|CHECK IN as persona|persona-check/i.test(await bodyText(page))) { ok = true; break; }
-  }
-  await shot(page, "f4-00-demo-landing");
-  if (!ok) {
-    record("4", "FAIL", "demo CTA never landed on /demo console");
-    return;
-  }
-  // The /demo page has buttons (not role=radio) for each status.
+  await shot(page, "f4-00-employee-home");
+
+  // The live check-in card renders the 7 status pills.
   const statuses = await page.evaluate(() => {
-    const sec = document.querySelector('[data-testid="demo-checkin"]');
-    if (!sec) return [];
-    return [...sec.querySelectorAll("button")].map((x) => x.textContent?.trim()).filter(Boolean);
+    const scope = document.querySelector('[data-testid="checkin-card"]') ?? document.body;
+    return [...scope.querySelectorAll('[role="radio"], button')]
+      .map((x) => (x.textContent ?? "").trim().toLowerCase())
+      .filter(Boolean);
   });
   const expected = [
     "arrived","checkpoint","lunch","quick side mission","feeling sick","day finish","job finish",
   ];
   const missing = expected.filter((s) => !statuses.includes(s));
-  await shot(page, "f4-01-status-pills");
 
   // side mission duration picker
   await page.evaluate(() => {
-    const sec = document.querySelector('[data-testid="demo-checkin"]');
-    const btn = [...(sec?.querySelectorAll("button") ?? [])].find((x) => /quick side mission/i.test(x.textContent || ""));
-    btn?.click();
+    const scope = document.querySelector('[data-testid="checkin-card"]') ?? document.body;
+    const el = [...scope.querySelectorAll('[role="radio"], button')].find((x) => /quick side mission/i.test(x.textContent || ""));
+    el?.click();
   });
   await sleep(400);
-  const sideMinPresent = !!(await page.$('[data-testid="demo-checkin"] select option[value="120"]'));
-  await shot(page, "f4-02-side-mission");
+  const sideMinPresent = await page.evaluate(() => {
+    const scope = document.querySelector('[data-testid="checkin-card"]') ?? document.body;
+    return [...scope.querySelectorAll("select option")].some((o) => o.value === "120");
+  });
+  await shot(page, "f4-01-status-pills");
+
   if (missing.length) {
-    record("4", "FAIL", `demo: missing statuses: ${missing.join(",")} (saw ${statuses.join("|")})`);
+    record("4", "FAIL", `live card: missing statuses: ${missing.join(",")}`);
   } else if (!sideMinPresent) {
-    record("4", "CAVEAT", `demo: all 7 statuses present; side-mission duration picker not found (status pill click may not have stuck)`);
+    record("4", "CAVEAT", `live card: all 7 statuses present; side-mission duration picker not found (status pill click may not have stuck)`);
   } else {
-    record("4", "PASS", `demo: 7 statuses present; side-mission picker revealed (120-min option visible)`);
+    record("4", "PASS", `live card: 7 statuses present; side-mission picker revealed (120-min option visible)`);
   }
 
-  // Live check-in via the demo widget
-  await page.evaluate(() => {
-    const sec = document.querySelector('[data-testid="demo-checkin"]');
-    const btn = [...(sec?.querySelectorAll("button") ?? [])].find((x) => /arrived/i.test(x.textContent || ""));
-    btn?.click();
-  });
-  await sleep(400);
-  await clickByTestId(page, "demo-checkin-button").catch(() => {});
+  // Live check-in from the employee home.
+  await clickByTestId(page, "checkin-submit").catch(() => {});
   await sleep(5000);
   const after = await bodyText(page);
   await shot(page, "f4-03-checked-in");
-  const msg = await getTestIdText(page, "demo-checkin-message").catch(() => "");
-  const verdict = /Logged|Logged \w+|persona/i.test(msg) ? "PASS" :
+  const verdict = /Logged \w+/.test(after) ? "PASS" :
                   /Weak GPS|denied/i.test(after) ? "CAVEAT" :
                   /No site assigned|Loading your sites/i.test(after) ? "FAIL" : "CAVEAT";
-  record("4.live", verdict, `demo check-in: msg="${msg}" body="${after.match(/Logged \w+|Weak GPS[^|]*|denied[^|]*|No site assigned[^|]*/)?.[0] ?? "no match"}"`);
+  record("4.live", verdict, `live check-in: body="${after.match(/Logged \w+|Weak GPS[^|]*|denied[^|]*|No site assigned[^|]*/)?.[0] ?? "no match"}"`);
 }
 
 // ------------------------------------------------------------------
-// F5: Offline outbox + foreground replay (demo widget)
+// F5: Offline outbox + foreground replay (live employee card)
 // ------------------------------------------------------------------
 async function f5() {
-  // We're already on /demo from F4. Pick "day finish" and go offline.
+  // We are already signed in as the employee from F4. Pick "day finish" and go offline.
   await page.evaluate(() => {
-    const sec = document.querySelector('[data-testid="demo-checkin"]');
-    const btn = [...(sec?.querySelectorAll("button") ?? [])].find((x) => /day finish/i.test(x.textContent || ""));
-    btn?.click();
+    const scope = document.querySelector('[data-testid="checkin-card"]') ?? document.body;
+    const el = [...scope.querySelectorAll('[role="radio"], button')].find((x) => /day finish/i.test(x.textContent || ""));
+    el?.click();
   });
   await sleep(400);
   await cdp.send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
-  await clickByTestId(page, "demo-checkin-button").catch(() => {});
+  await clickByTestId(page, "checkin-submit").catch(() => {});
   await sleep(3500);
   const offBody = await bodyText(page);
   const queued = /pending|queued|offline/i.test(offBody);
@@ -385,46 +365,41 @@ async function f5() {
   for (let i = 0; i < 12; i++) {
     await sleep(2000);
     const b = await bodyText(page);
-    // Demo widget: no "N check-ins queued offline" label by default; we
-    // accept "no pending message" as evidence the request succeeded.
-    if (!/Network error|failed to fetch|offline/i.test(b) || /Logged \w+/.test(b)) { replayed = true; break; }
+    // The live card shows an "N check-ins queued offline" counter; it must
+    // clear once the outbox replays.
+    if (!/\d+ check-ins? queued offline/i.test(b)) { replayed = true; break; }
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
   }
   await shot(page, "f5-02-replayed");
-  if (!queued && !/Logged \w+/i.test(offBody)) record("5", "FAIL", "offline demo check-in produced no queued/logged UI");
-  else record("5", "PASS", `demo offline flow: ${queued ? "queued then " : ""}${replayed ? "replayed" : "may have succeeded online"}`);
+  if (!queued && !/Logged \w+/i.test(offBody)) record("5", "FAIL", "offline check-in produced no queued/logged UI");
+  else record("5", "PASS", `offline flow: ${queued ? "queued then " : ""}${replayed ? "replayed" : "may have succeeded online"}`);
 }
 
 // ------------------------------------------------------------------
-// F6: Push opt-in (employee) — needs VAPID. Probes the demo widget's
-// notification control (if any) AND the regular employee control.
+// F6: Push opt-in (employee) — needs VAPID. Probes the live employee
+// home, where the opt-in control lives (src/app/notifications.tsx).
 // ------------------------------------------------------------------
 async function f6() {
-  // Probe the demo page for any notification / push control.
-  const demoHas = await page.evaluate(() => {
+  // We are signed in as the employee (F4/F5). The employee home is where the
+  // push opt-in lives — but it needs VAPID + a real employee session.
+  const employeeHas = await page.evaluate(() => {
     const txt = document.body.innerText;
     return /notification|push|enable|install/i.test(txt);
   });
   await shot(page, "f6-01-push-ui");
-  // The demo widget doesn't expose push; the regular employee home does
-  // (see src/app/notifications.tsx). Sign out of demo and visit the regular
-  // employee home — but we don't have a real employee account. Best we can
-  // do: log a code-audit verdict (covered in code-F6.json).
-  record("6", demoHas ? "CAVEAT" : "CAVEAT",
-    demoHas
-      ? "demo page mentions notification/install; the regular employee control (src/app/notifications.tsx) requires a real signed-in employee — code-audited in code-F6.json"
-      : "demo page does not surface a push opt-in; the regular employee control requires a real signed-in employee (code-audited in code-F6.json)");
+  record("6", "CAVEAT",
+    employeeHas
+      ? "employee home mentions notification/install; the opt-in control (src/app/notifications.tsx) needs VAPID — code-audited in code-F6.json"
+      : "employee home does not surface a push opt-in; the control needs VAPID — code-audited in code-F6.json");
 }
 
 // ------------------------------------------------------------------
 // F7: Employee → Moderator messages (deferred to F10 employee leg; the
 // regular employee /messages textarea is only available to a real signed-in
-// employee, not the demo persona.)
+// employee.)
 // ------------------------------------------------------------------
 async function f7() {
-  // The /demo page only shows the moderator's INBOX for the bound persona
-  // (`data-testid="demo-messages"`), not the outbound compose UI. The
-  // outbound compose lives in src/app/messages.tsx and is rendered on the
+  // The outbound compose lives in src/app/messages.tsx and is rendered on the
   // regular employee home, which we exercise in F10's employee leg.
   await shot(page, "f7-01-deferred");
   record("7", "DEFERRED", "employee→moderator message compose UI lives on regular employee home (src/app/messages.tsx); exercised in F10.emp.ci leg");
@@ -438,7 +413,7 @@ async function f8() {
   await signOutOfApp();
   await wipe(page, cdp, BASE_URL);
   await safeGoto(BASE_URL + "/");
-  // After demo/anonymous session, force a reload to make Convex re-evaluate auth.
+  // Force a reload so the auth handshake re-evaluates before signing in.
   await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
   await sleep(2500);
   try {
@@ -589,6 +564,8 @@ async function f10() {
   await fillInput(page, 'input[placeholder="Confirm new password"]', NEW_PW);
   await clickByText(page, /update password/i).catch(() => {});
   await sleep(6000);
+  // F4/F5/F6/F17 sign in as this employee to exercise the live employee surface.
+  employeeCreds = { email: empEmail, password: NEW_PW };
   await page.reload({ waitUntil: "networkidle2" }).catch(() => {});
   await sleep(4000);
   for (let i = 0; i < 6; i++) {
@@ -750,23 +727,16 @@ async function f16() {
 // F17: a11y — focus rings, contrast, 44px touch
 // ------------------------------------------------------------------
 async function f17() {
-  // We are already on /demo from F16. Use the demo checkin button.
-  // First ensure we're on /demo.
-  const onDemo = await page.$('[data-testid="demo-checkin"]');
-  if (!onDemo) {
-    await wipe(page, cdp, BASE_URL);
-    await safeGoto(BASE_URL + "/");
-    await sleep(1500);
-    await clickByTestId(page, "demo-preview-cta").catch(() => {});
-    for (let i = 0; i < 25; i++) {
-      await sleep(1500);
-      if (/CHECK IN as persona/.test(await bodyText(page))) break;
-    }
-    await sleep(500);
+  // Sign in as the employee (F16 left the page offline) and probe the live
+  // check-in button.
+  const signedIn = await signInAsEmployee();
+  if (!signedIn) {
+    record("17", "DEFERRED", "employee sign-in unavailable — F10 must provision the employee first");
+    return;
   }
-  // Focus the CHECK IN as persona button and read its computed style.
+  // Focus the live CHECK IN button and read its computed style.
   const focusInfo = await page.evaluate(() => {
-    const btn = document.querySelector('[data-testid="demo-checkin-button"]');
+    const btn = document.querySelector('[data-testid="checkin-submit"]');
     if (!btn) return null;
     btn.focus();
     const cs = getComputedStyle(btn);
@@ -785,8 +755,8 @@ async function f17() {
   const big = focusInfo && parseInt(focusInfo.height, 10) >= 40;
   // Probe focus on a status pill too
   const pillInfo = await page.evaluate(() => {
-    const sec = document.querySelector('[data-testid="demo-checkin"]');
-    const pill = sec?.querySelector("button:not([data-testid])");
+    const scope = document.querySelector('[data-testid="checkin-card"]') ?? document.body;
+    const pill = scope.querySelector('[role="radio"]');
     if (!pill) return null;
     pill.focus();
     const cs = getComputedStyle(pill);
@@ -809,15 +779,15 @@ async function f17() {
 // ------------------------------------------------------------------
 try {
   await f1();
-  await f2();
   await f3();
+  await f8();
+  await f9();
+  await f10();
+  // F4-F6 exercise the live employee surface — they need the account F10 provisions.
   await f4();
   await f5();
   await f6();
   await f7();
-  await f8();
-  await f9();
-  await f10();
   await f11();
   await f12();
   await f13();

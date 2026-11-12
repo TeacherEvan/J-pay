@@ -16,7 +16,7 @@ function formatElapsed(ms: number): string {
   return [h, m, s].map((n) => n.toString().padStart(2, "0")).join(":");
 }
 
-/** Today's cleared minutes + pay, for the shift-card corner (live only). */
+/** Today's cleared minutes + pay, for the shift-card corner. */
 function TodayStrip() {
   const me = useQuery(api.users_queries.me);
   // Re-anchor at local midnight so "Today" never means yesterday after a day rollover.
@@ -61,7 +61,6 @@ export interface ShiftClockProps {
   last?: CardLog;
   loaded: boolean;
   userLocale?: string;
-  isLive: boolean;
   siteName?: string;
   /** Current open segment's startedAt (from deriveSegments), or first event of today. */
   shiftAnchorMs?: number;
@@ -73,7 +72,6 @@ export function ShiftTimer({
   last,
   loaded,
   userLocale,
-  isLive,
   siteName,
   shiftAnchorMs,
 }: ShiftClockProps) {
@@ -128,7 +126,7 @@ export function ShiftTimer({
               ? `On break · ${last ? LABEL[last.status as Status] : ""}`
               : "Off the clock"}
         </p>
-        {isLive && <TodayStrip />}
+        <TodayStrip />
       </div>
 
       <p className="tnum font-mono relative mt-2 text-5xl font-semibold tracking-tight text-[var(--paper)] [font-variant-numeric:tabular-nums_lining-nums]" aria-live="off">

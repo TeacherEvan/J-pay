@@ -14,7 +14,7 @@ Blockers (honest):
 Deliverables (verified on disk):
 - playwright.config.ts (baseURL, retries=2 CI / 0 local, trace 'on-first-retry', fixtures)
 - tests/e2e/fixtures/employee-page.ts (EmployeeCheckInPage POM)
-- tests/e2e/punch-clock.spec.ts (4 behaviors: login/demo, consent/privacy,
+- tests/e2e/punch-clock.spec.ts (4 behaviors: login, consent/privacy,
   check-in/geofence verdict, offline queue + replay lane, auth isolation)
 - package.json: @playwright/test ^1.52.0 added (package.json.bak preserved)
 

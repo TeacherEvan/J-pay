@@ -15,9 +15,7 @@ export const test = base.extend<{
 export { expect } from '@playwright/test';
 
 // Page object: employee check-in flow (TRD §5.1 / §6.1 punch-clock).
-// Two surfaces map to the same component (CheckInCard):
-//   * variant="live"    — data-testid="checkin-card"     on /
-//   * variant="persona" — data-testid="demo-checkin"     on /demo
+// The live check-in card is rendered on / as data-testid="checkin-card".
 export class EmployeeCheckInPage {
   constructor(public readonly page: Page, public readonly baseUrl: string) {}
 
@@ -26,25 +24,6 @@ export class EmployeeCheckInPage {
   /** Navigate to the root sign-in surface. */
   async goto() {
     await this.page.goto(this.baseUrl);
-  }
-
-  // ----- Demo path (no auth required) -----
-
-  /**
-   * Click the demo CTA and wait for navigation to /demo. Skips cleanly
-   * if the CTA is disabled in this env (demo.status returned enabled=false).
-   */
-  async enterDemoPreview() {
-    const cta = this.page.getByTestId('demo-preview-cta');
-    await cta.click();
-    await this.page.waitForURL(/\/demo(\b|$)/, { timeout: 15000 });
-  }
-
-  /** Submit the demo (persona) check-in. */
-  async clickDemoCheckIn() {
-    // demo-checkin-button is the persona variant's primary submit
-    // (src/app/check-in-card.tsx line 818).
-    await this.page.getByTestId('demo-checkin-button').click();
   }
 
   // ----- Live path (auth required) -----

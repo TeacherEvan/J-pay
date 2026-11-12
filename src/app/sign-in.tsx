@@ -1,17 +1,13 @@
 "use client";
 
 import { useAuthActions } from "@/lib/backend/react";
-import { useQuery } from "@/lib/backend/react";
 import { useState } from "react";
-import { api } from "@/lib/backend/api";
 import { errMsg } from "@/lib/errors";
 
 export function SignIn() {
   const { signIn } = useAuthActions();
-  const demo = useQuery(api.demo.status);
   const [step, setStep] = useState<"signIn" | "signUp">("signIn");
   const [error, setError] = useState<string | null>(null);
-  const [demoBusy, setDemoBusy] = useState(false);
 
   return (
     <form
@@ -75,41 +71,6 @@ export function SignIn() {
       >
         {step === "signIn" ? "First time? Activate with your ID code" : "Back to sign in"}
       </button>
-      {demo?.enabled && (
-        <>
-          <div className="mt-1 flex items-center gap-2 text-xs text-[var(--fog-dim)]">
-            <span className="h-px flex-1 bg-[var(--line)]" />
-            or
-            <span className="h-px flex-1 bg-[var(--line)]" />
-          </div>
-          <button
-            type="button"
-            data-testid="demo-preview-cta"
-            data-loading={demoBusy}
-            aria-busy={demoBusy}
-            disabled={demoBusy}
-            onClick={() => {
-              setError(null);
-              setDemoBusy(true);
-              signIn("anonymous", {})
-                .then(() => {
-                  if (typeof window !== "undefined") {
-                    window.location.assign("/demo");
-                  }
-                })
-                .catch((e: Error) => setError(errMsg(e)))
-                .finally(() => setDemoBusy(false));
-            }}
-            className="btn-surgical min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-medium disabled:opacity-50"
-          >
-            <span className="btn-label">Enter demo preview (no account)</span>
-            <span className="btn-spinner" aria-hidden="true" />
-          </button>
-          <p className="text-center text-xs text-[var(--fog)]">
-            Preview mode uses throwaway demo data — nothing here is real.
-          </p>
-        </>
-      )}
     </form>
   );
 }

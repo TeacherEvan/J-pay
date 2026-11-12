@@ -22,21 +22,6 @@ test.describe('J-Pay auth & account flows (TRD §3 / §4 / §7)', () => {
     await expect(authPage.page.getByTestId('auth-submit-signIn')).toBeVisible();
   });
 
-  test('demo CTA is rendered when demo.status returns enabled (R36)', async ({ authPage }) => {
-    await authPage.goto();
-    // demo.status is a Convex query; the CTA renders only when it returns enabled.
-    // Either the CTA shows OR the loading state clears without it — both are
-    // valid TRD-compliant outcomes, not failures.
-    const cta = authPage.page.getByTestId('demo-preview-cta');
-    const signInForm = authPage.page.getByTestId('auth-submit-signIn');
-    await expect(signInForm).toBeVisible({ timeout: 15000 });
-    // Give the demo query a moment to resolve; absence after the wait is also valid.
-    const isVisible = await cta.isVisible().catch(() => false);
-    if (isVisible) {
-      await expect(cta).toBeEnabled();
-    }
-  });
-
   test('bad credentials do not authenticate the user', async ({ authPage }) => {
     await authPage.goto();
     await authPage.signIn('nobody@example.invalid', 'definitely-wrong-12345');
@@ -58,19 +43,6 @@ test.describe('J-Pay auth & account flows (TRD §3 / §4 / §7)', () => {
     await authPage.acknowledgeConsent();
     // After sign-in, the role badge in the header is the source of truth.
     await authPage.expectSignedInAs('moderator');
-  });
-
-  test('demo preview → routes to /demo (R36 / §3)', async ({ authPage }) => {
-    await authPage.goto();
-    // Skip cleanly if demo is disabled in this env (the CTA is conditional).
-    const cta = authPage.page.getByTestId('demo-preview-cta');
-    if (!(await cta.isVisible().catch(() => false))) {
-      test.skip(true, 'Demo preview CTA is disabled in this env.');
-      return;
-    }
-    await authPage.enterDemoPreview();
-    // sign-in.tsx onClick: signIn("anonymous", {}).then(() => location.assign("/demo"))
-    await authPage.page.waitForURL(/\/demo(\b|$)/, { timeout: 15000 });
   });
 
   test('sign-out clears the session and returns to sign-in', async ({ authPage }) => {

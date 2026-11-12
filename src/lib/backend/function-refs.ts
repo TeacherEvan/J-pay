@@ -4,55 +4,6 @@
 import type { FunctionRef } from "./api";
 
 export type ApiSurface = {
-  "demo": {
-    bindReviewer: FunctionRef;
-    boundPersonaLogs: FunctionRef;
-    boundPersonaPayroll: FunctionRef;
-    boundPersonaShifts: FunctionRef;
-    boundPersonaSites: FunctionRef;
-    checkInAsPersona: FunctionRef;
-    demoAudit: FunctionRef;
-    demoEmployeeRoster: FunctionRef;
-    demoExportLogsCsv: FunctionRef;
-    demoKpis: FunctionRef;
-    demoMarkQueueItemRead: FunctionRef;
-    demoModeratorInbox: FunctionRef;
-    demoNeedsReview: FunctionRef;
-    demoRecomputeEmployeeShifts: FunctionRef;
-    demoReplyToEmployee: FunctionRef;
-    demoResolveShift: FunctionRef;
-    ensurePersonaSiteAssignments: FunctionRef;
-    getBinding: FunctionRef;
-    purgeStaleReviewers: FunctionRef;
-    seedAll: FunctionRef;
-    seedDemoData: FunctionRef;
-    status: FunctionRef;
-    switchPersona: FunctionRef;
-  };
-  "demo_index": {
-    bindReviewer: FunctionRef;
-    boundPersonaLogs: FunctionRef;
-    boundPersonaPayroll: FunctionRef;
-    boundPersonaShifts: FunctionRef;
-    boundPersonaSites: FunctionRef;
-    checkInAsPersona: FunctionRef;
-    demoAudit: FunctionRef;
-    demoEmployeeRoster: FunctionRef;
-    demoExportLogsCsv: FunctionRef;
-    demoKpis: FunctionRef;
-    demoMarkQueueItemRead: FunctionRef;
-    demoModeratorInbox: FunctionRef;
-    demoNeedsReview: FunctionRef;
-    demoRecomputeEmployeeShifts: FunctionRef;
-    demoReplyToEmployee: FunctionRef;
-    demoResolveShift: FunctionRef;
-    ensurePersonaSiteAssignments: FunctionRef;
-    getBinding: FunctionRef;
-    purgeStaleReviewers: FunctionRef;
-    seedDemoData: FunctionRef;
-    status: FunctionRef;
-    switchPersona: FunctionRef;
-  };
   "geocode": {
     geocode: FunctionRef;
   };

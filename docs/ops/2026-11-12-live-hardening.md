@@ -52,7 +52,7 @@ manual poking; nothing here is payroll truth, since `logs` are the source of tru
 the derived `shifts` cache is rebuildable):
 
 `logs`, `shifts`, `punches`, `travelSegments`, `messages`, `shiftOverrides`,
-`reviewResolutions`, `purgeAudit`, `pushSubscriptions`, `demoSessions`, `systemEvents`,
+`reviewResolutions`, `purgeAudit`, `pushSubscriptions`, `systemEvents`,
 `jpay_rate_limits` → **0 rows each**.
 
 **Churn removed** (this is the "don't let existing data stagnate" half):
