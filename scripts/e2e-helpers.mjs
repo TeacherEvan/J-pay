@@ -219,6 +219,24 @@ export function attachErrorCapture(page, opts = {}) {
     if (shouldIgnore(text)) return;
     errors.push(`requestfailed: ${text.slice(0, 200)}`);
   });
+  // A failing API response is the most actionable signal there is — record the
+  // URL and the response body (debug mode) so a stuck screen can be traced
+  // instead of guessed at.
+  page.on("response", async (res) => {
+    const url = res.url();
+    const isBackendCall = url.includes("/api/backend/call");
+    if (res.status() < 400 && !(dump && isBackendCall)) return;
+    const text = `${res.status()} ${url}`;
+    if (res.status() >= 400 && shouldIgnore(text)) return;
+    let body = "";
+    try {
+      body = (await res.text()).slice(0, 240);
+    } catch {
+      /* body already consumed or the navigation raced us */
+    }
+    if (res.status() >= 400) errors.push(`http ${res.status()}: ${url.slice(0, 160)} ${body}`);
+    if (dump) console.log(`    [http ${res.status()}]`, url.slice(0, 90), body.slice(0, 160));
+  });
 
   return {
     errors,

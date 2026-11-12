@@ -285,8 +285,13 @@ try {
   await waitForText(/payroll/i, 8_000);
   await log("payroll section present", /payroll/i.test(await text()));
 
-  // Provision a new employee (sets up the next section's sign-in). The form
-  // is on the ACCESS tab.
+  // Provision a new employee (sets up the next section's sign-in).
+  // The organisation must be SELECTED first — an unscoped employee lands
+  // outside the org-scoped roster and could not be assigned a site.
+  for (let i = 0; i < 40; i++) {
+    if (/lands in selected org/i.test(await text())) break;
+    await sleep(500);
+  }
   await switchTab("access");
   await waitForSelector("input[placeholder='Email']", 15_000);
   await p.evaluate(() => {
