@@ -87,10 +87,55 @@ Last failure (commit `6a2337b`): `failed to read project config: unexpected stat
 DatabaseTimeout — The connection to the database timed out`. That is a **Supabase
 platform** error, not migration drift — the project's own DB was healthy throughout.
 
-Because the migration history now matches the local files (0014–0017 recorded under
-their local names), the check was re-triggered after this work. If it fails again with
-a platform error rather than a diff, **disabling the GitHub integration is the correct
-call** for this repo: its preview/migration-diff path implies `supabase db push`
-semantics, which this repo forbids by design. The check is therefore *not* a signal we
-should keep a red light on — the real gate is `npm run verify` + the live
-`/api/health/db` probe (see `docs/ops/deploy.md`).
+After the migrations above were applied, the check failed again with a *real* reason:
+`Remote migration versions not found in local migrations directory.` Cause: the Supabase
+integration resolves each **remote** `schema_migrations` row against a **local** file by
+the version prefix in the filename. Our files use `0004_manager_role.sql` (version
+`0004`), while the rows recorded by `apply_migration` carried Supabase's timestamps
+(`20261110145415`) and, for the four older ones, names without the numeric prefix.
+
+### 5.1 Reconciliation (2026-11-12) — the check is green and meaningful again
+
+`supabase_migrations.schema_migrations` was rewritten to the repo's own naming
+convention (one transaction):
+
+| Remote version (before) | Remote name (before) | → version | → name |
+|---|---|---|---|
+| 20261110145415 | `manager_role` | `0004` | `0004_manager_role` |
+| 20261110145423 | `manager_sites` | `0005` | `0005_manager_sites` |
+| 20261110145432 | `travel_tracking` | `0006` | `0006_travel_tracking` |
+| 20261110145440 | `shift_overrides` | `0007` | `0007_shift_overrides` |
+| 20261111054742 … 20261112144521 | `0002…`, `0009…` – `0017…` | same numeric prefix | same name |
+| *(missing)* | *(never recorded — applied by hand)* | `0001` | `0001_init` |
+
+After this, **every local migration file resolves to a recorded remote version, and
+every remote version resolves to a local file** — there is nothing left for the
+integration to "push", which also removes the standing footgun of `0001_init.sql`
+(the fresh-install baseline) being treated as pending on production.
+
+Two side benefits that also fell out of the check being satisfied: the integration
+does **not** read `supabase/migrations/archive/` (the `0003` / `0008` owner-only files
+stayed invisible — confirmed by the check reporting no pending migrations), and the
+preview branch remains a genuine "does our migration set still apply to a fresh DB"
+rehearsal — the one thing we cannot do locally.
+
+### 5.2 Required follow-up after every MCP apply
+
+`apply_migration` records a **timestamp** version, which would re-introduce the drift
+above. After applying a migration that way, run one statement to restore the
+convention (the local numeric prefix):
+
+```sql
+update supabase_migrations.schema_migrations
+   set version = '00NN', name = '00NN_name'
+ where name = '00NN_name';
+```
+
+### 5.3 If the check ever needs to go away
+
+The GitHub App cannot be disconnected with a user token (GitHub requires an App token
+for installation management), and no Supabase MCP tool exposes the integration
+settings. The remaining route is the Supabase dashboard → Project Settings →
+Integrations → GitHub → remove this repository (or disable preview branches). Until
+then, **the gate of record is `npm run verify` + the live `/api/health/db` probe**
+(`docs/ops/deploy.md`), not this check.

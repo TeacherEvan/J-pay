@@ -32,7 +32,10 @@ name is historical — do NOT create, clone, or reference sibling directories.
    (SQL editor) or by an agent acting on a **fresh, explicit owner instruction in that
    session** — then via the Supabase MCP `apply_migration` (records it in the remote
    history under the local file name), one file at a time, with the file's own pre-flight
-   guards left intact. Production history: `docs/ops/2026-11-12-live-hardening.md`.
+   guards left intact. **After an MCP apply, fix the recorded version** to the local
+   numeric prefix (`update supabase_migrations.schema_migrations set version='00NN',
+   name='00NN_name' where name='00NN_name'`) or the Supabase Preview check goes red on
+   drift. Production history: `docs/ops/2026-11-12-live-hardening.md`.
 
 ## Convex generated types
 `convex/_generated/` is historical — committed so `tsc` passes without codegen;
