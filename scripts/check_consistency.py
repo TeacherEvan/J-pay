@@ -67,8 +67,17 @@ if "clockSkewMs" in doc:
     if has_index_claim and not (has_two_tail and has_scan_admission):
         failures.append("B3: skew-index claim inconsistent with schema/indexes")
 # M1: impossible travel must specify lookup method
+# The lookup changed on 2026-11-11 (audit P2-B13): the previous fix is the
+# newest by WORK time inside a 48 h read horizon, not the 5 newest by
+# insertion order. Accept either explicit description of the lookup.
 if "impossibleTravelFlag" in doc and "previous fix" in doc.lower():
-    if 'order("desc")' not in doc and "by_user_time descending" not in doc:
+    has_insertion_lookup = 'order("desc")' in doc or "by_user_time descending" in doc
+    has_work_time_lookup = (
+        "by_user_time" in doc
+        and "clientReportedTime" in doc
+        and ("horizon" in doc.lower() or "work time" in doc.lower())
+    )
+    if not (has_insertion_lookup or has_work_time_lookup):
         failures.append("M1: impossible-travel previous-fix lookup unspecified")
 
 # B4 strict: platform support table must exist

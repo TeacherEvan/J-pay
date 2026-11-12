@@ -10,7 +10,7 @@ import { serverClockSkewMs } from "../src/lib/shift-engine";
 import { purgeExpiredTravelPathsInternal } from "./travel";
 
 import { jpayConfig } from "../src/config/jpay.config";
-import { trailingWorkTimeWindow } from "../src/lib/travel-window";
+import { trailingWorkTimeWindow, TRAVEL_WINDOW_MS } from "../src/lib/travel-window";
 
 const MAX_ACCURACY_METERS = jpayConfig.geoRules.maxAccuracyMeters;
 const IMPOSSIBLE_TRAVEL_KMH = jpayConfig.geoRules.impossibleTravelSpeedKmh;
@@ -84,17 +84,20 @@ export const createLog = mutation({
     const clockSkewMs = serverClockSkewMs(args.clientReportedTime, args.queuedAt, Date.now());
 
     let impossibleTravelFlag: boolean | undefined = undefined;
-    // P2-B13: order by WORK time, not insertion order — the index is
-    // [userId] only, so .order("desc") walks _creationTime and mis-ranks
-    // out-of-order offline replays. No clientReportedTime index exists
-    // (no migrations allowed), so collect and rank in memory.
+    // P2-B13: rank the trailing window by WORK time, not insertion order —
+    // the index is [userId] only, so .order("desc") walks _creationTime and
+    // mis-ranks out-of-order offline replays. The read horizon is an INDEX
+    // constraint on _creationTime (the index's range field), not a .filter()
+    // predicate: index constraints are pushed into PostgREST as SQL WHERE
+    // (served by logs_user_time_idx), while .filter() predicates are
+    // evaluated in JS after every row of the user's history has crossed the
+    // wire (src/lib/backend/db.ts). The horizon bounds the READ; the
+    // selection below is by work time.
     const allPrior = await ctx.db
       .query("logs")
-      .withIndex("by_user_time", (q) => q.eq("userId", userId))
-      // Bound the read: impossible-travel only needs the working horizon.
-      // The adapter pushes gte into PostgREST (same pattern as the horizon
-      // filter in derivation), so this is a bounded scan, not collect-all.
-      .filter((q) => q.gte(q.field("clientReportedTime"), Date.now() - 48 * 3600 * 1000))
+      .withIndex("by_user_time", (q) =>
+        q.eq("userId", userId).gte("_creationTime", Date.now() - TRAVEL_WINDOW_MS)
+      )
       .collect();
     const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
     if (prevFix) {
@@ -235,8 +238,9 @@ export const createLogAs = internalMutation({
     let impossibleTravelFlag: boolean | undefined = undefined;
     const allPrior = await ctx.db
       .query("logs")
-      .withIndex("by_user_time", (q) => q.eq("userId", args.personaUserId))
-      .filter((q) => q.gte(q.field("clientReportedTime"), Date.now() - 48 * 3600 * 1000))
+      .withIndex("by_user_time", (q) =>
+        q.eq("userId", args.personaUserId).gte("_creationTime", Date.now() - TRAVEL_WINDOW_MS)
+      )
       .collect();
     const prevFix = trailingWorkTimeWindow(allPrior, 5)[0];
     if (prevFix) {

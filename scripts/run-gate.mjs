@@ -55,6 +55,7 @@ const stagesFor = (mode) => {
     { label: "useQuery loop", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-use-query-loop.mjs"] },
     { label: "scheduler retry", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-scheduler-retry.mjs"] },
     { label: "db adapter", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-db-adapter.mjs"] },
+    { label: "travel window bounds (index-range pushdown, P2-B13)", cmd: process.execPath, args: ["scripts/test-travel-window-bounds.mjs"] },
     { label: "cron jobs map", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-cron-jobs.mjs"] },
     { label: "runtime module census", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-runtime-modules.mjs"] },
     { label: "manager authz + override chain + org guards", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-manager-authz.mjs"] },

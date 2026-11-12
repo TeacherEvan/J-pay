@@ -424,6 +424,15 @@ Derivation rules (v1.1):
 - Out-of-order or malformed sequences **never silently miscount**: they create a shift flagged `needsReview = true` for moderator resolution.
 - Every payroll number is reconstructible from `logs` alone. `shifts` is a materialized cache; **logs are truth**.
 
+### 6.2 Payroll Money Rules (strict)
+
+Money is computed in **integer cents**, never by accumulating floats (`src/lib/payroll-strategies.ts`):
+
+1. **Exact products:** rate and multiplier are parsed from their shortest round-trip decimal string into exact rationals; each earning component's cents are computed with exact rational arithmetic (minutes × rate × multiplier × 100 ÷ 60) and rounded **half away from zero** on the true product. `Math.round(n * 100) / 100` is forbidden — it under-rounds exact half-cent products (audit 2026-11-11, P2-B10: ~947 divergences of exactly −R0.01 across an exhaustive rate × minutes sweep).
+2. **Per-component rounding:** ordinary time, overtime time and Sunday time are each rounded to the cent, then summed as integers. A line total is therefore an exact integer-cent sum, and a period total is the exact sum of its lines — no float drift (a `575.6999999999999` style artifact cannot occur).
+3. **Caps are decided before money:** weekly-cap allocation (BCEA 45 h, FLSA 40 h, WTR-UK 48 h) is settled in minutes before any conversion.
+4. **Disclosed change (2026-11-11):** rule 2 changed the emitted cents versus the previous float implementation (which rounded each line's component sum once). Measured over 3.24 M single-day and 1.5 M weekly cases: max divergence **R0.01 per line / R0.04 per weekly total**; the new path never paid *less* than the old one across the swept set. Employer-facing payslips may therefore differ from pre-2026-11-11 output by up to a few cents.
+
 ---
 
 ## 7. Security
@@ -433,7 +442,7 @@ Derivation rules (v1.1):
 - **Row-scoped authz (v1.1 — HARD RULE):** every query and mutation derives the acting `userId` from `ctx.auth` and filters rows by it. A client-supplied `userId` argument is NEVER trusted as an identity or filter input, including on indexed queries like `by_user_time`. Employees read only their own logs/shifts/messages; one unscoped query is a full payroll-data leak.
 - **Device binding:** HMAC-signed token issued inside Convex (issuance preconditions per §5.3), stored IndexedDB, verified per mutation. Re-issue flow is moderator-gated.
 - **Impossible-travel heuristic (v1.1):** at write time, compare against the employee's previous fix: if implied speed > 200 km/h, set `impossibleTravelFlag = true` for moderator review. Catches naive GPS spoofing cheaply; advisory flag, not a hard reject.
-  *Previous-fix definition:* query `logs.by_user_time` with `.order("desc")`, scan back up to 5 entries, take the one with the greatest skew-corrected `clientReportedTime`. This is approximate under offline replay by design — the flag is advisory evidence for moderators, not ground truth.
+  *Previous-fix definition (revised 2026-11-11, audit P2-B13):* the previous fix is the one with the greatest skew-corrected `clientReportedTime` (WORK time) among that user's fixes inside a **48 h read horizon** — NOT the 5 newest by insertion order, which mis-ranked out-of-order offline replays. The horizon is an index range constraint on `_creationTime` (`logs.by_user_time`), so it is pushed into SQL and bounds the read; the selection inside the horizon is by work time (`src/lib/travel-window.ts`). The flag remains advisory evidence for moderators, not ground truth.
 - **Clock tamper:** `clockSkewMs` computed AND stored at write. Moderators filter via two-tail range queries on `by_user_skew` (`skew ≤ −30000` OR `skew ≥ 30000`) — Convex index ranges cannot express absolute-value scans, so both tails are queried and unioned. Within a single user's date window a post-query filtered scan is also acceptable at this scale; the index exists so large-window audits don't degrade.
 - **IP address:** captured where available (edge headers) but treated strictly as advisory telemetry for fraud review. Not an enforcement control — documented as such everywhere it appears.
 - **Geofencing:** haversine distance computed server-side inside mutations against the user's assigned site(s). Client-reported `isWithinGeofence` is never trusted.

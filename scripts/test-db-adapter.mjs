@@ -123,4 +123,51 @@ const exhausted = await db.query("logs").withIndex("by_user_time", (q) => q.eq("
 assert.equal(exhausted.length, 60, "take(60) must page through windows until 60 post-filter rows accumulate");
 assert.ok(__pg.calls.some((c) => c.method === "range"), "residual path must page via range()");
 
-console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact, predicate LIMIT deferral, window-loop exhaustion");
+// --- Test 10 (P2-B13): the impossible-travel read horizon must reach SQL.
+// The travel window (convex/logs.ts createLog / createLogAs, convex/punches.ts
+// recordPunch) bounds its read with an INDEX range constraint. An INDEX
+// constraint is pushed into PostgREST as SQL WHERE; a .filter() predicate is
+// NOT (it is evaluated in JS after every row of the user's history crossed the
+// wire). This test pins both halves so the horizon cannot silently degrade
+// into an unbounded read again.
+__pg.reset();
+__pg.seed("logs", [
+  { _id: "old", _creationTime: 1000, userId: "H", clientReportedTime: 1000 },
+  { _id: "mid", _creationTime: 9000, userId: "H", clientReportedTime: 9000 },
+  { _id: "new", _creationTime: 99000, userId: "H", clientReportedTime: 99000 },
+  { _id: "other", _creationTime: 99000, userId: "X", clientReportedTime: 99000 },
+]);
+__pg.calls.length = 0;
+const horizon = 50000;
+const inHorizon = await db
+  .query("logs")
+  .withIndex("by_user_time", (q) => q.eq("userId", "H").gte("_creationTime", horizon))
+  .collect();
+assert.deepEqual(
+  inHorizon.map((r) => r._id).sort(),
+  ["new"],
+  "only in-horizon rows of that user may be returned"
+);
+assert.ok(
+  __pg.calls.some((c) => c.method === "gte" && c.col === "_creationTime" && c.val === horizon),
+  "the read horizon must be pushed into SQL as a gte filter (bounded read)"
+);
+assert.ok(
+  !__pg.calls.some((c) => c.method === "gte" && c.col === "clientReportedTime"),
+  "the horizon must be an index range constraint, not a work-time predicate"
+);
+
+// A .filter() predicate must NOT reach SQL — this is why the horizon has to be
+// an index constraint (P2-B13 regression guard).
+__pg.calls.length = 0;
+await db
+  .query("logs")
+  .withIndex("by_user_time", (q) => q.eq("userId", "H"))
+  .filter((q) => q.gte(q.field("clientReportedTime"), horizon))
+  .collect();
+assert.ok(
+  !__pg.calls.some((c) => c.method === "gte"),
+  "filter() predicates stay in JS — they must not be mistaken for a pushdown"
+);
+
+console.log("db adapter pushdown OK: SQL eq/limit pushdown, IS NULL parity, residual JS neq/predicate intact, predicate LIMIT deferral, window-loop exhaustion, index-range horizon pushdown");
