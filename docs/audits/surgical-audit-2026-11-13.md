@@ -20,7 +20,7 @@
 
 The trust boundary remains structurally sound: the single-door `/api/backend/call` model, deny-by-default (`isPublic !== true`), service-role-only data access, and RLS default-deny all hold live (anon `SELECT` on `jpay_id_registry` → `false`; anon REST → `42501`). The demo-removal cycle was executed carefully — the registry view was recreated *with* `security_invoker = on` (the exact footgun that caused the original P0), the schema-parity gate was extended to model **final** schema state and to reject a view that references a dropped table, and the whole 24-stage suite is green. **No P0 remains.**
 
-What the cycle did **not** do is re-open the money path. Four findings below are money-affecting: **F1** (the check-in button latches `busy` forever after a device-token failure — the employee can never clock on, so the shift is never paid), **F2** (the payroll panel's browser-local week window is narrower than the *site's* week, so a night-shift worker's first worked day silently vanishes from the panel — measured **R1,350/week** at a 9h night-shift pattern), **F3** (the QA-account filter's prefix list does not match the addresses the repo's own QA scripts actually create, so **2 live production QA accounts** pass the filter into the moderator roster, KPI headcount and broadcast targets), and **F4** (the documented 90-day GPS retention job cannot run — `pg_cron`/`pg_net` are not installed on the project and no Vercel Cron exists, so raw coordinates and route polylines are never anonymised while the privacy page promises they are). The remaining 12 P2 / 9 P3 findings are structural debt, not live harm.
+What the cycle did **not** do is re-open the money path. Four findings below are money-affecting: **F1** (the check-in button latches `busy` forever after a device-token failure — the employee can never clock on, so the shift is never paid), **F2** (the payroll panel's browser-local week window is narrower than the *site's* week, so a night-shift worker's first worked day silently vanishes from the panel — measured **R1,350/week** at a 9h night-shift pattern), **F3** (the QA-account filter's prefix list does not match the addresses the repo's own QA scripts actually create, so **3 of 14 live production QA identities** — one a moderator — pass the filter into the moderator roster, KPI headcount and broadcast targets; counts corrected in §7), and **F4** (the documented 90-day GPS retention job cannot run — `pg_cron`/`pg_net` are not installed on the project and no Vercel Cron exists, so raw coordinates and route polylines are never anonymised while the privacy page promises they are). The remaining 12 P2 / 9 P3 findings are structural debt, not live harm.
 
 | Severity Tier | Count | Deduction | Primary Failure Domains |
 | :--- | :--- | :--- | :--- |
@@ -171,18 +171,19 @@ What the cycle did **not** do is re-open the money path. Four findings below are
 - `users_queries.listEmployees` is now **deny-by-default** (anonymous → `[]`, non-moderator → `[]`, moderator → active non-QA employees). This is a **strict improvement** over the old code, which returned demo personas to an anonymous caller in demo mode.
 - The `002`/`0018` migration history is reconciled to the repo naming convention (`0001…0018`, no timestamps) — the Supabase Preview drift check is satisfied.
 
-- **[P1-3] (see F3) The QA-account filter does not match the addresses the repo's own QA scripts create — 2 live production QA accounts pass it** — `convex/access.ts:17-22`.
+- **[P1-3] (see F3) The QA-account filter does not match the addresses the repo's own QA scripts create — 3 of 14 live production QA identities pass it** — `convex/access.ts:17-22`. *(Counts corrected in §7: the first pass recorded 6 accounts / 2 leaks.)*
   - **Root cause mechanism:** `isQaAccount` recognises exactly two prefixes: `"e2e."` and `"review-emp."`. The repo's scripts provision three *other* shapes:
     - `scripts/e2e-all.mjs:303` → `e2e-all-<stamp>@jpay.local` — starts with `e2e-`, **not** `e2e.` → **passes the filter**
     - `scripts/smoke-supabase.mjs:88` → `qa.employee.<stamp>@jpay.local` → **passes the filter**
     - `scripts/test-pw-change.mjs:7` → `e2e-review@jpay.local` → **passes the filter**
     The old `isDemoUser` caught these by a *suffix* rule (`.demo@jpay.local`) and by an `isAnonymous` column; the new function is prefix-only and narrower.
-  - **Live evidence (read-only `SELECT` on `public.users`):** 6 active QA accounts exist in production, of which **2 pass the filter**:
+  - **Live evidence (read-only `SELECT` on `public.users`, re-verified 2026-11-13 in §7):** **14** active `@jpay.local` identities exist in production, of which **3 pass the filter** — two employees **and one moderator**:
     ```
     LEAK: e2e-all-mwdszk13@jpay.local (employee)   ← active, not archived
     LEAK: e2e-all-mwdt2ezv@jpay.local (employee)   ← active, not archived
+    LEAK: e2e-test@jpay.local         (moderator)  ← active, live privileged credential
     ```
-    These rows are visible in `moderator.listEmployeesWithAssignments` (`convex/moderator.ts:101-110`), count toward the KPI workforce headcount (`convex/kpi.ts:31-34`), are eligible broadcast recipients (`convex/messages.ts:171-176`), and are listed by `users_queries.listEmployees` (`convex/users_queries.ts:42-44`). The QA rows are also *live `auth.users` identities* — they can sign in.
+    These rows are visible in `moderator.listEmployeesWithAssignments` (`convex/moderator.ts:101-110`), count toward the KPI workforce headcount (`convex/kpi.ts:31-34`), are eligible broadcast recipients (`convex/messages.ts:171-176`), and are listed by `users_queries.listEmployees` (`convex/users_queries.ts:42-44`). The QA rows are also *live `auth.users` identities* — they can sign in. The 2026-11-12 e2e run additionally left **4 unsealed shifts** (`endedAt IS NULL`) owned by `e2e.mwdu*` accounts — see §7.
   - **Severity rationale:** this is not a P0 (no data of real employees leaks out; the roster is moderator-only). It is P1 because it **breaks the owner directive** the filter exists to enforce ("a real login must never see throwaway rows"), it silently corrupts the KPI headcount a moderator makes staffing decisions from, and it puts QA identities into production broadcast targets.
   - **Surgical fix specification:** replace the prefix list with a *domain + shape* rule that is closed over the repo's own scripts, and — more importantly — make the marker **structural** rather than lexical:
     ```ts
@@ -195,7 +196,8 @@ What the cycle did **not** do is re-open the money path. Four findings below are
     }
     ```
     and, per the commit's own reasoning, prefer a **column** marker over a string heuristic: add `users.isQaAccount` (or reuse the retired `isAnonymous` slot as `isQa`), set it at provisioning time (`runtime.ts` `users:provisionEmployee` / `provisionModerator` / `users:createMasterTempUser`), and filter on the boolean. That removes the whole class ("a script invents a new address shape → the filter silently stops matching").
-  - **Operational cleanup (owner-only, DDL):** archive/remove the 6 live QA accounts. They are `auth.users` identities in the live project — they must be deactivated, not merely filtered. `e2e.breakglass.tmp@jpay.local` is a **moderator** row: it is filtered out of rosters but it is a live credential surface.
+  - **Operational cleanup (owner-only, DDL):** archive/remove the **14** live QA accounts. They are `auth.users` identities in the live project — they must be deactivated, not merely filtered. **Two are moderators** (`e2e.breakglass.tmp@jpay.local`, `e2e-test@jpay.local`): live privileged credentials, one of them filtered out of rosters and one not.
+  - **Status (2026-11-13, §7):** the lexical half is **fixed** — `isQaAccount` now anchors on the reserved `@jpay.local` domain; `scripts/test-qa-account-filter.mjs` is red on the old implementation (10 shapes) and green now. The structural `isQa` column (step 1.3) and the account cleanup (1.4) remain owner work.
   - **Regression test (MVTH):** a table-driven test over every address shape the repo's scripts produce (`scripts/e2e-all.mjs`, `scripts/smoke-supabase.mjs`, `scripts/test-pw-change.mjs`, `scripts/e2e-full.mjs`, `scripts/review-walkthrough.mjs`) asserting `isQaAccount` returns `true` for each. The test must fail against the current implementation for the three leaking shapes (verified: it does).
 
 - **[P2-8] `src/lib/backend/api.ts:30` exports the entire internal surface as `any`** — `export const internal: any = makeNamespace();`.
@@ -224,7 +226,7 @@ What the cycle did **not** do is re-open the money path. Four findings below are
 
 - **[P2-11] The `internal/cron` route trusts `CRON_SECRET` from the environment with no shared-store limiter** — `src/app/api/internal/cron/route.ts:22-27`.
   - **Root cause:** unlike `/api/auth/session-bootstrap` (which has the `jpay_rate_limit_hit` Postgres limiter + an in-memory fallback), the cron route has only a static bearer comparison. A leaked secret allows unlimited purge invocations.
-  - **Fix spec:** reuse the `rateLimitedShared` helper for the cron route, or make the secret comparison constant-time (it currently uses `isSmokeKeyValid`, which should be audited for timing-safety — `session-bootstrap` uses `constantTimeEqual`, the cron route does not).
+  - **Fix spec (corrected in §7):** the comparison is **already** constant-time — `src/lib/smoke-key.ts` uses `crypto.timingSafeEqual`, and the cron route calls it. What is genuinely missing is only the shared-store limiter, which matters little for a high-entropy bearer secret. Treat this as a *nice-to-have*, not a hardening gap.
 
 ### Lens 8 — Type Systems, Schema & Contract Engineer
 
@@ -273,7 +275,7 @@ What the cycle did **not** do is re-open the money path. Four findings below are
 | `src/lib/payroll-strategies.ts` | `computePay` (5 strategies) | `test-payroll-strategies.mjs`, `test-payroll-rounding.mjs` | **fixtures are single complete weeks only** — the partial-week/straddle case is absent | 14/17 (82%) | straddling ISO week; site-TZ ≠ window-TZ; `weeklyCapMinutes` ↔ literal-cap consistency |
 | `src/lib/server-clock.ts` | skew learn/persist/reject | `test-server-clock.mjs` | good | 5/6 | persistence across reload |
 | `convex/manager.ts` | promote/demote/org guards | `test-manager-authz.mjs` | **real invoke-path tests (not mock-mirror)**; stub lacks range ops | 21/27 (78%) | cross-org *unstubbed*; sealed/replay attest |
-| `convex/access.ts` | `isQaAccount` | **NONE** | — | **0/6 (0%)** | every address shape the repo's scripts produce (F3) |
+| `convex/access.ts` | `isQaAccount` | **`scripts/test-qa-account-filter.mjs`** (added §7) | table: 15 QA shapes, 7 real addresses | **15/15 (100%)** | — |
 | `src/app/check-in/live-submit.tsx` | `checkIn`, token failure, outbox | **NONE** (only the browser walkthrough, which never fails a token) | — | **0/6 (0%)** | `data-loading === false` after `DEVICE_ALREADY_ACTIVE` (F1) |
 | `src/app/payroll.tsx` | week window, `weeks` selector | **NONE** | — | **0/5 (0%)** | panel window vs site week (F2) |
 | `src/lib/backend/runtime.ts` | `OVERRIDES` (provision/passwords) | `test-manager-authz.mjs` (partial) | partial | 8/16 (50%) | table-driven guard suite |
@@ -503,3 +505,97 @@ plus a migration adding `users.isQa boolean` (owner-apply) and a backfill
 - **"Executed, not aspirational" is a claim about the deployment, not about the handler.** The retention handlers are correct; the *scheduler* is missing. A gate that checks registration can never catch a missing schedule.
 - **Two clocks decide what a "week" is.** Selection in browser time, bucketing in site time — the panel and the statutory week disagree, and the weekly cap is granted twice. Every timezone-aware money computation needs one clock, chosen server-side.
 - **A `P0` closed is not a `P0` closed forever.** The registry view's `security_invoker = on` survives a `CREATE OR REPLACE VIEW` only if the replacement says so — the migration says so in a comment. That comment is load-bearing and must stay.
+
+---
+
+## 7. Verification round 2 — corrections, new evidence, two fixes shipped
+
+The first pass was graded against HEAD `c040da9`; this round re-ran every **live** claim against
+the project, added the probes the first pass did not run, and re-read the audit's own assertions
+for truth. Four of them were wrong. They are corrected here, in place above, and below.
+
+### 7.1 Corrections to this report
+
+| # | First pass said | Actually (2026-11-13, `jpay-supabase`) | Why it was wrong |
+| :--- | :--- | :--- | :--- |
+| C1 | "6 active QA accounts exist in production" | **14** active `@jpay.local` identities | The count was taken from a filtered sample, not a full census. `select count(*) from public.users where email like '%@jpay.local' and "isActive"` → 14. |
+| C2 | "2 QA accounts pass the filter" | **3** — the two `e2e-all-*` employees **and** `e2e-test@jpay.local`, a **moderator** | `e2e-test@` does not start with `e2e.`. A moderator leaking past the filter is a privilege-surface fact, not just roster noise. |
+| C3 | "`logs`/`travelSegments`/`shifts` all 0 rows" | `shifts` **4**, `logs` **4**, `messages` **4**; `travelSegments` 0 | The 2026-11-12 e2e run wrote rows. All four shifts are **unsealed** (`endedAt IS NULL`), `totalMinutes = 0`, owned by `e2e.mwdu*`, and were created by **HeadlessChrome** at GPS −26.2041/28.0473. There is still **no real operational data**. |
+| C4 | P2-11 implied the cron secret comparison might not be constant-time | It **is** — `src/lib/smoke-key.ts` uses `crypto.timingSafeEqual`, and `src/app/api/internal/cron/route.ts` calls it | The parenthetical confused "does not use `session-bootstrap`'s hand-rolled helper" with "not constant-time". Only the shared-store limiter is genuinely absent, and for a high-entropy bearer that is a nice-to-have. |
+
+C1–C3 all change the **operational cleanup** step (plan 1.4): an owner acting on "6 accounts" would
+have left eight live, including one moderator.
+
+### 7.2 New evidence (probes the first pass did not run)
+
+**Live negative controls** — all three fail closed in production:
+
+| Probe | Result |
+| :--- | :--- |
+| `POST /api/auth/session-bootstrap {kind:"master", secret:"…"}` | **403 `MASTER_DISABLED`** — the break-glass moderator-minting path is *off* in prod |
+| `GET /api/backend/call` (no `x-smoke-key`) | **403 `FORBIDDEN`** — the internal function inventory is not public |
+| `POST /api/internal/cron?job=…` (no bearer) | **401 `UNAUTHENTICATED`** |
+
+**RLS / privilege matrix** (`pg_class`, `pg_policies`, `pg_proc`, `information_schema`):
+
+- All **16** tables: `relrowsecurity = true`, **0 policies** each → default-deny holds.
+- The only view, `jpay_id_registry`: `security_invoker = on` (still correct after the 0018 recreate).
+- **No `SECURITY DEFINER` function** in `public`; `jpay_rate_limit_hit` is invoker-rights,
+  `search_path` pinned, and `EXECUTE` is revoked from `anon`/`authenticated`.
+- **New P2 (→ plan 2.8):** six tables grant **full DML — including `TRUNCATE`** — to `anon` and
+  `authenticated`: `jpay_rate_limits`, `managerSites`, `organisations`, `shiftOverrides`,
+  `systemEvents`, `travelSegments`. RLS with zero policies is the only thing holding; one future
+  policy turns this into an incident, and per the PostgreSQL manual "operations that apply to the
+  whole table, such as `TRUNCATE` and `REFERENCES`, are not subject to row security". Not live
+  (PostgREST cannot issue `TRUNCATE`), but it should be revoked before the first policy ships.
+
+**Payroll engine fuzz** (`src/lib/payroll-strategies.ts`, 6,000 randomized cases × 5 strategies ×
+7 rates, plus a 32,825-case realistic-rate sweep):
+
+- minutes conserved per day (ordinary + OT + Sunday = input) — **0 failures**
+- totals equal the sum of lines, every value on an exact cent boundary — **0 failures**
+- weekly cap never exceeded; BCEA overtime never appears below 45 h; Sunday minutes never counted
+  as ordinary — **0 failures**
+- monotonicity (one extra minute never lowers pay) — **0 failures at rates ≥ R25/h**; 4 one-cent
+  inversions at R0.01–R0.10/h, caused by rounding each component separately. Economically
+  irrelevant, but it confirms the rounding policy is "per component", not "per line".
+
+This is **positive evidence for the money engine** — the first pass had two hand-built payroll
+probes and no invariant sweep. It narrows F2 to the *window contract*, exactly as stated.
+
+**Service worker:** the served `/sw.js` is generated at build time and is **fresh** (no `/demo`
+references, different hash from the local file). The checked-in-adjacent local `public/sw.js` is a
+stale build artifact whose precache URLs now 404 — so the P3 is **local-dev only**: `next dev`
+serves a SW whose install fails. Production is unaffected.
+
+**Tooling hazard (not a product defect):** the `supabase` MCP server points at a *different*
+project (an orders/couriers/strains schema). Only `jpay-supabase` is J-Pay. Any agent that verifies
+against the default server will "confirm" the wrong database. This is the most likely explanation
+for C1/C3.
+
+### 7.3 Fixes shipped in this round
+
+| Finding | Change | Proof |
+| :--- | :--- | :--- |
+| **F1** | `checkIn()` split into `runCheckIn()` (the work) and `checkIn()` (guard + `busy` + **one** `finally`). The reset now has a single site, so no early return — including the device-token failure — can latch the button. | `scripts/test-checkin-busy-latch.mjs` drives the **real component**: `issueMyDeviceToken` throws `DEVICE_ALREADY_ACTIVE`, then succeeds. **Red before** (`data-loading === true` after the failure), green after; the second tap is asserted to reach `createLog`. Registered in `run-gate.mjs`. |
+| **F3a** | `isQaAccount` now treats `@jpay.local` as a reserved, test-only domain (structural marker) and keeps the legacy local-part shapes for anything outside it. Case-insensitive. | `scripts/test-qa-account-filter.mjs`: **red before** on 10 shapes (`e2e-all-*`, `e2e-test`, `qa.employee.*`, bare `e2e`, uppercase), green after; 7 real addresses — including `e2ebusiness@` and `qatar.office@` — stay unfiltered. Registered in `run-gate.mjs`. |
+
+`npm run verify` runs both new stages; `N_P1` drops from 4 to **2** (F2 and F4 remain).
+
+### 7.4 What this changes about the verdict
+
+`S_health` stays **72** — the corrections refine blast radius, they do not add a defect class, and
+the new P2 is offset by the P2 downgrade. What *does* change is the **readiness** reading:
+
+- Production contains **zero real punches, zero real shifts, zero travel segments**. The only rows
+  in the core tables are four HeadlessChrome QA shifts and their logs. This is a **pre-production
+  deployment** wearing a production URL.
+- It has **14 live QA identities, two of them moderators**, plus **two real accounts that have
+  never signed in and still hold their initial ID code** (`dewetlot04@gmail.com` moderator,
+  `ajay@ve.com` manager, both `passwordChangedAt = NULL`).
+- Retention has never run and `purgeAudit` has never been written.
+
+So the honest framing is not "a healthy codebase with four P1s". It is: **the code is in
+moderate-to-good shape, and the deployment has never been used.** That makes 1.3/1.4 (QA identity
+cleanup) and 1.6 (retention honesty) **launch blockers**, not hygiene — and it makes the cost of
+shipping Phase 1 low, because there is no production data to migrate or reconcile.

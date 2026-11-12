@@ -62,6 +62,8 @@ const stagesFor = (mode) => {
     { label: "org list counts", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-list-orgs.mjs"] },
     { label: "write-set telemetry", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-write-set.mjs"] },
     { label: "server-clock calibration", cmd: process.execPath, args: [...TS_NODE, "scripts/test-server-clock.mjs"] },
+    { label: "QA-account filter (all script address shapes, F3)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-qa-account-filter.mjs"] },
+    { label: "check-in busy latch (token failure must not disable submit, F1)", cmd: process.execPath, args: ["--import", "./scripts/register-tsx-stub.mjs", "scripts/test-checkin-busy-latch.mjs"] },
   ];
   if (mode === "verify") {
     stages.unshift(

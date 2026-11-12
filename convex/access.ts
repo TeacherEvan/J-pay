@@ -8,17 +8,30 @@ type Ctx = MutationCtx | QueryCtx;
 /**
  * Throwaway accounts provisioned by the automated QA suites.
  *
- * The e2e walkthrough and the review walkthrough create employees whose
- * addresses carry one of these prefixes. They are real rows in `public.users`,
- * so without this marker they would surface in a moderator's roster, count
- * toward workforce KPIs and receive broadcasts. A real login must never see
- * them.
+ * Two rules, in order:
+ *   1. `@jpay.local` is a reserved, test-only domain. Every QA identity the
+ *      suites create lives there, so the domain alone is authoritative — this
+ *      is the structural marker, and it cannot drift when a script picks a new
+ *      local-part shape.
+ *   2. For anything provisioned outside that domain, fall back to the local
+ *      part shapes the repo's scripts use (`e2e.`, `e2e-`, `qa.`, …).
+ *
+ * Audit 2026-11-13, F3: the previous prefix-only list (`e2e.`, `review-emp.`)
+ * missed `e2e-all-*`, `e2e-test@…` and `qa.employee.*` — three live production
+ * rows (one of them a moderator) leaked into rosters, KPI counts and
+ * broadcasts. Regression: scripts/test-qa-account-filter.mjs.
  */
-const QA_ACCOUNT_EMAIL_PREFIXES = ["e2e.", "review-emp."];
+const QA_EMAIL_DOMAIN = "@jpay.local";
+const QA_EMAIL_LOCAL_PARTS = ["e2e", "e2e-all", "e2e-review", "qa", "review-emp"];
 
 export function isQaAccount(user: Doc<"users">): boolean {
-  const email = user.email ?? "";
-  return QA_ACCOUNT_EMAIL_PREFIXES.some((prefix) => email.startsWith(prefix));
+  const email = (user.email ?? "").trim().toLowerCase();
+  if (!email) return false;
+  if (email.endsWith(QA_EMAIL_DOMAIN)) return true;
+  const local = email.split("@")[0];
+  return QA_EMAIL_LOCAL_PARTS.some(
+    (part) => local === part || local.startsWith(`${part}.`) || local.startsWith(`${part}-`)
+  );
 }
 
 /**

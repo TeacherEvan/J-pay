@@ -114,13 +114,12 @@ export function LiveSubmit({
 
   const inflight = useRef(false);
 
-  async function checkIn() {
-    // U1 fix: synchronous in-flight guard + busy set before ANY await, so a
-    // double-tap in the same frame cannot start two submissions.
-    if (inflight.current) return;
-    inflight.current = true;
-    setBusy(true);
-    setMessage(null);
+  /**
+   * The check-in work, with no busy management of its own. Every exit —
+   * including the device-token `return` below — unwinds through `checkIn`'s
+   * single `finally`.
+   */
+  async function runCheckIn(): Promise<void> {
     let token: string;
     try {
       token = await getToken();
@@ -208,7 +207,23 @@ export function LiveSubmit({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setMessage(/denied|permission/i.test(msg) ? "Location permission denied." : msg);
+    }
+  }
+
+  async function checkIn() {
+    // U1 fix: synchronous in-flight guard + busy set before ANY await, so a
+    // double-tap in the same frame cannot start two submissions.
+    if (inflight.current) return;
+    inflight.current = true;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await runCheckIn();
     } finally {
+      // F1 (audit 2026-11-13): the reset lives at exactly one site, so no
+      // early return inside runCheckIn — least of all a device-token failure —
+      // can leave the button latched. Splitting this across two sibling try
+      // blocks is what caused the bug.
       inflight.current = false;
       setBusy(false);
     }
