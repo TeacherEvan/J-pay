@@ -17,11 +17,14 @@ import {
   waitForUrl,
 } from "./e2e-helpers.mjs";
 
-const { MOD_EMAIL, MOD_PW } = requireEnv(["JPAY_EMAIL", "JPAY_PASSWORD"], {
+// requireEnv returns the keys AS NAMED — destructure them under the local
+// names (the previous `{ MOD_EMAIL, MOD_PW }` destructuring silently produced
+// undefined and every sign-in failed with "requires opts.email").
+const { JPAY_EMAIL: MOD_EMAIL, JPAY_PASSWORD: MOD_PW } = requireEnv(["JPAY_EMAIL", "JPAY_PASSWORD"], {
   message: "Set JPAY_EMAIL + JPAY_PASSWORD (moderator credentials) before running.",
 });
 
-mkdirSync("user-review", { recursive: true });
+mkdirSync(process.env.JPAY_SCREENSHOT_DIR ?? "user-review", { recursive: true });
 
 // Wipe cookies + storage on the current origin so the next sign-in is clean.
 // Implemented inline (not via a helper) because the helpers cover script-level
@@ -113,6 +116,16 @@ await runWithBrowser(async (page, { baseUrl, cdp, assertions }) => {
   await page.screenshot({ path: "user-review/14-provisioned.png" });
 
   // assign the new employee to the first site so check-in can pass the geofence
+  // The roster that feeds the assignment picker is fetched when the Access
+  // panel mounts; the freshly provisioned employee is not in it until the
+  // panel re-fetches, so reload the console and switch back to Access.
+  await page.reload({ waitUntil: "networkidle2" });
+  await new Promise((r) => setTimeout(r, 4000));
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="console-tab-access"]');
+    if (el) el.click();
+  });
+  await new Promise((r) => setTimeout(r, 3000));
   await page
     .waitForFunction(
       (n) => [...document.querySelectorAll("option")].filter((o) => o.text === n).length >= 1,

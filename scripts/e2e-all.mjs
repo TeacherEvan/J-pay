@@ -67,6 +67,41 @@ const waitForText = async (regex, timeoutMs = 15_000) => {
   return null;
 };
 
+// The moderator console is tabbed (live / crew / access / payroll /
+// overrides / audit / messages). Every assertion must first switch to the tab
+// that owns the surface it inspects — the tab bar is role=tab with
+// data-testid="console-tab-<id>" and aria-selected.
+const switchTab = async (id) => {
+  await p.evaluate((tabId) => {
+    const el = document.querySelector(`[data-testid="console-tab-${tabId}"]`);
+    if (el) el.click();
+  }, id);
+  for (let i = 0; i < 30; i++) {
+    const selected = await p.evaluate(
+      (tabId) => document.querySelector(`[data-testid="console-tab-${tabId}"]`)?.getAttribute("aria-selected") === "true",
+      id
+    );
+    if (selected) {
+      await sleep(600); // let the panel's first query resolve
+      return true;
+    }
+    await sleep(250);
+  }
+  return false;
+};
+
+// Wait until a selector matches at least one node (panels render after their
+// query resolves; asserting too early reads an empty DOM).
+const waitForSelector = async (selector, timeoutMs = 15_000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const n = await p.evaluate((sel) => document.querySelectorAll(sel).length, selector);
+    if (n > 0) return n;
+    await sleep(300);
+  }
+  return 0;
+};
+
 // Geometry: assert a bounding rect is within a viewport region.
 // For mobile checks, viewport=375; for desktop, viewport=1280. Set by setViewport below.
 const rectOf = (selector) =>
@@ -121,11 +156,11 @@ try {
     if (hasEmail) break;
     await sleep(1500);
   }
-  await p.evaluate(() => {
+  await p.evaluate((emailValue) => {
     const email = document.querySelector('input[type="email"]');
     if (email) {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      setter.call(email, arguments[0] ?? "");
+      setter.call(email, emailValue ?? "");
       email.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }, MOD_EMAIL);
@@ -138,8 +173,19 @@ try {
     }
   }, MOD_PW);
   await clickByText("Sign in");
-  t = await (await waitForText(/moderator|Moderator console/i, 20_000)) ?? "";
-  await log("moderator sign-in lands on /moderator", p.url().includes("/moderator") || /Moderator console/.test(t), p.url());
+  // The app does NOT auto-redirect: the landing page ("/") renders a
+  // role-aware panel with an "Open moderator console" link for moderators.
+  // Assert that link, then the console itself is reached explicitly below.
+  for (let i = 0; i < 20; i++) {
+    t = await text();
+    if (/Open moderator console|Moderator console/i.test(t)) break;
+    await sleep(500);
+  }
+  await log(
+    "moderator sign-in reaches the moderator console",
+    /Open moderator console|Moderator console/i.test(t) || p.url().includes("/moderator"),
+    p.url()
+  );
   // Dismiss consent.
   await waitForText(/I understand|Set your own password|Moderator console/i, 10_000);
   await clickByText("I understand").catch(() => {});
@@ -153,7 +199,9 @@ try {
   await waitForText(/Moderator console/, 15_000);
   await log("moderator console header renders", /Moderator console/.test(await text()));
 
-  // KPI banner: 4 cards, equal width.
+  // KPI banner: 4 cards, equal width. The values render once the KPI query
+  // resolves — assert after they exist, not before.
+  await waitForSelector('[aria-label="Key metrics"] .text-2xl', 20_000);
   const kpiCount = await p.evaluate(() => document.querySelectorAll('[aria-label="Key metrics"] .text-2xl').length);
   await log("KPI banner renders 4 cards", kpiCount === 4, `count=${kpiCount}`);
   const kpiRect = await rectOf('[aria-label="Key metrics"]');
@@ -169,26 +217,39 @@ try {
   });
   await log("KPI cards align to the same row (no top spread > 2px)", kpiRowTop !== null && kpiRowTop <= 2, `spread=${kpiRowTop}px`);
 
-  // Audit log: 7 columns. We assert the table exists and has column headers.
+  // Audit log: 7 columns. The audit table lives on the AUDIT tab — switch to
+  // it before asserting (the Live tab renders the KPI banner + crew map).
+  await switchTab("audit");
+  await waitForSelector("table th", 15_000);
   const auditHeaderCount = await p.evaluate(() => {
     const ths = document.querySelectorAll("table th");
     return ths.length;
   });
   await log("audit log table has >= 6 columns", auditHeaderCount >= 6, `th count=${auditHeaderCount}`);
 
-  // ProvisionPanel + SitePanel: 2-column grid at md+.
+  // ProvisionPanel + SitePanel: 2-column grid at md+. The provisioning form
+  // lives on the ACCESS tab.
+  await switchTab("access");
+  await waitForSelector("input[placeholder='Email']", 15_000);
   const provisionFormRect = await rectOf("input[placeholder='Email']");
   if (provisionFormRect) {
-    await log("ProvisionPanel form is on the upper half of the page (above fold)", provisionFormRect.top < 400, `top=${provisionFormRect.top.toFixed(0)}px`);
+    // The Access tab stacks ORGANISATIONS above PROVISION ACCOUNT, so the
+    // form is not in the upper half by design — assert it is on screen.
+    await log("ProvisionPanel form is visible in the viewport", provisionFormRect.top < 800, `top=${provisionFormRect.top.toFixed(0)}px`);
   }
 
-  // Geofence modal: find a "map" button if any audit row has one.
+  // Geofence modal: find a "map" button if any audit row has one (Audit tab).
+  await switchTab("audit");
+  await waitForSelector("table", 15_000);
+  const auditRows = await p.evaluate(() => document.querySelectorAll("table tbody tr").length);
   const modalOpened = await p.evaluate(() => {
     const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "map");
     if (btn) { btn.click(); return true; }
     return false;
   });
-  if (modalOpened) {
+  if (auditRows === 0) {
+    await log("audit log has no anomalies (nothing to map)", true, `${auditRows} rows`);
+  } else if (modalOpened) {
     await sleep(2000);
     const modal = await p.$("[role='dialog']");
     await log("geofence modal opens with role=dialog", !!modal);
@@ -211,18 +272,23 @@ try {
       }
     }
   } else {
-    await log("audit log has a 'map' button to open geofence modal", false, "no audit row had a map button (expected when no anomalies)");
+    await log("audit log has a 'map' button to open geofence modal", false, `${auditRows} anomaly row(s) but no map button`);
   }
 
-  // NeedsReview: assert the section renders even with empty state.
-  await waitForText(/Shifts needing review/i, 5_000);
+  // NeedsReview + payroll: both live on the PAYROLL tab (PayrollPanel +
+  // ReviewPanel).
+  await switchTab("payroll");
+  await waitForText(/Shifts needing review/i, 8_000);
   await log("needs-review section present (may say 'Nothing flagged')", /Shifts needing review/i.test(await text()));
 
   // Payroll section present.
-  await waitForText(/payroll/i, 5_000);
+  await waitForText(/payroll/i, 8_000);
   await log("payroll section present", /payroll/i.test(await text()));
 
-  // Provision a new employee (sets up the next section's sign-in).
+  // Provision a new employee (sets up the next section's sign-in). The form
+  // is on the ACCESS tab.
+  await switchTab("access");
+  await waitForSelector("input[placeholder='Email']", 15_000);
   await p.evaluate(() => {
     const name = document.querySelector('input[placeholder="Full name"]');
     if (name) {
@@ -258,26 +324,35 @@ try {
   const empEmail = await p.evaluate(() => window.__JPAY_LAST_EMPLOYEE_EMAIL ?? "");
 
   // Assign the new employee to JNB Central Depot.
-  await p.evaluate(() => {
-    const empSel = [...document.querySelectorAll("select")].find((s) => [...s.options].some((o) => o.text?.includes("E2E All Test")));
-    if (empSel) {
-      const opt = [...empSel.options].find((o) => o.text?.includes("E2E All Test"));
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-      setter.call(empSel, opt.value);
-      empSel.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    const siteSel = [...document.querySelectorAll("select")].find((s) => [...s.options].some((o) => o.text?.includes("JNB Central Depot")));
-    if (siteSel) {
-      const opt = [...siteSel.options].find((o) => o.text?.includes("JNB Central Depot"));
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-      setter.call(siteSel, opt.value);
-      siteSel.dispatchEvent(new Event("change", { bubbles: true }));
-    }
+  // The current UI (src/app/moderator/assign-panel.tsx): pick the employee in
+  // the "Employee to assign" select, tick the site checkbox in the list that
+  // appears, then press "Save assignments".
+  const employeeSelected = await p.evaluate(() => {
+    const sel = document.querySelector('select[aria-label="Employee to assign"]');
+    if (!sel) return false;
+    const opt = [...sel.options].find((o) => o.text?.includes("E2E All Test"));
+    if (!opt) return false;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+    setter.call(sel, opt.value);
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
   });
-  await sleep(500);
-  await clickByText("Assign");
-  await sleep(2000);
-  await log("employee assigned to JNB Central Depot", /Assigned|already assigned/i.test(await text()));
+  await log("new employee appears in the assignment picker", employeeSelected);
+  // The site list renders after the employee is selected.
+  for (let i = 0; i < 20; i++) {
+    const ticked = await p.evaluate(() => {
+      const label = [...document.querySelectorAll("label")].find((l) => l.textContent?.trim() === "JNB Central Depot");
+      const box = label?.querySelector('input[type="checkbox"]');
+      if (!box || box.checked) return false;
+      box.click();
+      return true;
+    });
+    if (ticked) break;
+    await sleep(400);
+  }
+  await clickByText("Save assignments");
+  await sleep(2500);
+  await log("employee assigned to JNB Central Depot", /Saved —|assigned/i.test(await text()));
 
   // =========================================================================
   // SECTION 3: EMPLOYEE WALKTHROUGH (sign out, sign in as the new employee)

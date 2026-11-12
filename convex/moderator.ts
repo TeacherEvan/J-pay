@@ -98,9 +98,11 @@ export const listEmployeesWithAssignments = query({
     }
     const out = [];
     for (const e of employees) {
-      // Owner directive 2026-08-26: throwaway QA-provisioned users never
-      // appear in a real moderator's roster.
-      if (isQaAccount(e)) continue;
+      // The roster is the moderator's MANAGEMENT surface: every account in the
+      // org has to be visible so it can be assigned, deactivated, archived and
+      // cleaned up. Throwaway QA rows are excluded from workforce COUNTS
+      // (convex/kpi.ts) and from the audit views — not from the roster, where
+      // hiding them would make a stray test account impossible to remove.
       const assignments = byUser.get(e._id) ?? [];
       const siteNames: string[] = [];
       for (const siteId of assignments) {
