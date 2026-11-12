@@ -139,3 +139,16 @@ settings. The remaining route is the Supabase dashboard → Project Settings →
 Integrations → GitHub → remove this repository (or disable preview branches). Until
 then, **the gate of record is `npm run verify` + the live `/api/health/db` probe**
 (`docs/ops/deploy.md`), not this check.
+
+## 6. Residuals after this work (advisors, 2026-11-12)
+
+* `auth_leaked_password_protection [WARN]` — **leaked-password protection is OFF** for the project's
+  Auth service. It is an Auth-service flag (no `auth.*` GUC, no `auth.config` row), so it is **not**
+  reachable from SQL, the CLI or the MCP — it is one checkbox in the Supabase dashboard:
+  *Authentication → Sign In / Providers → "Enable leaked password protection"*. Worth turning on:
+  it rejects a password that appears in a public breach at sign-up/password-change.
+* `rls_enabled_no_policy [INFO] x17` — **by design**. The browser roles have no policies on purpose:
+  deny-by-default RLS, with the service role as the only data door (`POST /api/backend/call`).
+  The `security_definer_view` lint that flagged `jpay_id_registry` is **gone** — that was the P0.
+* `unindexed_foreign_keys [INFO] x10` and `unused_index [INFO] x12` — informational on tables this
+  small; would only matter at real volume. Not addressed here (each needs a migration + owner apply).
