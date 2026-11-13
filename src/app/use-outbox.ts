@@ -62,6 +62,11 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
             : prev,
         );
       }
+    } catch (e) {
+      // MT1 companion: outboxAll()/outboxRemove() can reject (blocked or
+      // versioned-out IndexedDB). Without this the error escapes as an
+      // unhandled promise rejection and the operator never sees it.
+      setLastError(`Sync failed: ${String(e)}`);
     } finally {
       flushLock = null;
       setSyncing(false);
