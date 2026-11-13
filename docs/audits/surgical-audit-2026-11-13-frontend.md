@@ -5,7 +5,7 @@
 | **Audit Date** | 2026-11-13 (same day as `surgical-audit-2026-11-13.md`, different scope) |
 | **Audited Scope** | `src/app/**`, `src/components/console/**`, `src/lib/{react.ts→`backend/react.ts`, outbox, safe-storage, use-user-locale, format, csv, errors}` — **54 implementation files, ≈7,200 effective LOC** (5,670 LOC preflight `src/app` + 621 LOC `src/components` + ≈900 LOC client-side `lib` layers) |
 | **Tech Stack & Runtime** | Next.js 16.3.3 (`--webpack`) · React 19.1 · Supabase JS · `@serwist/next` PWA · Leaflet 1.9 · Tailwind 4 · TypeScript 5.9 strict |
-| **Audited Commit / Tree** | `f9df247` (`main`, clean tree at audit start; HEAD = `feat(j-pay): revamp moderator console and enforce multi-org isolation`) |
+| **Audited Commit / Tree** | `f9df247` at audit time; the tree moved to **`2cc52b0`** ("chore(j-pay): surgical pruning") mid-session. Verified the full delta (`git diff f9df247 2cc52b0 -- src/`): 11 files, 13 insertions / 63 deletions — export de-linking, removal of dead CSS (`.btn-surgical-cyan`, `.status-pip-*`, `.pulse-soft`) and two dead `function-refs.ts` entries. **No behaviour changed; no finding in this report is invalidated.** Figures quoted against the old tree (e.g. "46 hardcoded colour literals", globals line counts) shift by <5 lines |
 | **Pre/Post Audit SHA-256 (`src`)** | `e1abe9f154f0c216bc07b868ece3ad9defec9a55c497dcca033b976fca1929da` / **VERIFIED ZERO MUTATION** (same digest re-run after the swarm completed; re-checked post-report) |
 | **Method** | Surgical-orchestration swarm (Job 1 check-in surface, Job 2 moderator console, Job 4 client-platform layer, all 3 returned and code-verified by this orchestrator) + an **orchestrator-executed partial Job 3** (payroll/auth/layout/manager/messaging surfaces) because both subagent retries hit the provider's free-quota limit and the code-reviewer verifier died on a model outage — see §8. Findings below that were not executed-reproduced were verified by manual code read with quoted lines; the highest-risk P1s were re-opened and re-read here |
 | **Deterministic Health Score** | **`36 / 100`** (`D_raw = 148`, `P_test = 8.7` @ `M_kill = 42%`, `N_P0 = 0`, `N_P1 = 10`, `N_P2 = 18`, `N_P3 = 14`, `LOC_eff = 7,200`) |
@@ -260,7 +260,7 @@ const key = orgId ?? "__none__";
 | `sed -n 33,50p src/app/moderator/audit-view.tsx` + `grep limit convex/moderator.ts` | `.take(limit=50)` per query then merge/slice — confirmed |
 | `sed -n 55,85p src/app/payroll.tsx` + `sed -n 1,75p convex/payroll.ts` | browser `getDay()` ISO anchor vs server `localDayKey(siteTz)` — F2 confirmed present |
 | `sed -n 144,230p src/app/check-in/live-submit.tsx` | single-`finally` F1 fix genuinely present; **transport latch survives** |
-| `git rev-parse HEAD` | `f9df2475f354cdbff488828a535b2e4e5b199b55` |
+| `git rev-parse HEAD` | `f9df2475f354cdbff488828a535b2e4e5b199b55` at audit time; then `2cc52b0` (verified cosmetic-only delta) |
 
 ---
 
