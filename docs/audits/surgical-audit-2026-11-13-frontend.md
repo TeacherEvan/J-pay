@@ -274,7 +274,20 @@ const key = orgId ?? "__none__";
 
 ---
 
-## 8. Zero-Mutation Verification
+## 8. Remediation Log (same day, after `dbd7a63`)
+
+Two P1 classes were remediated red-first, one concern per commit. Remaining P1s are NOT fixed.
+
+| Fix | Commit | State before → after | Verification |
+| :--- | :--- | :--- | :--- |
+| **MT1 — client transport had no timeout; never-settling request pinned the button + dedup map forever** | `1e4e094` (+`c595d45` for the `flush()` companion) | `fetch("/api/backend/call", …)` with no signal → `AbortSignal.timeout(__test_transport.timeoutMs /* 15 s */)`; abort → `BackendError("TIMEOUT")`; dedup entry evicted on settle; `errMsg` maps TIMEOUT to user copy; `useOutbox.flush()` no longer escapes as an unhandled rejection | New `scripts/test-transport-timeout-worker.mjs` (3 cases: signal passed, never-settling rejects with TIMEOUT, timed-out key evicted & retried). `npm test` 25/25 · `npm run verify` 29/29 |
+| **F2 — payroll panel derived its ISO week in the browser zone; site-tz bucketing dropped/edged days** | `57ab0c2` | `fromMs/toMs` in the panel (browser-local Monday anchor) → `weeks/weekOffset/anchorMs` intent args; server computes ISO weeks **in the site's timezone** via new `src/lib/iso-week.ts::siteWeekRange` (end-at-current-week semantics); result carries `period{fromMs,toMs,fromDay,toDay,timezone}`; `ShiftTimer` "Today" strip → "This week"; `exportLogsCsv` bound to the server period's `fromMs/toMs`; `test-org-isolation`/`smoke-supabase`/`docs/E2E-FEATURE-MAP.md` migrated | New `scripts/test-iso-week.mjs` (9 table cases: UTC, SAST incl. behind-site zone at 05:00Z, NY DST transition, 2-week/4-week blocks ending at the current week, block-backed step). `npm test` 25/25 · `npm run verify` 29/29 |
+
+**Remaining open items from this audit (NOT done):** P1-2.1/2.2/2.3 (org-desk remount boundary), P1-4.1 (29-site `useQueryResult` migration), P1-4.2 (dedup generation), P1-2.4 (server-side audit filters), P1-2.5 (browser-tz corrected-end), plus the full P2/P3 backlog. `exportLogsCsv` still accepts a raw `fromMs/toMs` window from the caller — it now receives the server-owned period, but the contract itself is unchanged (documented residual gap, same week-semantics class).
+
+---
+
+## 9. Zero-Mutation Verification
 
 - `git status --porcelain` before this report: **clean**.
 - After the full read phase the same command returned **clean** again (no source modified).
