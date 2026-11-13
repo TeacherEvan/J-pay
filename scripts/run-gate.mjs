@@ -45,6 +45,7 @@ const stagesFor = (mode) => {
     { label: "node --test suites (engine, payroll, outbox, a11y, build-artefact…)", cmd: process.execPath, args: testNodeTest },
     { label: "payroll rounding (exact half-cent, P2-B10)", cmd: process.execPath, args: [...TS_NODE, "scripts/test-payroll-rounding.mjs"] },
     { label: "adapter render dedup", cmd: process.execPath, args: ["scripts/test-react-adapter-dedup.mjs"] },
+    { label: "transport timeout (MT1: never-settling request settles TIMEOUT)", cmd: process.execPath, args: ["scripts/test-transport-timeout.mjs"] },
     { label: "CSV export", cmd: process.execPath, args: [...TS_NODE, "scripts/test-csv.mjs"] },
     { label: "payroll jurisdictions", cmd: process.execPath, args: [...TS_NODE, "scripts/test-payroll-jurisdictions.mjs"] },
     { label: "schema parity (TRD §6 ↔ schema.ts ↔ migrations ↔ INDEX_FIELDS ↔ registry view)", cmd: process.execPath, args: ["scripts/test-schema-parity.mjs"] },

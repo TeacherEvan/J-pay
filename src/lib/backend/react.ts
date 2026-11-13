@@ -145,14 +145,27 @@ export function callBackend(
 
   const promise = (async () => {
     const token = await accessToken();
-    const response = await fetch("/api/backend/call", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ ref: fnKey, args: args ?? {} }),
-    });
+    // MT1: bound the wait. A fetch with no deadline can stay pending forever
+    // (captive portal, half-open TCP); the deadline aborts it and surfaces a
+    // BackendError("TIMEOUT") so callers settle and retry() dispatches fresh.
+    const deadline = AbortSignal.timeout(__test_transport.timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch("/api/backend/call", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ref: fnKey, args: args ?? {} }),
+        signal: deadline,
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new BackendError("TIMEOUT", "request timed out");
+      }
+      throw e;
+    }
     // Learn the device↔server clock offset from the Date header (safelisted;
     // readable on same-origin fetches). Every API call refreshes it. Tolerate
     // response mocks that carry no Headers at all.
@@ -581,6 +594,17 @@ export const __test_queryCache = {
   has: (key: string) => inFlightQueries.has(key),
   clear: () => inFlightQueries.clear(),
 };
+
+/* ------------------------------------------------ transport deadline ----- */
+
+/**
+ * Abort the backend call after a deadline. Browsers impose no wall-clock limit
+ * on fetch, so a connection that is accepted but never answered would leave
+ * the caller pending forever — latching the check-in button (audit MT1, F1
+ * class) and pinning the in-flight dedup map so retry() is a no-op.
+ * Test-only holder allows the timeout to be shortened in the regression test.
+ */
+export const __test_transport: { timeoutMs: number } = { timeoutMs: 15_000 };
 
 export const __test_invalidationBus = {
   subscribe,

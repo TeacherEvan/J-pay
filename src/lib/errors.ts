@@ -8,6 +8,7 @@ const TYPED_MESSAGES: Record<string, string> = {
   SITE_NOT_FOUND: "Site not found or archived.",
   GEOFENCE_FAILED: "You are outside the allowed geofence radius for this site.",
   GEOFENCE_RADIUS_OUT_OF_RANGE: "Invalid geofence radius configuration.",
+  TIMEOUT: "The server took too long to respond. Check your connection and try again.",
 };
 
 export function errMsg(e: unknown): string {
