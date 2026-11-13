@@ -43,6 +43,7 @@ const testNodeTest = [
 const stagesFor = (mode) => {
   const stages = [
     { label: "node --test suites (engine, payroll, outbox, a11y, build-artefact…)", cmd: process.execPath, args: testNodeTest },
+    { label: "iso-week bounds (site-timezone ISO ranges, F2)", cmd: process.execPath, args: [...TS_NODE, "scripts/test-iso-week.mjs"] },
     { label: "payroll rounding (exact half-cent, P2-B10)", cmd: process.execPath, args: [...TS_NODE, "scripts/test-payroll-rounding.mjs"] },
     { label: "adapter render dedup", cmd: process.execPath, args: ["scripts/test-react-adapter-dedup.mjs"] },
     { label: "transport timeout (MT1: never-settling request settles TIMEOUT)", cmd: process.execPath, args: ["scripts/test-transport-timeout.mjs"] },

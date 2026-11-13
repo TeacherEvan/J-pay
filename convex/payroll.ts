@@ -12,8 +12,29 @@ import { listSupportedJurisdictions, getPayStrategy } from "../src/lib/payroll-j
 import { toCsv } from "../src/lib/csv";
 import { internal } from "./_generated/api";
 import { jpayConfig } from "../src/config/jpay.config";
+import { siteWeekRange } from "../src/lib/iso-week";
 
-async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, fromMs: number, toMs: number) {
+/** Caller's intent, not a ms window — the server derives ISO-week bounds in the SITE's timezone. */
+export interface PeriodIntent {
+  anchorMs: number;
+  weeks: 1 | 2 | 4;
+  weekOffset: number;
+}
+
+interface SiteTimezoneAssignment { timezone?: string | null }
+
+async function siteTimezoneFor(ctx: QueryCtx, userId: Doc<"users">["_id"]): Promise<string> {
+  const firstAssignment = await ctx.db
+    .query("userSites")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .first();
+  if (!firstAssignment) return "UTC";
+  const site = await ctx.db.get(firstAssignment.siteId);
+  const tz = (site as SiteTimezoneAssignment | null)?.timezone;
+  return tz && tz.length > 0 ? tz : "UTC";
+}
+
+async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, intent: PeriodIntent) {
     // Config integrity (audit P2-B4/B5): a missing rate pays R0.00 in silence, and
     // an unrecognised PAYROLL_STRATEGY silently degrades to flat-rate pay. Fail
     // loudly instead — these are payroll bugs, not inputs.
@@ -34,23 +55,18 @@ async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, fromMs:
       (process.env.PAYROLL_STRATEGY as PayStrategyName | undefined) ??
       jpayConfig.payrollRules.strategy;
 
+    // Resolve the site's timezone FIRST — the ISO-week bounds are computed there,
+    // not in the caller's zone (audit F2: local weeks under-select behind-site shifts).
+    const timezone = await siteTimezoneFor(ctx, user._id);
+    const period = siteWeekRange(intent.anchorMs, timezone, intent.weeks, intent.weekOffset);
+
     const shifts = await ctx.db
       .query("shifts")
       .withIndex("by_user_start", (q) =>
-        q.eq("userId", user._id).gte("startedAt", fromMs).lte("startedAt", toMs)
+        q.eq("userId", user._id).gte("startedAt", period.fromMs).lte("startedAt", period.toMs)
       )
       .collect();
     const inRange = shifts;
-
-    let timezone = "UTC";
-    const firstAssignment = await ctx.db
-      .query("userSites")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .first();
-    if (firstAssignment) {
-      const site = await ctx.db.get(firstAssignment.siteId);
-      timezone = site?.timezone ?? "UTC";
-    }
 
     const days = new Map<string, number>();
     let payableMinutes = 0;
@@ -84,6 +100,7 @@ async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, fromMs:
       locale: user.locale ?? "en-ZA",
       timezone,
       days: result.lines.map((l) => ({ day: l.day, minutes: l.ordinaryMinutes + l.overtimeMinutes + l.sundayMinutes, pay: l.pay })),
+      period,
       totals: {
         payableMinutes,
         pay: result.totals.pay,
@@ -97,14 +114,21 @@ async function computeEmployeePayroll(ctx: QueryCtx, user: Doc<"users">, fromMs:
     };
 }
 
+/** Intent validators shared by the two payroll queries — the server owns the clock arithmetic. */
+const periodIntentValidator = {
+  weeks: v.union(v.literal(1), v.literal(2), v.literal(4)),
+  weekOffset: v.number(),
+  anchorMs: v.number(),
+};
+
 export const calcForEmployee = query({
-  args: { userId: v.id("users"), fromMs: v.number(), toMs: v.number() },
+  args: { userId: v.id("users"), ...periodIntentValidator },
   handler: async (ctx, args) => {
     const { userId: caller, role } = await requireActiveUser(ctx);
     if (role !== "moderator" && caller !== args.userId) throw new ConvexError("FORBIDDEN");
     const user = await ctx.db.get(args.userId);
     if (!user) throw new ConvexError("USER_NOT_FOUND");
-    return computeEmployeePayroll(ctx, user, args.fromMs, args.toMs);
+    return computeEmployeePayroll(ctx, user, { weeks: args.weeks, weekOffset: args.weekOffset, anchorMs: args.anchorMs });
   },
 });
 
@@ -113,16 +137,26 @@ export const calcForEmployee = query({
  * with no rate / bad strategy yields a status row instead of failing the table.
  */
 export const calcForOrg = query({
-  args: { orgId: v.id("organisations"), fromMs: v.number(), toMs: v.number() },
+  args: { orgId: v.id("organisations"), ...periodIntentValidator },
   handler: async (ctx, args) => {
     await requireModerator(ctx);
     await requireOrgScope(ctx, args.orgId);
+    const intent: PeriodIntent = { weeks: args.weeks, weekOffset: args.weekOffset, anchorMs: args.anchorMs };
     const rows = [];
     for (const user of await orgUsers(ctx, args.orgId)) {
       const base = { userId: user._id, name: user.name ?? user.email ?? "unknown", email: user.email, role: user.role };
       try {
-        const r = await computeEmployeePayroll(ctx, user, args.fromMs, args.toMs);
-        rows.push({ ...base, status: "ok" as const, rate: r.rate, currency: r.currency, locale: r.locale, strategy: r.strategy, ...r.totals });
+        const r = await computeEmployeePayroll(ctx, user, intent);
+        rows.push({
+          ...base,
+          status: "ok" as const,
+          rate: r.rate,
+          currency: r.currency,
+          locale: r.locale,
+          strategy: r.strategy,
+          period: r.period,
+          ...r.totals,
+        });
       } catch (e) {
         const msg = e instanceof ConvexError ? String(e.data) : "ERROR";
         rows.push({ ...base, status: msg === "RATE_NOT_CONFIGURED" ? ("no_rate" as const) : ("error" as const), error: msg });

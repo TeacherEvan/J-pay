@@ -141,7 +141,7 @@ await run("createSite requires a live org (F3)", async () => {
 });
 
 await run("calcForOrg: one row per member; missing rate is a row, not a failure (F9)", async () => {
-  const rows = await call("payroll", "calcForOrg", { orgId: "org-A", fromMs: NOW - 7 * 24 * H, toMs: NOW }, asUser("mod"));
+  const rows = await call("payroll", "calcForOrg", { orgId: "org-A", weeks: 1, weekOffset: 0, anchorMs: NOW }, asUser("mod"));
   const byId = Object.fromEntries(rows.map((r) => [r.userId, r.status]));
   assert.equal(byId.a1, "ok");
   assert.equal(byId.a2, "no_rate");
@@ -151,7 +151,7 @@ await run("calcForOrg: one row per member; missing rate is a row, not a failure 
 await run("employees and managers cannot call moderator scope queries", async () => {
   for (const id of ["a1", "mgrA"]) {
     assert.deepEqual(await call("moderator", "listAllSites", { orgId: "org-A" }, asUser(id)), []);
-    await assert.rejects(() => call("payroll", "calcForOrg", { orgId: "org-A", fromMs: 0, toMs: NOW }, asUser(id)));
+    await assert.rejects(() => call("payroll", "calcForOrg", { orgId: "org-A", weeks: 1, weekOffset: 0, anchorMs: 0 }, asUser(id)));
   }
 });
 

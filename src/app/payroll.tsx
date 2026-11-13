@@ -13,12 +13,24 @@ import { QueryError } from "@/components/console/query-error";
 import { usePagination } from "@/components/console/use-pagination";
 import { useOrg } from "./moderator/org-context";
 
+type PeriodInfo = {
+  fromMs: number;
+  toMs: number;
+  fromDay: string;
+  toDay: string;
+  timezone: string;
+  weeks: 1 | 2 | 4;
+  weekOffset: number;
+  anchorMs: number;
+};
+
 type PayrollResult = {
   rate: number;
   currency: string;
   strategy: string;
   locale?: string;
   timezone: string;
+  period?: PeriodInfo;
   days: { day: string; minutes: number; pay: number }[];
   totals: { payableMinutes: number; pay: number; shiftCount: number; flaggedCount: number };
   flagged: { startedAt: number; reason?: string; minutes?: number }[];
@@ -42,6 +54,7 @@ type OrgPayrollRow = {
   currency?: string;
   locale?: string;
   strategy?: string;
+  period?: PeriodInfo;
   payableMinutes?: number;
   pay?: number;
   shiftCount?: number;
@@ -56,54 +69,33 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   useEffect(() => {
     if (userFilter) setUserId(userFilter);
   }, [userFilter]);
-  // ISO-week-aligned periods (1/2/4 weeks, Mon–Sun). A rolling N-day window straddles
-  // two ISO weeks, resetting the BCEA weekly overtime cap for each half and erasing
-  // statutory OT the worker already earned (audit 2026-11-11, P1-B1). No free-form
-  // window is offered anymore: every selectable period is complete ISO weeks, so the
-  // 45h/week cap is always consumed correctly.
+  // ISO-week-aligned periods ending at the CURRENT week (1/2/4 weeks, Mon–Sun).
+  // The bounds are computed on the SERVER, in the SITE's timezone, from the intent
+  // (weeks / weekOffset / anchorMs) — the panel never derives them in the browser
+  // zone (audit 2026-11-13, F2: browser-local weeks under-select for
+  // behind-site shifts). A rolling N-day window straddles ISO weeks, resetting
+  // the BCEA weekly overtime cap for each half, so no free-form window is offered.
   const [weeks, setWeeks] = useState<1 | 2 | 4>(1);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [dayKey, setDayKey] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const t = setInterval(
+      () => setDayKey((prev) => (new Date().toDateString() === prev ? prev : new Date().toDateString())),
+      30_000
+    );
+    return () => clearInterval(t);
+  }, []);
+  const anchorMs = useMemo(() => Date.now(), [dayKey]);
   const active = employees.filter(
     (e) => !e.archivedAt && (!isModerator || !orgId || !e.orgId || e.orgId === orgId),
   );
-  // Re-anchor at local midnight so an open panel never drifts stale across days.
-  const dayKey = new Date().toDateString();
-  const monday = useMemo(
-    () => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      // Monday=0..Sunday=6 (getDay: Sunday=0)
-      const base = (d.getDay() + 6) % 7 === 0 ? d.getTime() : d.getTime() - ((d.getDay() + 6) % 7) * 24 * 3600 * 1000;
-      const shifted = new Date(base);
-      shifted.setDate(shifted.getDate() + weekOffset * 7);
-      return shifted.getTime();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayKey, weekOffset],
-  );
-  const fromMs = monday;
-  const toMs = useMemo(
-    () => {
-      const d = new Date(monday);
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() + weeks * 7);
-      // End-exclusive is not supported by the API; use the last ms of the last day.
-      return d.getTime() - 1;
-    },
-    [monday, weeks],
-  );
-  const periodLabel = useMemo(() => {
-    const fmt = (ms: number) =>
-      new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `${fmt(fromMs)} – ${fmt(toMs)}`;
-  }, [fromMs, toMs]);
   const payrollArgs = useMemo(
-    () => (userId ? { userId, fromMs, toMs } : "skip"),
-    [userId, fromMs, toMs],
+    () => (userId ? { userId, weeks, weekOffset, anchorMs } : "skip"),
+    [userId, weeks, weekOffset, anchorMs],
   );
   const orgPayrollArgs = useMemo(
-    () => (isModerator && orgId && !userId ? { orgId, fromMs, toMs } : "skip"),
-    [isModerator, orgId, userId, fromMs, toMs],
+    () => (isModerator && orgId && !userId ? { orgId, weeks, weekOffset, anchorMs } : "skip"),
+    [isModerator, orgId, userId, weeks, weekOffset, anchorMs],
   );
   const {
     data: resultData,
@@ -133,6 +125,14 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
   );
   const supported = supportedData === null ? undefined : (supportedData as SupportedStrategy[] | undefined);
   const result = resultData === null ? undefined : (resultData as PayrollResult | undefined);
+  const periodLabel = useMemo(() => {
+    const period = result?.period ?? (orgRowsData && orgRowsData.length > 0 ? orgRowsData[0]?.period : undefined);
+    if (!period) return "";
+    const fmt = (ms: number) =>
+      new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    // Boundaries are site-local; the label is display-only text.
+    return `${fmt(period.fromMs)} – ${fmt(period.toMs)}`;
+  }, [result, orgRowsData]);
   const [payStrategyBusy, setPayStrategyBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   // Revoke-timer for the CSV object URL — cleared on unmount (audit 2026-11-11, P3-D20).
@@ -268,11 +268,16 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
               if (!userId || exportBusy) return;
               setExportBusy(true);
               setSaveError(null);
+              const period = result?.period;
+              if (!period) {
+                setSaveError("Payroll estimate hasn't loaded yet.");
+                return;
+              }
               try {
                 const out = await exportLogsCsv({
                   userId: userId as Id<"users">,
-                  fromMs,
-                  toMs,
+                  fromMs: period.fromMs,
+                  toMs: period.toMs,
                 });
                 download(out.filename, out.csv);
               } catch (err) {
@@ -281,7 +286,7 @@ export function PayrollPanel({ employees, role, className }: { employees: { _id:
                 setExportBusy(false);
               }
             }}
-            disabled={exportBusy}
+            disabled={exportBusy || !result?.period}
             className="btn-surgical ml-auto min-h-[44px] px-4 py-2 text-xs font-semibold disabled:opacity-50"
           >
             Export logs CSV

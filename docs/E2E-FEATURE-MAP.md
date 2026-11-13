@@ -57,7 +57,7 @@ Only files exporting `query` / `mutation` / `action` with no `internal` prefix.
 | `convex/moderator.ts` | `resolveShift` | mutation | `{ shiftId }` | `src/app/payroll.tsx:167` |
 | `convex/moderator.ts` | `recomputeEmployeeShifts` | mutation | `{ userId }` | `src/app/payroll.tsx:168` |
 | `convex/moderator.ts` | `setHourlyOverride` | mutation | `{ userId, rate? }` | `src/app/moderator/page.tsx:429` |
-| `convex/payroll.ts` | `calcForEmployee` | query | `{ userId, fromMs, toMs }` | `src/app/payroll.tsx:34` |
+| `convex/payroll.ts` | `calcForEmployee` | query | `{ userId, weeks, weekOffset, anchorMs }` | `src/app/payroll.tsx:34` |
 | `convex/payroll.ts` | `setPayStrategy` | mutation | `{ userId, strategy }` | `src/app/payroll.tsx:40` |
 | `convex/payroll.ts` | `listSupportedStrategies` | query | — | `src/app/payroll.tsx:37` |
 | `convex/payroll.ts` | `exportLogsCsv` | action | `{ userId, fromMs, toMs }` | `src/app/payroll.tsx:41` |

@@ -181,7 +181,7 @@ try {
   const now = Date.now();
   const payroll = await call(
     "payroll:calcForEmployee",
-    { userId: created._id, fromMs: now - 24 * 3600 * 1000, toMs: now + 3600 * 1000 },
+    { userId: created._id, weeks: 4, weekOffset: 0, anchorMs: now },
     moderator.token
   );
   record(
@@ -192,7 +192,7 @@ try {
 
   const csv = await call(
     "payroll:exportLogsCsv",
-    { userId: created._id, fromMs: now - 24 * 3600 * 1000, toMs: now + 3600 * 1000 },
+    { userId: created._id, fromMs: now - 28 * 24 * 3600 * 1000, toMs: now + 3600 * 1000 },
     moderator.token
   );
   record(
