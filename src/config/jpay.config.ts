@@ -33,4 +33,4 @@ export const jpayConfig = {
   defaultLocale: "en-ZA",
 } as const;
 
-export type JPayConfig = typeof jpayConfig;
+type JPayConfig = typeof jpayConfig;

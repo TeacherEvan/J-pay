@@ -92,10 +92,6 @@ export const auditNeedsReview = query({
   },
 });
 
-function zip<A, B>(a: A[], b: B[]): [A, B][] {
-  return a.map((_, i) => [a[i], b[i]] as [A, B]);
-}
-
 export const listEmployeesWithAssignments = query({
   args: { orgId: v.id("organisations") },
   handler: async (ctx, args) => {

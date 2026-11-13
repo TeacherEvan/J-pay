@@ -7,7 +7,7 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-export interface SiteSelectorProps {
+interface SiteSelectorProps {
   sites: CardSite[];
   sitesLoading: boolean;
   siteId: Id<"sites"> | "";

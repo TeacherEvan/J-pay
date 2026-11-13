@@ -56,7 +56,7 @@ function TodayStrip() {
 }
 
 // Shift chronometer component with strict tabular-nums readout
-export interface ShiftClockProps {
+interface ShiftClockProps {
   phase: Phase;
   last?: CardLog;
   loaded: boolean;

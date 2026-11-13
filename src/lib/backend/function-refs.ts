@@ -62,7 +62,6 @@ export type ApiSurface = {
     calcForEmployee: FunctionRef;
     calcForOrg: FunctionRef;
     exportLogsCsv: FunctionRef;
-    listJurisdictionsForLocale: FunctionRef;
     listSupportedStrategies: FunctionRef;
     setPayStrategy: FunctionRef;
   };
@@ -95,7 +94,6 @@ export type ApiSurface = {
     getSiteForPunch: FunctionRef;
     listMine: FunctionRef;
     setEmployeeSites: FunctionRef;
-    unassignEmployee: FunctionRef;
   };
   "travel": {
     forUser: FunctionRef;

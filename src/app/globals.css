@@ -181,32 +181,6 @@
     }
   }
 
-  .btn-surgical-cyan {
-    background: linear-gradient(180deg, oklch(0.78 0.170 215) 0%, oklch(0.70 0.160 215) 100%);
-    color: oklch(0.12 0.035 215);
-    border: 1px solid oklch(1 0 0 / 0.25);
-    box-shadow:
-      inset 0 1px 0 0 oklch(1 0 0 / 0.4),
-      0 1px 3px 0 oklch(0 0 0 / 0.4),
-      0 4px 14px -2px var(--cyan-glow);
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .btn-surgical-cyan:hover:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]) {
-      border-color: oklch(1 0 0 / 0.4);
-      background: linear-gradient(180deg, oklch(0.82 0.175 215) 0%, oklch(0.73 0.165 215) 100%);
-      box-shadow:
-        inset 0 1px 0 0 oklch(1 0 0 / 0.5),
-        0 2px 6px 0 oklch(0 0 0 / 0.45),
-        0 6px 18px -2px var(--cyan-glow);
-    }
-  }
-
-  .btn-surgical-danger {
-    background: linear-gradient(180deg, oklch(0.68 0.19 22) 0%, oklch(0.60 0.18 22) 100%);
-    color: oklch(0.98 0.005 255);
-    border: 1px solid oklch(1 0 0 / 0.2);
-  }
-
   .btn-surgical-light {
     background: linear-gradient(180deg, oklch(0.92 0.015 255) 0%, oklch(0.85 0.015 255) 100%);
     color: oklch(0.12 0.02 262);
@@ -364,24 +338,6 @@
     letter-spacing: -0.01em;
   }
 
-  /* Glowing semantic status pips */
-  .status-pip {
-    display: inline-block;
-    border-radius: 9999px;
-  }
-  .status-pip-mint {
-    background: var(--mint);
-    box-shadow: 0 0 8px var(--mint-glow);
-  }
-  .status-pip-hivis {
-    background: var(--hivis);
-    box-shadow: 0 0 8px var(--hivis-glow);
-  }
-  .status-pip-danger {
-    background: var(--danger);
-    box-shadow: 0 0 8px oklch(0.70 0.185 22 / 0.4);
-  }
-
   /* Coarse touch target enforcement */
   @media (any-pointer: coarse) {
     .touch-target-44 {
@@ -470,9 +426,6 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
-.pulse-soft {
-  animation: jpay-pulse-opacity 1.6s ease-in-out infinite;
-}
 
 /* ── Leaflet Dark-Telemetry Theme Overrides ──────────────────────── */
 .leaflet-container {
@@ -528,8 +481,7 @@
     scroll-behavior: auto !important;
   }
   .pulse-dot,
-  .jpay-loader-emblem,
-  .pulse-soft {
+  .jpay-loader-emblem {
     animation: none !important;
   }
   .btn-surgical .btn-spinner {

@@ -118,20 +118,6 @@ export const assignEmployee = mutation({
   },
 });
 
-export const unassignEmployee = mutation({
-  args: { userId: v.id("users"), siteId: v.id("sites") },
-  handler: async (ctx, args) => {
-    await requireModerator(ctx);
-    const rows = await ctx.db
-      .query("userSites")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    const match = rows.find((a) => a.siteId === args.siteId);
-    if (!match) throw new ConvexError("NOT_ASSIGNED");
-    await ctx.db.delete(match._id);
-  },
-});
-
 /**
  * Bulk multi-site assignment (owner 2026-11-10): the moderator picks the exact
  * set of sites for one employee/manager in one call. Convex mutations are a

@@ -161,19 +161,6 @@ export const listSupportedStrategies = query({
   },
 });
 
-export const listJurisdictionsForLocale = query({
-  args: { locale: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    await requireActiveUser(ctx);
-    if (!args.locale) return listSupportedJurisdictions();
-    try {
-      return [getPayStrategy(args.locale)];
-    } catch {
-      return listSupportedJurisdictions();
-    }
-  },
-});
-
 export const exportLogsCsv = action({
   args: { userId: v.id("users"), fromMs: v.number(), toMs: v.number() },
   handler: async (ctx, args) => {

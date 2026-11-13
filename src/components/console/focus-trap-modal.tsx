@@ -13,7 +13,7 @@ const FOCUSABLE =
  * on unmount. `onClose` may be omitted for must-acknowledge gates (Escape is
  * then ignored).
  */
-export function useFocusTrap(
+function useFocusTrap(
   panelRef: RefObject<HTMLElement | null>,
   onClose?: () => void
 ) {

@@ -2,7 +2,7 @@ import type { Status } from "./types";
 import { LABEL } from "./types";
 import { StatusIcon } from "./StatusIcon";
 
-export interface StatusChipsProps {
+interface StatusChipsProps {
   chips: Status[];
   pending: Status;
   setPending: (s: Status) => void;

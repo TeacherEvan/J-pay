@@ -13,7 +13,7 @@ import { useOrg } from "./org-context";
 
 /* ─────────────────────────── Shift overrides ─────────────────────────── */
 
-export type OverridableShift = {
+type OverridableShift = {
   _id: string;
   employeeName: string;
   startedAt: number;

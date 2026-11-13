@@ -41,7 +41,7 @@ const ConsoleContext = createContext<ConsoleContextValue>({
 export function useOrg() {
   return useContext(ConsoleContext);
 }
-export const useConsole = useOrg;
+
 
 const ORG_KEY = "jpay.currentOrg";
 

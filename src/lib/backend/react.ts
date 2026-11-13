@@ -19,7 +19,7 @@ import { observeServerDate } from "../server-clock";
  * reactive queries, so writes must refresh readers.
  */
 
-export class BackendError extends Error {
+class BackendError extends Error {
   code: string;
   /** Mirrors ConvexError.data so src/lib/errors.ts keeps mapping typed codes. */
   data: string;
@@ -34,7 +34,7 @@ export class BackendError extends Error {
 
 /* ------------------------------------------------ table / scope mappings -- */
 
-export type TableName =
+type TableName =
   | "users"
   | "organisations"
   | "sites"
@@ -52,7 +52,7 @@ export type TableName =
 
 /* ------------------------------------------------------- invalidation bus -- */
 
-export type InvalidationEvent = {
+type InvalidationEvent = {
   mutationName?: string;
   tables?: readonly TableName[] | readonly string[];
 };
@@ -196,7 +196,7 @@ export function callBackend(
 
 type QueryState = { key: string; data: unknown; error: Error | null };
 
-export type UseQueryResult<T = any> = {
+type UseQueryResult<T = any> = {
   /** The resolved payload (`null` on UNAUTHENTICATED — signed out), undefined while loading/failed. */
   data: T | null | undefined;
   /** The query error, if the last attempt failed. UNAUTHENTICATED is folded into data:null. */

@@ -1,9 +1,0 @@
-{
-  "plan": "2026-09-07-bigfile-J-pay-check-in-card.tsx.md",
-  "verdict": "READY-WITH-WARNINGS",
-  "ready_for_impl": true,
-  "gaps": [
-    "llm_unreachable"
-  ],
-  "reviewed_at": "2026-09-07T09:33:28.468244+07:00"
-}

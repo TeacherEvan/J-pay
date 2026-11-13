@@ -19,4 +19,4 @@ export function useUserLocale(): string {
   }, [stored]);
 }
 
-export { FALLBACK_LOCALE };
+

@@ -6,7 +6,6 @@
     "dev": "node scripts/dev-strict.mjs",
     "build": "next build --webpack",
     "start": "next start",
-    "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
     "e2e": "node scripts/e2e-full.mjs",
     "e2e:all": "node scripts/e2e-all.mjs",
@@ -15,7 +14,6 @@
     "verify:node": "node scripts/run-gate.mjs verify:node"
   },
   "dependencies": {
-    "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
     "@serwist/next": "^10.0.0-preview.14",
     "@supabase/ssr": "^0.12.7",
@@ -40,7 +38,6 @@
     "typescript": "~5.9.0"
   },
   "overrides": {
-    "@auth/core": "^0.41.3",
     "glob": "^14.0.4",
     "minimatch": "^11.0.7",
     "zod": "^4.6.7"
