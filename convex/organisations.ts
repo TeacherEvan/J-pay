@@ -19,19 +19,6 @@ export const createOrg = mutation({
   },
 });
 
-/** Moderator-only: rename an organisation. */
-export const renameOrg = mutation({
-  args: { orgId: v.id("organisations"), name: v.string() },
-  handler: async (ctx, args) => {
-    await requireModerator(ctx);
-    const name = validName(args.name);
-    const org = await ctx.db.get(args.orgId);
-    if (!org) throw new ConvexError("ORG_NOT_FOUND");
-    await ctx.db.patch(args.orgId, { name });
-    return { ok: true as const };
-  },
-});
-
 /** Moderator-only: archive (soft-delete) an organisation. Sites/users keep their link;
  *  archived orgs are hidden from pickers but their data remains for audit. */
 export const archiveOrg = mutation({

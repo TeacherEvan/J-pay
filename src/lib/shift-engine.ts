@@ -20,7 +20,7 @@ export type ShiftOverride = {
   overrideId: string;
 };
 
-export type Segment = {
+type Segment = {
   startedAt: number;
   endedAt?: number;
   totalMinutes?: number;
@@ -32,7 +32,7 @@ export type Segment = {
 const L = jpayConfig.laborRules;
 export const MAX_SHIFT_MS = L.maxShiftHours * 3600 * 1000;
 export const DEFAULT_LUNCH_MINUTES = L.defaultLunchMinutes;
-export const PICKER_MAX_MINUTES = L.maxSideMissionMinutes;
+const PICKER_MAX_MINUTES = L.maxSideMissionMinutes;
 
 /**
  * A log written more than this long after the client timestamp it carries is
@@ -63,7 +63,7 @@ export function serverClockSkewMs(
   return anchor - clientReportedTime;
 }
 
-export function isOfflineReplay(log: EngineLog): boolean {
+function isOfflineReplay(log: EngineLog): boolean {
   return log._creationTime - skewCorrectedTime(log) > REPLAY_REVIEW_MS;
 }
 

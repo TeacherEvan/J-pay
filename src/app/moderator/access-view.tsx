@@ -11,7 +11,7 @@ import type { ModeratorEmployee } from "./types";
 
 /* ───────────────────── Access (provision / sites / scopes) ───────────────────── */
 
-export type AccessTask = "provision" | "site" | "assign" | "managers" | "orgs";
+type AccessTask = "provision" | "site" | "assign" | "managers" | "orgs";
 
 export function AccessView({
   employees,
@@ -54,7 +54,7 @@ export function AccessView({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 md:grid-cols-2 md:grid-rows-2">
         <div className={cell("provision")}>
-          <ProvisionPanel />
+          <ProvisionPanel sites={sites} />
         </div>
         <div className={cell("site")}>
           <SitePanel />

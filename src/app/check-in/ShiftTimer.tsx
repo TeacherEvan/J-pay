@@ -1,12 +1,10 @@
 import type { Id } from "../../../convex/_generated/dataModel";
-import { formatTime } from "@/lib/format";
-import { formatMinutesShort } from "../check-in-card";
+import { formatTime, formatMinutesShort, formatCurrency } from "@/lib/format";
 import type { Status, Phase, CardLog } from "./types";
 import { LABEL } from "./types";
 import { useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
 import { useEffect, useMemo, useState } from "react";
-import { formatCurrency } from "@/lib/format";
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));

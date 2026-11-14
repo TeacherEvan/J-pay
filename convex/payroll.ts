@@ -15,7 +15,7 @@ import { jpayConfig } from "../src/config/jpay.config";
 import { siteWeekRange } from "../src/lib/iso-week";
 
 /** Caller's intent, not a ms window — the server derives ISO-week bounds in the SITE's timezone. */
-export interface PeriodIntent {
+interface PeriodIntent {
   anchorMs: number;
   weeks: 1 | 2 | 4;
   weekOffset: number;

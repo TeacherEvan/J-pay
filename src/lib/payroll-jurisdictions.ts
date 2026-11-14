@@ -1,8 +1,8 @@
-export type JurisdictionCode = "ZA" | "US" | "UK";
+type JurisdictionCode = "ZA" | "US" | "UK";
 
-export type JurisdictionStrategy = "bcea" | "flsa" | "wtr_uk";
+type JurisdictionStrategy = "bcea" | "flsa" | "wtr_uk";
 
-export interface JurisdictionInfo {
+interface JurisdictionInfo {
   code: JurisdictionCode;
   strategy: JurisdictionStrategy;
   currency: string;

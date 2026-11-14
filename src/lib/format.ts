@@ -41,20 +41,6 @@ export function formatCurrency(
   }
 }
 
-export function formatDate(
-  epoch: number,
-  locale: string = "en-ZA"
-): string {
-  if (typeof Intl === "undefined" || !Intl.DateTimeFormat) {
-    return new Date(epoch).toLocaleDateString();
-  }
-  try {
-    return df(locale, { dateStyle: "medium" }).format(new Date(epoch));
-  } catch {
-    return new Date(epoch).toLocaleDateString();
-  }
-}
-
 export function formatTime(
   epoch: number,
   locale: string = "en-ZA"
@@ -67,6 +53,12 @@ export function formatTime(
   } catch {
     return new Date(epoch).toLocaleTimeString();
   }
+}
+
+export function formatMinutesShort(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = Math.round(m % 60);
+  return h > 0 ? `${h}h ${min.toString().padStart(2, "0")}m` : `${min}m`;
 }
 
 export function formatDateTime(

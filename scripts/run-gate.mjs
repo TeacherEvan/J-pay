@@ -19,7 +19,7 @@ const TS_NODE = [
   "--no-warnings",
   "--import", "./scripts/register-ts-ext.mjs",
 ];
-const TS_TRANSPILE = ["--import", "./scripts/register-ts-transpile.mjs"];
+const TS_TRANSPILE = ["--no-warnings", "--import", "./scripts/register-ts-transpile.mjs"];
 
 const testNodeTest = [
   ...TS_NODE,
@@ -56,6 +56,7 @@ const stagesFor = (mode) => {
     { label: "scheduler retry", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-scheduler-retry.mjs"] },
     { label: "db adapter", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-db-adapter.mjs"] },
     { label: "travel window bounds (index-range pushdown, P2-B13)", cmd: process.execPath, args: ["scripts/test-travel-window-bounds.mjs"] },
+    { label: "travel consent revocation (B2 + pathSamples purge)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-consent-revoke.mjs"] },
     { label: "cron jobs map", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-cron-jobs.mjs"] },
     { label: "runtime module census", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-runtime-modules.mjs"] },
     { label: "manager authz + override chain + org guards", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-manager-authz.mjs"] },
@@ -66,7 +67,7 @@ const stagesFor = (mode) => {
     { label: "write-set telemetry", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-write-set.mjs"] },
     { label: "server-clock calibration", cmd: process.execPath, args: [...TS_NODE, "scripts/test-server-clock.mjs"] },
     { label: "QA-account filter (all script address shapes, F3)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-qa-account-filter.mjs"] },
-    { label: "check-in busy latch (token failure must not disable submit, F1)", cmd: process.execPath, args: ["--import", "./scripts/register-tsx-stub.mjs", "scripts/test-checkin-busy-latch.mjs"] },
+    { label: "check-in busy latch (token failure must not disable submit, F1)", cmd: process.execPath, args: ["--no-warnings", "--import", "./scripts/register-tsx-stub.mjs", "scripts/test-checkin-busy-latch.mjs"] },
   ];
   if (mode === "verify") {
     stages.unshift(

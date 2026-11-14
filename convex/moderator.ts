@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 import { requireModerator, maybeCurrentUserId, isQaAccount, orgUsers } from "./access";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 /** Moderator + live org, or null (queries degrade to [] for anyone else). */
 async function modOrgScope(ctx: QueryCtx, orgId: Id<"organisations">) {
@@ -15,6 +15,14 @@ async function modOrgScope(ctx: QueryCtx, orgId: Id<"organisations">) {
   const org = await ctx.db.get(orgId);
   if (!org || org.archivedAt !== undefined) return null;
   return mod;
+}
+
+async function requireTargetInLiveOrg(ctx: MutationCtx, userId: Id<"users">) {
+  const target = await ctx.db.get(userId);
+  if (!target || isQaAccount(target) || !target.orgId || !(await modOrgScope(ctx, target.orgId))) {
+    throw new ConvexError("FORBIDDEN");
+  }
+  return target;
 }
 
 
@@ -155,6 +163,7 @@ export const resolveShift = mutation({
     const modId = await requireModerator(ctx);
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
+    await requireTargetInLiveOrg(ctx, shift.userId);
     await ctx.db.patch(args.shiftId, {
       needsReview: false,
       reviewReason: `resolved:${shift.reviewReason ?? "flagged"}`,
@@ -174,6 +183,7 @@ export const recomputeEmployeeShifts = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     await requireModerator(ctx);
+    await requireTargetInLiveOrg(ctx, args.userId);
     await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId: args.userId });
   },
 });
@@ -182,7 +192,8 @@ export const setHourlyOverride = mutation({
   args: { userId: v.id("users"), rate: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requireModerator(ctx);
-    if (args.rate !== undefined && (args.rate < 0 || args.rate > 100000)) {
+    await requireTargetInLiveOrg(ctx, args.userId);
+    if (args.rate !== undefined && (!Number.isFinite(args.rate) || args.rate < 0 || args.rate > 100000)) {
       throw new ConvexError("RATE_OUT_OF_RANGE");
     }
     await ctx.db.patch(args.userId, { hourlyRateOverride: args.rate });
@@ -245,8 +256,7 @@ export const endShiftOverride = mutation({
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new ConvexError("SHIFT_NOT_FOUND");
     if (shift.sealed === true) throw new ConvexError("PAYROLL_SEALED");
-    const target = await ctx.db.get(shift.userId);
-    if (!target || isQaAccount(target)) throw new ConvexError("FORBIDDEN");
+    await requireTargetInLiveOrg(ctx, shift.userId);
     if (args.endedAt < shift.startedAt) throw new ConvexError("ENDED_BEFORE_START");
     if (args.endedAt > Date.now() + 5 * 60 * 1000) throw new ConvexError("ENDED_IN_FUTURE");
     await ctx.db.insert("shiftOverrides", {

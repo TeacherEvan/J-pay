@@ -124,6 +124,40 @@ describe("React Adapter Query Deduplication & Scoped Invalidation", () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it("bypasses stale in-flight promise when bump() advances the generation", async () => {
+      let callCount = 0;
+      let resolveFirst;
+      const firstGate = new Promise((r) => { resolveFirst = r; });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async () => {
+        callCount++;
+        const n = callCount;
+        if (n === 1) {
+          await firstGate;
+          return { ok: true, json: async () => ({ result: { gen: "stale" } }) };
+        }
+        return { ok: true, json: async () => ({ result: { gen: "fresh" } }) };
+      };
+
+      try {
+        const ref = { module: "users_queries", fn: "me" };
+        const p1 = callBackend(ref, { id: 99 });
+        __test_invalidationBus.bump({ tables: ["users"] });
+        const p2 = callBackend(ref, { id: 99 });
+
+        assert.notStrictEqual(p1, p2, "callBackend after bump() must not reuse pre-mutation promise");
+        const r2 = await p2;
+        assert.deepStrictEqual(r2, { gen: "fresh" });
+        resolveFirst();
+        const r1 = await p1;
+        assert.deepStrictEqual(r1, { gen: "stale" });
+        assert.strictEqual(callCount, 2);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 
   describe("Table / Scope-Aware Invalidation", () => {

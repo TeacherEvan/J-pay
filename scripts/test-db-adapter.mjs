@@ -124,7 +124,7 @@ assert.equal(exhausted.length, 60, "take(60) must page through windows until 60 
 assert.ok(__pg.calls.some((c) => c.method === "range"), "residual path must page via range()");
 
 // --- Test 10 (P2-B13): the impossible-travel read horizon must reach SQL.
-// The travel window (convex/logs.ts createLog / createLogAs, convex/punches.ts
+// The travel window (convex/logs.ts createLog, convex/punches.ts
 // recordPunch) bounds its read with an INDEX range constraint. An INDEX
 // constraint is pushed into PostgREST as SQL WHERE; a .filter() predicate is
 // NOT (it is evaluated in JS after every row of the user's history crossed the

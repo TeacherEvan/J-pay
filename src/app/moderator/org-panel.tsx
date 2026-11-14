@@ -89,12 +89,14 @@ export function OrgPanel() {
                 <li key={o._id}>
                   <button
                     type="button"
-                    onClick={() => setOrgId(selected ? null : o._id)}
+                    onClick={() => {
+                      if (!selected) setOrgId(o._id);
+                    }}
                     aria-pressed={selected}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                    className={`flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
                       selected
-                        ? "border-[var(--mint)]/60 bg-[var(--mint)]/10 text-[var(--paper)]"
-                        : "border-[var(--line)] text-[var(--text-secondary)] hover:bg-[var(--panel-elevated)]/40"
+                        ? "cursor-default border-[var(--mint)]/60 bg-[var(--mint)]/10 text-[var(--paper)]"
+                        : "cursor-pointer border-[var(--line)] text-[var(--text-secondary)] hover:bg-[var(--panel-elevated)]/40"
                     }`}
                   >
                     <span className="min-w-0 truncate font-semibold">{o.name}</span>

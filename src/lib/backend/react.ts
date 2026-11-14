@@ -120,7 +120,7 @@ export function subscribe(
 
 /* ------------------------------------------- in-flight query deduplication -- */
 
-const inFlightQueries = new Map<string, Promise<unknown>>();
+const inFlightQueries = new Map<string, { promise: Promise<unknown>; gen: number }>();
 
 /* ------------------------------------------------------------- transport -- */
 
@@ -139,9 +139,10 @@ export function callBackend(
   const cacheKey = `${fnKey}::${JSON.stringify(args ?? {})}`;
 
   const existing = inFlightQueries.get(cacheKey);
-  if (existing) {
-    return existing;
+  if (existing && existing.gen === version) {
+    return existing.promise;
   }
+  const gen = version;
 
   const promise = (async () => {
     const token = await accessToken();
@@ -195,10 +196,12 @@ export function callBackend(
     return payload.result;
   })();
 
-  inFlightQueries.set(cacheKey, promise);
+  inFlightQueries.set(cacheKey, { promise, gen });
 
   const cleanup = () => {
-    inFlightQueries.delete(cacheKey);
+    if (inFlightQueries.get(cacheKey)?.promise === promise) {
+      inFlightQueries.delete(cacheKey);
+    }
   };
   promise.then(cleanup, cleanup);
 
@@ -303,7 +306,10 @@ export function useQueryResult<T = any>(
     data: skip ? undefined : isCurrent ? (state.data as T | null) : undefined,
     error: isCurrent ? state.error : null,
     isLoading,
-    retry: () => setNonce((n) => n + 1),
+    retry: () => {
+      setState((prev) => (prev.key === key ? { ...prev, error: null } : prev));
+      setNonce((n) => n + 1);
+    },
   };
 }
 

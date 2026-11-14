@@ -8,7 +8,7 @@ import {
   retrieveAccount,
 } from "@convex-dev/auth/server";
 import { issueDeviceToken } from "./deviceTokens";
-import { currentUserId, requireActiveUser, requireModerator } from "./access";
+import { currentUserId, isQaAccount, requireActiveUser, requireModerator } from "./access";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { mapRetrieveResult } from "./changePassword";
@@ -22,7 +22,6 @@ const LOCALE_VALUES = [
   "fr-FR",
 ] as const;
 const localeValidator = v.union(...LOCALE_VALUES.map((l) => v.literal(l)));
-export type LocaleCode = (typeof LOCALE_VALUES)[number];
 
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -46,8 +45,16 @@ async function requireModeratorActionCtx(ctx: import("./_generated/server").Acti
 }
 
 export const provisionEmployee = action({
-  args: { name: v.string(), email: v.string(), orgId: v.id("organisations") },
-  handler: async (ctx, args) => {
+  args: {
+    name: v.string(),
+    email: v.string(),
+    orgId: v.id("organisations"),
+    role: v.optional(v.union(v.literal("employee"), v.literal("manager"))),
+    siteIds: v.optional(v.array(v.id("sites"))),
+    hourlyRateOverride: v.optional(v.number()),
+    locale: v.optional(localeValidator),
+  },
+  handler: async (ctx, args): Promise<{ userId?: Id<"users">; email: string; idCode: string }> => {
     await requireModeratorActionCtx(ctx);
     const org = await ctx.runQuery(internal.organisations.getActive, { id: args.orgId });
     if (!org) throw new ConvexError("ORG_NOT_FOUND");
@@ -59,7 +66,7 @@ export const provisionEmployee = action({
     });
     if (existing) throw new ConvexError("USER_EXISTS");
     const idCode = generateIdCode();
-    await createAccount(ctx, {
+    const created = await createAccount(ctx, {
       provider: "password",
       account: { id: email, secret: idCode },
       profile: {
@@ -70,7 +77,7 @@ export const provisionEmployee = action({
         orgId: args.orgId,
       },
     });
-    return { email, idCode };
+    return { userId: created.user._id as Id<"users">, email, idCode };
   },
 });
 
@@ -181,22 +188,6 @@ export const clearForceChange = internalMutation({
   },
 });
 
-export const archiveUserBreakGlass = internalAction({
-  args: { key: v.string(), email: v.string() },
-  handler: async (ctx, args): Promise<{ archived: string }> => {
-    if (!process.env.BOOTSTRAP_KEY || args.key !== process.env.BOOTSTRAP_KEY) {
-      throw new ConvexError("BOOTSTRAP_KEY_INVALID");
-    }
-    const user: { _id: Id<"users">; email?: string | null } | null = await ctx.runQuery(
-      internal.users_queries.getByEmail,
-      { email: args.email.trim().toLowerCase() }
-    );
-    if (!user) throw new ConvexError("USER_NOT_FOUND");
-    await ctx.runMutation(internal.users.archiveUserInternal, { userId: user._id });
-    return { archived: user.email ?? "" };
-  },
-});
-
 export const markPasswordChanged = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -258,6 +249,40 @@ export const deactivateEmployee = mutation({
     const user = await ctx.db.get(args.userId);
     if (!user || (user.role !== "employee" && user.role !== "manager")) throw new ConvexError("NOT_AN_EMPLOYEE");
     await ctx.db.patch(args.userId, { archivedAt: Date.now(), isActive: false });
+  },
+});
+
+export const deactivateModerator = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const actorId = await requireModerator(ctx);
+    if (args.userId === actorId) throw new ConvexError("CANNOT_ARCHIVE_SELF");
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.role !== "moderator" || isQaAccount(target) || target.isMasterTemp === true) {
+      throw new ConvexError("NOT_A_MODERATOR");
+    }
+    if (target.archivedAt !== undefined || !target.isActive) {
+      return { ok: true as const, already: true as const };
+    }
+    const mods = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "moderator"))
+      .collect();
+    const activeMods = mods.filter(
+      (u) => u.isActive && u.archivedAt === undefined && !isQaAccount(u) && u.isMasterTemp !== true
+    );
+    if (activeMods.length <= 1) {
+      throw new ConvexError("LAST_MODERATOR");
+    }
+    const now = Date.now();
+    await ctx.db.insert("systemEvents", {
+      kind: "moderator_deactivated",
+      userId: args.userId,
+      at: now,
+      detail: JSON.stringify({ actorId, targetUserId: args.userId }),
+    });
+    await ctx.db.patch(args.userId, { archivedAt: now, isActive: false });
+    return { ok: true as const, already: false as const };
   },
 });
 

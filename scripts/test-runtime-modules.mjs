@@ -6,7 +6,7 @@
  * call failed with UNKNOWN_FUNCTION while tsc and npm test stayed green.
  *
  * For every top-level convex module (plus every module in a convex module
- * sub-directory), _generated/ and auth.config.ts excluded, every export that
+ * sub-directory), _generated/ excluded, every export that
  * looks like a Convex handler (object or function carrying a `_handler`
  * function) must appear in describeFunctions() as `<module>:<exportName>` —
  * or under another namespace, when the module is a re-export surface.
@@ -27,7 +27,7 @@ function moduleKeys() {
   const keys = [];
   for (const entry of readdirSync(convexDir, { withFileTypes: true })) {
     if (entry.isFile()) {
-      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".d.ts") || entry.name === "auth.config.ts") continue;
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".d.ts")) continue;
       keys.push(entry.name.slice(0, -".ts".length));
     } else if (entry.isDirectory() && entry.name !== "_generated") {
       for (const f of readdirSync(join(convexDir, entry.name))) {
