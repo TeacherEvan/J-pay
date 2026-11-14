@@ -49,6 +49,7 @@ function fixture() {
   ];
   s.travelSegments = [];
   s.shiftOverrides = [];
+  s.systemEvents = [];
 }
 
 const mkLog = (i, userId, siteId, t) => ({
@@ -153,6 +154,121 @@ await run("employees and managers cannot call moderator scope queries", async ()
     assert.deepEqual(await call("moderator", "listAllSites", { orgId: "org-A" }, asUser(id)), []);
     await assert.rejects(() => call("payroll", "calcForOrg", { orgId: "org-A", weeks: 1, weekOffset: 0, anchorMs: 0 }, asUser(id)));
   }
+});
+
+await run("users_queries:listModerators returns non-QA non-temp moderators only to active moderators", async () => {
+  const s = __stub.store;
+  s.users.push(
+    { _id: "mod-a", _creationTime: 11, role: "moderator", email: "aaron@real.test", name: "aaron Mod", isActive: true, passwordChangedAt: NOW },
+    { _id: "mod-arch", _creationTime: 12, role: "moderator", email: "zed@real.test", name: "zed Mod", isActive: false, archivedAt: NOW - 1000 },
+    { _id: "mod-qa", _creationTime: 13, role: "moderator", email: "qa.mod@jpay.local", name: "QA Mod", isActive: true },
+    { _id: "mod-temp", _creationTime: 14, role: "moderator", email: "mod@real.test", name: "Master Temp", isActive: true, isMasterTemp: true },
+  );
+  assert.deepEqual(await call("users_queries", "listModerators", {}, null), []);
+  assert.deepEqual(await call("users_queries", "listModerators", {}, asUser("a1")), []);
+  assert.deepEqual(await call("users_queries", "listModerators", {}, asUser("mgrA")), []);
+  assert.deepEqual(await call("users_queries", "listModerators", {}, asUser("mod-arch")), []);
+
+  const list = await call("users_queries", "listModerators", {}, asUser("mod"));
+  assert.deepEqual(list.map((m) => m._id), ["mod-a", "mod", "mod-arch"]);
+  assert.equal(list[0].hasChangedPassword, true);
+  assert.equal(list[1].hasChangedPassword, false);
+  assert.equal(list[2].isActive, false);
+  assert.ok(typeof list[2].archivedAt === "number");
+});
+
+await run("users:deactivateModerator enforces self/last/type guards and logs audit event", async () => {
+  const s = __stub.store;
+  s.users.push(
+    { _id: "mod-2", _creationTime: 11, role: "moderator", email: "mod2@real.test", name: "Mod Two", isActive: true },
+    { _id: "mod-arch", _creationTime: 12, role: "moderator", email: "modarch@real.test", name: "Archived Mod", isActive: false, archivedAt: NOW - 1000 },
+    { _id: "mod-qa", _creationTime: 13, role: "moderator", email: "qa.mod@jpay.local", name: "QA Mod", isActive: true },
+    { _id: "mod-temp", _creationTime: 14, role: "moderator", email: "mod@real.test", name: "Temp Mod", isActive: true, isMasterTemp: true },
+  );
+
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "mod-2" }, asUser("a1")), /FORBIDDEN/);
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "mod" }, asUser("mod")), /CANNOT_ARCHIVE_SELF/);
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "a1" }, asUser("mod")), /NOT_A_MODERATOR/);
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "mod-qa" }, asUser("mod")), /NOT_A_MODERATOR/);
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "mod-temp" }, asUser("mod")), /NOT_A_MODERATOR/);
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "missing" }, asUser("mod")), /NOT_A_MODERATOR/);
+
+  const alreadyRes = await call("users", "deactivateModerator", { userId: "mod-arch" }, asUser("mod"));
+  assert.deepEqual(alreadyRes, { ok: true, already: true });
+
+  const res = await call("users", "deactivateModerator", { userId: "mod-2" }, asUser("mod"));
+  assert.deepEqual(res, { ok: true, already: false });
+  const mod2 = s.users.find((u) => u._id === "mod-2");
+  assert.equal(mod2.isActive, false);
+  assert.ok(typeof mod2.archivedAt === "number");
+
+  const events = s.systemEvents.filter((e) => e.kind === "moderator_deactivated");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].userId, "mod-2");
+  assert.deepEqual(JSON.parse(events[0].detail), { actorId: "mod", targetUserId: "mod-2" });
+
+  const idempotent = await call("users", "deactivateModerator", { userId: "mod-2" }, asUser("mod"));
+  assert.deepEqual(idempotent, { ok: true, already: true });
+  assert.equal(s.systemEvents.filter((e) => e.kind === "moderator_deactivated").length, 1);
+
+  await assert.rejects(() => call("users", "deactivateModerator", { userId: "mod" }, asUser("mod-qa")), /LAST_MODERATOR/);
+});
+
+await run("moderator:resolveShift, setHourlyOverride, and recomputeEmployeeShifts enforce target org scope", async () => {
+  const s = __stub.store;
+  s.organisations.push({ _id: "org-Arch", _creationTime: 3, name: "Archived Org", archivedAt: NOW - 1000 });
+  s.users.push(
+    { _id: "empNoOrg", _creationTime: 11, role: "employee", email: "noorg@real.test", name: "No Org", isActive: true },
+    { _id: "empArchOrg", _creationTime: 12, role: "employee", email: "arch@real.test", name: "Arch Org", isActive: true, orgId: "org-Arch" },
+    { _id: "empQa", _creationTime: 13, role: "employee", email: "qa.emp@jpay.local", name: "QA Emp", isActive: true, orgId: "org-A" },
+  );
+  s.shifts.push(
+    { _id: "sh-a1", _creationTime: 40, userId: "a1", startedAt: NOW - 2 * H, needsReview: true, reviewReason: "x" },
+    { _id: "sh-no-org", _creationTime: 41, userId: "empNoOrg", startedAt: NOW - 2 * H, needsReview: true, reviewReason: "x" },
+    { _id: "sh-arch-org", _creationTime: 42, userId: "empArchOrg", startedAt: NOW - 2 * H, needsReview: true, reviewReason: "x" },
+    { _id: "sh-qa", _creationTime: 43, userId: "empQa", startedAt: NOW - 2 * H, needsReview: true, reviewReason: "x" },
+  );
+
+  for (const shiftId of ["sh-no-org", "sh-arch-org", "sh-qa"]) {
+    await assert.rejects(() => call("moderator", "resolveShift", { shiftId }, asUser("mod")), /FORBIDDEN/);
+  }
+  for (const userId of ["empNoOrg", "empArchOrg", "empQa", "missing-user"]) {
+    await assert.rejects(() => call("moderator", "setHourlyOverride", { userId, rate: 150 }, asUser("mod")), /FORBIDDEN/);
+    await assert.rejects(() => call("moderator", "recomputeEmployeeShifts", { userId }, asUser("mod")), /FORBIDDEN/);
+  }
+
+  const resolved = await call("moderator", "resolveShift", { shiftId: "sh-a1" }, asUser("mod"));
+  assert.deepEqual(resolved, { ok: true });
+  assert.equal(s.shifts.find((sh) => sh._id === "sh-a1").sealed, true);
+  await call("moderator", "setHourlyOverride", { userId: "a1", rate: 175 }, asUser("mod"));
+  assert.equal(s.users.find((u) => u._id === "a1").hourlyRateOverride, 175);
+  await call("moderator", "recomputeEmployeeShifts", { userId: "a1" }, asUser("mod"));
+});
+
+await run("users:provisionEmployee validates org, role, rate, locale, and site org boundary before Supabase admin call", async () => {
+  const s = __stub.store;
+  s.organisations.push({ _id: "org-Arch", _creationTime: 3, name: "Archived Org", archivedAt: NOW - 1000 });
+  s.sites.push(
+    { _id: "site-Arch", _creationTime: 22, name: "Archived Site", orgId: "org-A", archivedAt: NOW - 500, latitude: -26, longitude: 28, geofenceRadiusMeters: 150, timezone: "Africa/Johannesburg", createdBy: "mod" },
+    { _id: "site-NoOrg", _creationTime: 23, name: "Orphan Site", latitude: -26, longitude: 28, geofenceRadiusMeters: 150, timezone: "Africa/Johannesburg", createdBy: "mod" },
+  );
+  const base = { name: "New Hire", email: "newhire@real.test", orgId: "org-A" };
+
+  await assert.rejects(() => call("users", "provisionEmployee", base, null), /UNAUTHENTICATED/);
+  await assert.rejects(() => call("users", "provisionEmployee", base, asUser("a1")), /FORBIDDEN/);
+  await assert.rejects(() => call("users", "provisionEmployee", { name: "New Hire", email: "newhire@real.test" }, asUser("mod")), /ORG_NOT_FOUND/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, orgId: "org-missing" }, asUser("mod")), /ORG_NOT_FOUND/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, orgId: "org-Arch" }, asUser("mod")), /ORG_NOT_FOUND/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, role: "moderator" }, asUser("mod")), /INVALID_ROLE/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, hourlyRateOverride: -1 }, asUser("mod")), /RATE_OUT_OF_RANGE/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, hourlyRateOverride: 100001 }, asUser("mod")), /RATE_OUT_OF_RANGE/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, hourlyRateOverride: Number.NaN }, asUser("mod")), /RATE_OUT_OF_RANGE/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, locale: "de-DE" }, asUser("mod")), /INVALID_LOCALE/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, siteIds: ["site-missing"] }, asUser("mod")), /SITE_NOT_FOUND/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, siteIds: ["site-Arch"] }, asUser("mod")), /SITE_ARCHIVED/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, siteIds: ["site-B"] }, asUser("mod")), /CROSS_ORG_ASSIGNMENT_FORBIDDEN/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, siteIds: ["site-NoOrg"] }, asUser("mod")), /CROSS_ORG_ASSIGNMENT_FORBIDDEN/);
+  await assert.rejects(() => call("users", "provisionEmployee", { ...base, email: "a1@real.test" }, asUser("mod")), /USER_EXISTS/);
 });
 
 if (process.exitCode) { console.error("\nHARNESS FAILED"); } else { console.log("\norg isolation OK"); }

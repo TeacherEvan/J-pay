@@ -2,8 +2,9 @@
 
 import { useQuery } from "@/lib/backend/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/backend/api";
+import { phaseOf, type CardLog } from "../check-in/types";
 import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { ManagerMap } from "./manager-map";
 import { ManagerMessagesPanel } from "./messages-panel";
@@ -41,10 +42,22 @@ type ViewId = "live" | "crew" | "messages";
 
 export default function ManagerPage() {
   const me = useQuery(api.users_queries.me);
+  // Employee/manager self-shift phase is derived from the caller's own punch logs
+  // (convex/shifts.ts only exports internal derivation mutations; CheckInCard uses logs:listMine).
+  const myLogs = useQuery(api.logs.listMine, me?.role === "manager" ? {} : "skip") as CardLog[] | null | undefined;
   const crew = useQuery(api.manager.myCrew, {}) as CrewRow[] | undefined;
   const managedSites = useQuery(api.manager.listManagedSites, {}) as SiteRow[] | undefined;
   const travel = useQuery(api.travel.recentForCrew, { limit: 25 }) as TravelRow[] | undefined;
   const userLocale = useUserLocale();
+  const latestLog = useMemo(() => {
+    if (!Array.isArray(myLogs) || myLogs.length === 0) return undefined;
+    return [...myLogs].sort(
+      (a, b) =>
+        (b.clientReportedTime ?? b._creationTime) - (a.clientReportedTime ?? a._creationTime) ||
+        b._creationTime - a._creationTime
+    )[0];
+  }, [myLogs]);
+  const myPhase = phaseOf(latestLog);
   // Ticking clock for elapsed-time displays: a mount-stable Date.now() would
   // freeze in-transit legs at 0 min for the whole session. 30 s cadence keeps
   // re-renders modest; cleared on unmount.
@@ -116,6 +129,30 @@ export default function ManagerPage() {
           >
             ← check-in
           </Link>
+          {Array.isArray(myLogs) && (
+            <Link
+              href="/"
+              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:brightness-110 ${
+                myPhase === "on"
+                  ? "border-[var(--mint)]/50 bg-[var(--mint)]/12 text-[var(--mint)]"
+                  : myPhase === "break"
+                    ? "border-[var(--hivis)]/50 bg-[var(--hivis)]/12 text-[var(--hivis)]"
+                    : "border-[var(--line)] bg-[var(--panel)] text-[var(--fog)] hover:text-[var(--paper)]"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${
+                  myPhase === "on"
+                    ? "bg-[var(--mint)]"
+                    : myPhase === "break"
+                      ? "bg-[var(--hivis)]"
+                      : "bg-[var(--fog)]/60"
+                }`}
+              />
+              {myPhase === "on" ? "You: on shift" : myPhase === "break" ? "You: on break" : "You: off shift"}
+            </Link>
+          )}
           <ChangePassword />
         </div>
       </header>
@@ -243,7 +280,7 @@ export default function ManagerPage() {
                       <span className="min-w-0 truncate text-sm font-semibold text-[var(--paper)]">
                         {c.name}
                         {c.role === "manager" && (
-                          <span className="ml-1.5 rounded-full border border-[var(--cyan)]/40 px-1.5 py-0.5 align-middle text-[9px] uppercase tracking-wider text-[var(--cyan)]">manager</span>
+                          <span className="ml-1.5 rounded-full border border-[var(--cyan)]/40 px-1.5 py-0.5 align-middle text-xs uppercase tracking-wider text-[var(--cyan)]">manager</span>
                         )}
                       </span>
                       {c.onShift ? (

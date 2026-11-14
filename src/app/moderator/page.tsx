@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/backend/api";
 import { MessagesPanel } from "../messages";
 import { PayrollPanel, ReviewPanel } from "../payroll";
+import { ShiftOverridePanel } from "./shift-overrides-panel";
 import { ChangePassword, ForcedPasswordChange } from "../change-password";
 import { GeofenceModal, type GeofenceFix } from "./geofence-modal";
 import { useUserLocale } from "@/lib/use-user-locale";
@@ -36,6 +37,7 @@ function ModeratorConsole() {
   const sites = useQuery(api.moderator.listAllSites, orgId ? { orgId } : "skip");
   const audit = useQuery(api.moderator.auditRecentLogs, orgId ? { orgId, limit: 50 } : "skip");
   const [geofenceFix, setGeofenceFix] = useState<GeofenceFix | null>(null);
+  const [payrollExceptionTab, setPayrollExceptionTab] = useState<"review" | "overrides">("review");
   const review = useQuery(api.moderator.auditNeedsReview, orgId ? { orgId } : "skip");
   const userLocale = useUserLocale();
 
@@ -121,7 +123,7 @@ function ModeratorConsole() {
             ariaLabel="Moderator console view"
           />
 
-          <div className="p-2 sm:p-3 md:min-h-0 md:flex-1">
+          <div key={orgId} className="p-2 sm:p-3 md:min-h-0 md:flex-1">
             {view === "live" && (
               <LiveView employees={employees ?? []} />
             )}
@@ -137,7 +139,48 @@ function ModeratorConsole() {
             {view === "payroll" && (
               <div role="tabpanel" id="tabpanel-payroll" aria-labelledby="tab-payroll" aria-label="Payroll" className="grid h-full min-h-0 gap-2 md:grid-cols-5">
                 <PayrollPanel employees={(employees ?? []) as never} role="moderator" className="md:col-span-3" />
-                <ReviewPanel className="md:col-span-2" />
+                <div className="md:col-span-2 flex min-h-0 flex-col gap-1.5">
+                  <div className="flex flex-none flex-wrap items-center gap-1.5" role="tablist" aria-label="Payroll shift exceptions">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={payrollExceptionTab === "review"}
+                      onClick={() => setPayrollExceptionTab("review")}
+                      className={`btn-surgical min-h-[44px] px-3 py-1.5 text-xs font-semibold ${
+                        payrollExceptionTab === "review"
+                          ? "border-[var(--mint)] bg-[var(--mint)]/10 text-[var(--mint)]"
+                          : "text-[var(--fog)] hover:text-[var(--paper)]"
+                      }`}
+                    >
+                      <span>Needs review</span>
+                      {reviewCount > 0 && (
+                        <span className="tnum ml-1.5 rounded-full bg-[var(--danger)]/20 px-1.5 py-0.5 text-xs font-bold text-[var(--danger)]">
+                          {reviewCount}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={payrollExceptionTab === "overrides"}
+                      onClick={() => setPayrollExceptionTab("overrides")}
+                      className={`btn-surgical min-h-[44px] px-3 py-1.5 text-xs font-semibold ${
+                        payrollExceptionTab === "overrides"
+                          ? "border-[var(--mint)] bg-[var(--mint)]/10 text-[var(--mint)]"
+                          : "text-[var(--fog)] hover:text-[var(--paper)]"
+                      }`}
+                    >
+                      Shift corrections
+                    </button>
+                  </div>
+                  {payrollExceptionTab === "review" ? (
+                    <ReviewPanel className="min-h-0 flex-1" />
+                  ) : (
+                    <div className="min-h-0 flex-1">
+                      <ShiftOverridePanel />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -158,7 +201,7 @@ function ModeratorConsole() {
           </div>
         </>
       )}
-      <EmployeeDrawer employees={employees ?? []} sites={sites ?? []} />
+      <EmployeeDrawer key={orgId ?? "none"} employees={employees ?? []} sites={sites ?? []} />
       {geofenceFix && <GeofenceModal fix={geofenceFix} onClose={() => setGeofenceFix(null)} />}
     </main>
   );

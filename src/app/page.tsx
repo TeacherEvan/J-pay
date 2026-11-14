@@ -359,7 +359,18 @@ function TravelDisclaimerModal({
   );
 }
 
+type ManagerCrewRow = {
+  _id: string;
+  onShift: { _id: string; startedAt: number } | null;
+};
+type ManagedSiteRow = { _id: string; name: string };
+
 function ManagerCard() {
+  const crew = useQuery(api.manager.myCrew, {}) as ManagerCrewRow[] | null | undefined;
+  const managedSites = useQuery(api.manager.listManagedSites, {}) as ManagedSiteRow[] | null | undefined;
+  const loaded = Array.isArray(crew) && Array.isArray(managedSites);
+  const onShiftCount = loaded ? crew.filter((c) => c.onShift).length : 0;
+
   return (
     <section className="card-surgical p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fog)]">
@@ -368,6 +379,25 @@ function ManagerCard() {
       <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
         Your crew is waiting — live positions, travel status and on-site arrival for the sites you manage.
       </p>
+      {loaded && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="tnum rounded-full border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)]">
+            {managedSites.length} {managedSites.length === 1 ? "site" : "sites"}
+          </span>
+          <span className="tnum rounded-full border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)]">
+            {crew.length} crew
+          </span>
+          <span
+            className={`tnum rounded-full border px-2.5 py-0.5 font-semibold ${
+              onShiftCount > 0
+                ? "border-[var(--mint)]/40 bg-[var(--mint)]/10 text-[var(--mint)]"
+                : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--fog)]"
+            }`}
+          >
+            {onShiftCount} on shift
+          </span>
+        </div>
+      )}
       <a
         href="/manager"
         className="btn-surgical btn-surgical-mint mt-4 flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold"

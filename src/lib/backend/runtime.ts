@@ -194,14 +194,22 @@ class RequestContext {
     },
   };
 
+  private invokeChild = async (ref: unknown, args: Record<string, unknown>) => {
+    const childMeta: { tablesWritten?: string[]; tablesRead?: string[] } = {};
+    const result = await invoke(ref, args, this.identity, true, childMeta);
+    for (const t of childMeta.tablesWritten ?? []) this.db.writtenTables.add(t);
+    for (const t of childMeta.tablesRead ?? []) this.db.readTables.add(t);
+    return result;
+  };
+
   runQuery = async (ref: unknown, args: Record<string, unknown>) =>
-    invoke(ref, args, this.identity, true);
+    this.invokeChild(ref, args);
 
   runMutation = async (ref: unknown, args: Record<string, unknown>) =>
-    invoke(ref, args, this.identity, true);
+    this.invokeChild(ref, args);
 
   runAction = async (ref: unknown, args: Record<string, unknown>) =>
-    invoke(ref, args, this.identity, true);
+    this.invokeChild(ref, args);
 
   /**
    * Convex `runAfter(0, …)` fires after the mutation returns. We run inline
@@ -275,6 +283,15 @@ function normaliseName(raw: unknown): string {
   return name;
 }
 
+const ALLOWED_LOCALES = new Set([
+  "en-ZA",
+  "en-US",
+  "en-GB",
+  "en-AU",
+  "es-ES",
+  "fr-FR",
+]);
+
 /**
  * Creates the Supabase Auth identity and the matching public.users row.
  * The ID code is the initial password; `passwordChangedAt` stays unset so the
@@ -283,7 +300,7 @@ function normaliseName(raw: unknown): string {
 async function createAccount(
   ctx: RequestContext,
   args: { name: string; email: string; role: "moderator" | "employee"; orgId?: string }
-): Promise<string> {
+): Promise<{ idCode: string; userId: string }> {
   requireAdminKey();
   const admin = createSupabaseAdminClient();
   const idCode = generateIdCode();
@@ -298,15 +315,16 @@ async function createAccount(
     if (/already|exists|registered/i.test(message)) throw new ConvexError("USER_EXISTS");
     throw new ConvexError("PROVISION_FAILED");
   }
+  const userId = String(data.user.id);
   await ctx.db.insert("users", {
-    _id: data.user.id,
+    _id: userId,
     name: args.name,
     email: args.email,
     role: args.role,
     isActive: true,
     orgId: args.orgId,
   });
-  return idCode;
+  return { idCode, userId };
 }
 
 /** Overrides that replace internal* Convex functions — server callers only. */
@@ -323,17 +341,73 @@ const OVERRIDES: Record<string, Handler["_handler"]> = {
     await requireModeratorActionCtx(request);
     const email = normaliseEmail(args.email);
     const name = normaliseName(args.name);
-    if (args.orgId !== undefined) {
-      const org = await request.db.get(String(args.orgId));
-      if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
+    if (typeof args.orgId !== "string" || !args.orgId.trim()) {
+      throw new ConvexError("ORG_NOT_FOUND");
     }
+    const orgId = args.orgId;
+    const org = await request.db.get(orgId);
+    if (!org || org.archivedAt !== undefined) throw new ConvexError("ORG_NOT_FOUND");
+
+    if (args.role !== undefined && args.role !== "employee" && args.role !== "manager") {
+      throw new ConvexError("INVALID_ROLE");
+    }
+    if (args.hourlyRateOverride !== undefined) {
+      const rate = args.hourlyRateOverride;
+      if (typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100000) {
+        throw new ConvexError("RATE_OUT_OF_RANGE");
+      }
+    }
+    if (args.locale !== undefined) {
+      if (typeof args.locale !== "string" || !ALLOWED_LOCALES.has(args.locale)) {
+        throw new ConvexError("INVALID_LOCALE");
+      }
+    }
+
+    const siteIds: string[] = [];
+    if (args.siteIds !== undefined) {
+      if (!Array.isArray(args.siteIds)) throw new ConvexError("INVALID_SITE_IDS");
+      const seen = new Set<string>();
+      for (const rawId of args.siteIds) {
+        const siteId = typeof rawId === "string" ? rawId : "";
+        if (seen.has(siteId)) continue;
+        seen.add(siteId);
+        const site = siteId ? await request.db.get(siteId) : null;
+        if (!site) throw new ConvexError("SITE_NOT_FOUND");
+        if (site.archivedAt !== undefined) throw new ConvexError("SITE_ARCHIVED");
+        if (String(site.orgId ?? "") !== orgId) {
+          throw new ConvexError("CROSS_ORG_ASSIGNMENT_FORBIDDEN");
+        }
+        siteIds.push(siteId);
+      }
+    }
+
     const existing = await request.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", email))
       .first();
     if (existing) throw new ConvexError("USER_EXISTS");
-    const idCode = await createAccount(request, { name, email, role: "employee", orgId: args.orgId ? String(args.orgId) : undefined });
-    return { email, idCode };
+
+    const { idCode, userId } = await createAccount(request, {
+      name,
+      email,
+      role: "employee",
+      orgId,
+    });
+
+    const patch: Record<string, unknown> = {};
+    if (args.hourlyRateOverride !== undefined) patch.hourlyRateOverride = args.hourlyRateOverride;
+    if (args.locale !== undefined) patch.locale = args.locale;
+    if (Object.keys(patch).length > 0) {
+      await request.db.patch(userId, patch);
+    }
+
+    if (siteIds.length > 0) {
+      await request.runMutation("sites:setEmployeeSites", { userId, siteIds });
+    }
+    if (args.role === "manager") {
+      await request.runMutation("manager:promoteToManager", { userId });
+    }
+    return { userId, email, idCode };
   },
 
   "users:provisionModerator": async (ctx, args) => {
@@ -355,7 +429,7 @@ const OVERRIDES: Record<string, Handler["_handler"]> = {
       .withIndex("email", (q) => q.eq("email", email))
       .first();
     if (existing) throw new ConvexError("USER_EXISTS");
-    const idCode = await createAccount(request, { name, email, role: "moderator" });
+    const { idCode } = await createAccount(request, { name, email, role: "moderator" });
     return { email, idCode };
   },
 
@@ -370,7 +444,7 @@ const OVERRIDES: Record<string, Handler["_handler"]> = {
       .collect();
     if (moderators.length > 0) throw new ConvexError("MODERATOR_EXISTS");
     const email = normaliseEmail(args.email);
-    const idCode = await createAccount(request, { name: "Moderator", email, role: "moderator" });
+    const { idCode } = await createAccount(request, { name: "Moderator", email, role: "moderator" });
     return { email, idCode };
   },
 

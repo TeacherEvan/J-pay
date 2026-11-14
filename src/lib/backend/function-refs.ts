@@ -12,7 +12,6 @@ export type ApiSurface = {
   };
   "logs": {
     createLog: FunctionRef;
-    createLogAs: FunctionRef;
     listMine: FunctionRef;
     purgeExpiredCoords: FunctionRef;
     purgeExpiredCoordsBatch: FunctionRef;
@@ -56,7 +55,6 @@ export type ApiSurface = {
     createOrg: FunctionRef;
     getActive: FunctionRef;
     listOrgs: FunctionRef;
-    renameOrg: FunctionRef;
   };
   "payroll": {
     calcForEmployee: FunctionRef;
@@ -104,13 +102,13 @@ export type ApiSurface = {
   "users": {
     archiveMyMasterSession: FunctionRef;
     archiveStaleMasterTemps: FunctionRef;
-    archiveUserBreakGlass: FunctionRef;
     archiveUserInternal: FunctionRef;
     bootstrapFirstModerator: FunctionRef;
     changeMyPassword: FunctionRef;
     clearForceChange: FunctionRef;
     createMasterTempUser: FunctionRef;
     deactivateEmployee: FunctionRef;
+    deactivateModerator: FunctionRef;
     forceChangeOn: FunctionRef;
     getMyLocale: FunctionRef;
     issueMyDeviceToken: FunctionRef;
@@ -127,6 +125,7 @@ export type ApiSurface = {
     getById: FunctionRef;
     listByRole: FunctionRef;
     listEmployees: FunctionRef;
+    listModerators: FunctionRef;
     me: FunctionRef;
   };
 };

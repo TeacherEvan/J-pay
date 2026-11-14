@@ -79,3 +79,34 @@ export const listByRole = internalQuery({
       .collect();
   },
 });
+
+export const listModerators = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewerId = await maybeCurrentUserId(ctx);
+    if (!viewerId) return [];
+    const viewer = await ctx.db.get(viewerId);
+    if (!viewer || viewer.role !== "moderator" || !viewer.isActive || viewer.archivedAt !== undefined) {
+      return [];
+    }
+
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "moderator"))
+      .collect();
+
+    return rows
+      .filter((u) => !isQaAccount(u) && u.isMasterTemp !== true)
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        isActive: u.isActive,
+        archivedAt: u.archivedAt,
+        hasChangedPassword: u.passwordChangedAt !== undefined,
+      }))
+      .sort((a, b) =>
+        String(a.name ?? a.email ?? "").localeCompare(String(b.name ?? b.email ?? ""))
+      );
+  },
+});
