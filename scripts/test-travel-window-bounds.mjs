@@ -26,7 +26,6 @@ const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 
 const CALL_SITES = [
   { file: "convex/logs.ts", label: "createLog" },
-  { file: "convex/logs.ts", label: "createLogAs" },
   { file: "convex/punches.ts", label: "recordPunch" },
 ];
 

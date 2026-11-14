@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-export type ConsoleTab = { id: string; label: string; badge?: number };
+type ConsoleTab = { id: string; label: string; badge?: number };
 
 /**
  * Console view switcher. ≥md: pill tab bar (role=tablist with roving

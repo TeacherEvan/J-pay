@@ -17,7 +17,7 @@ type PasswordFormProps = {
   submitRef?: RefObject<HTMLButtonElement | null>;
 };
 
-export function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProps) {
+function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProps) {
   const change = useAction(api.users.changeMyPassword);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");

@@ -9,7 +9,6 @@
  */
 
 export type FunctionRef = { module: string; fn: string };
-export type { ApiSurface } from "./function-refs";
 
 function makeNamespace(): Record<string, Record<string, unknown>> {
   return new Proxy({} as Record<string, Record<string, unknown>>, {
@@ -26,8 +25,6 @@ function makeNamespace(): Record<string, Record<string, unknown>> {
 import type { ApiSurface } from "./function-refs";
 
 export const api = makeNamespace() as unknown as ApiSurface;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const internal: any = makeNamespace();
 
 export function refToKey(ref: unknown): string {
   if (typeof ref === "string") return ref;

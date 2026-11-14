@@ -2,12 +2,12 @@ import { jpayConfig } from "../config/jpay.config";
 
 export type PayStrategyName = "flat" | "bcea" | "dailyOvertime" | "flsa" | "wtr_uk";
 
-export interface PayInputDay {
+interface PayInputDay {
   day: string;
   minutes: number;
 }
 
-export interface PayLine {
+interface PayLine {
   day: string;
   ordinaryMinutes: number;
   overtimeMinutes: number;
@@ -15,7 +15,7 @@ export interface PayLine {
   pay: number;
 }
 
-export interface PayResult {
+interface PayResult {
   strategy: PayStrategyName;
   lines: PayLine[];
   totals: {
@@ -82,7 +82,7 @@ export function mondayOfWeek(day: string): string {
 export function weeklyCapMinutes(strategy: PayStrategyName): number | null {
   switch (strategy) {
     case "bcea":
-      return 45 * 60;
+      return P.standardWorkWeekHours * 60;
     case "flsa":
       return 40 * 60;
     case "wtr_uk":
@@ -126,7 +126,7 @@ function computeDailyOvertime(days: PayInputDay[], rate: number): PayResult {
 }
 
 function computeBcea(days: PayInputDay[], rate: number): PayResult {
-  const weeklyCapMin = P.standardWorkWeekHours * 60;
+  const weeklyCapMin = weeklyCapMinutes("bcea")!;
 
   const weeks = new Map<string, PayInputDay[]>();
   for (const d of [...days].sort((a, b) => a.day.localeCompare(b.day))) {
@@ -154,7 +154,7 @@ function computeBcea(days: PayInputDay[], rate: number): PayResult {
 }
 
 function computeFlsa(days: PayInputDay[], rate: number): PayResult {
-  const weeklyCapMin = 40 * 60;
+  const weeklyCapMin = weeklyCapMinutes("flsa")!;
 
   const weeks = new Map<string, PayInputDay[]>();
   for (const d of [...days].sort((a, b) => a.day.localeCompare(b.day))) {
@@ -181,7 +181,7 @@ function computeWtrUk(days: PayInputDay[], rate: number): PayResult {
   // UK has no statutory OT premium. overtimeMinutes is tracked for
   // regulatory reporting only (Working Time Regulations 1998 48h weekly
   // cap); pay is straight time.
-  const weeklyCapMin = 48 * 60;
+  const weeklyCapMin = weeklyCapMinutes("wtr_uk")!;
 
   const weeks = new Map<string, PayInputDay[]>();
   for (const d of [...days].sort((a, b) => a.day.localeCompare(b.day))) {

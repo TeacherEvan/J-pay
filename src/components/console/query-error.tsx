@@ -18,7 +18,7 @@ export function QueryError({ error, onRetry, label }: { error: unknown; onRetry?
         <button
           type="button"
           onClick={onRetry}
-          className="btn-surgical flex-none px-2.5 py-1 text-[11px] font-semibold"
+          className="btn-surgical flex-none px-2.5 py-1 text-xs font-semibold"
         >
           Retry
         </button>

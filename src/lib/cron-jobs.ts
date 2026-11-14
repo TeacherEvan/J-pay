@@ -13,8 +13,6 @@ export const CRON_JOBS = {
   "purge-expired-messages": { module: "messages", fn: "purgeExpiredMessages" },
 } as const;
 
-export type CronJobName = keyof typeof CRON_JOBS;
-
 /** Resolve a job name to its internal function ref, or null if unknown. */
 export function cronJobRef(job: string): { module: string; fn: string } | null {
   return (CRON_JOBS as Record<string, { module: string; fn: string }>)[job] ?? null;

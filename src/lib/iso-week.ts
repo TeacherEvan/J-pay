@@ -9,7 +9,7 @@
  * and the unit tests.
  */
 
-export interface SiteWeekRange {
+interface SiteWeekRange {
   /** UTC ms of site-local Monday 00:00 of the first week. */
   fromMs: number;
   /** UTC ms of the final site-local day 23:59:59.999 of the last week. */
@@ -71,7 +71,7 @@ function localParts(instantMs: number, timeZone: string): LocalParts | null {
 }
 
 /** Offset at `instantMs`, i.e. local − UTC, in ms. Seconds precision. */
-export function tzOffsetMs(instantMs: number, timeZone: string): number {
+function tzOffsetMs(instantMs: number, timeZone: string): number {
   const p = localParts(instantMs, timeZone) ?? localParts(instantMs, "UTC")!;
   const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return asIfUtc - Math.floor(instantMs / 1000) * 1000;

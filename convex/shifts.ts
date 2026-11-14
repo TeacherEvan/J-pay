@@ -51,7 +51,11 @@ export const deriveForUser = internalMutation({
     // 2. Fetch logs within the active horizon (or all logs if no sealed shift)
     let logsQuery = ctx.db
       .query("logs")
-      .withIndex("by_user_time", (q) => q.eq("userId", args.userId));
+      .withIndex("by_user_time", (q) =>
+        horizonCutoff !== undefined
+          ? q.eq("userId", args.userId).gte("_creationTime", horizonCutoff - HORIZON_SAFETY_BUFFER_MS)
+          : q.eq("userId", args.userId)
+      );
 
     if (horizonCutoff !== undefined) {
       logsQuery = logsQuery.filter((q) =>

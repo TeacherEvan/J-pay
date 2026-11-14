@@ -20,11 +20,11 @@ function slurp(path) {
   return readFileSync(path, "utf8");
 }
 
-const files = walk(SRC_APP);
+const files = [...walk(SRC_APP), ...walk("src/components")];
 const fileByPath = Object.fromEntries(files.map((f) => [f, slurp(f)]));
 
-test("a11y-statics: no text-[10px] or text-[11px] remain in src/app/", () => {
-  const offenders = files.filter((f) => /text-\[(10|11)px\]/.test(fileByPath[f]));
+test("a11y-statics: no text-[9px], text-[10px], or text-[11px] remain in src/app/ or src/components/", () => {
+  const offenders = files.filter((f) => /text-\[(9|10|11)px\]/.test(fileByPath[f]));
   assert.deepEqual(
     offenders,
     [],

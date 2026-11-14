@@ -53,13 +53,12 @@ export const setConsent = mutation({
         .collect();
       for (const seg of mine) {
         if (seg.arrivedAt !== undefined) continue;
-        if (!seg.needsReview) {
-          await ctx.db.patch(seg._id, {
-            arrivedAt: Date.now(),
-            needsReview: true,
-            reviewReason: "consent_revoked",
-          });
-        }
+        await ctx.db.patch(seg._id, {
+          arrivedAt: Date.now(),
+          needsReview: true,
+          reviewReason: "consent_revoked",
+          pathSamples: [],
+        });
       }
     }
 

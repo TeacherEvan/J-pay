@@ -1,15 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAction, useMutation, useQuery } from "@/lib/backend/react";
+import { useMutation, useQuery } from "@/lib/backend/react";
 import { api } from "@/lib/backend/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import type { OutboxEntry } from "@/lib/outbox";
-import { useOutbox } from "./use-outbox";
-import { errMsg } from "@/lib/errors";
 import { storageGet } from "@/lib/safe-storage";
 import { useUserLocale } from "@/lib/use-user-locale";
-import { formatTime } from "@/lib/format";
+import { formatTime, formatMinutesShort } from "@/lib/format";
 import { haversineMeters } from "../../convex/geo";
 
 import {
@@ -42,19 +39,19 @@ export {
 };
 export type { Status, Phase, CardLog, CardSite };
 
-
-export function formatMinutesShort(m: number): string {
-  const h = Math.floor(m / 60);
-  const min = Math.round(m % 60);
-  return h > 0 ? `${h}h ${min.toString().padStart(2, "0")}m` : `${min}m`;
-}
-
 export function CheckInCard() {
   const logsQuery = useQuery(api.logs.listMine);
   const sitesQuery = useQuery(api.sites.listMine);
   const userLocale = useUserLocale();
 
-  const logs = (logsQuery ?? []) as unknown as CardLog[];
+  const logs = useMemo(() => {
+    const raw = (logsQuery ?? []) as unknown as CardLog[];
+    return [...raw].sort(
+      (a, b) =>
+        (b.clientReportedTime ?? b._creationTime) - (a.clientReportedTime ?? a._creationTime) ||
+        b._creationTime - a._creationTime
+    );
+  }, [logsQuery]);
   const sites = (sitesQuery ?? []) as unknown as CardSite[];
   const loaded = logsQuery !== undefined;
 
@@ -138,6 +135,7 @@ export function CheckInCard() {
       const accuracy = position.coords.accuracy;
       if (!Number.isFinite(accuracy) || accuracy > 50) return; // server would reject anyway
       if (!Number.isFinite(position.timestamp)) return;
+      setLocationError(null);
       lastFixSentRef.current = now;
       const clientReportedTime = Math.round(position.timestamp);
       const idempotencyKey =

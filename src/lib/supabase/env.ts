@@ -16,7 +16,7 @@ const RAW_PUBLISHABLE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export type SupabaseEnv = {
+type SupabaseEnv = {
   /** Project base URL, e.g. https://<ref>.supabase.co */
   url: string;
   /** Publishable (formerly anon) key — safe to ship to the browser. */

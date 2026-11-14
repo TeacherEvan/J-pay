@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 
-export type RetrieveResult =
+type RetrieveResult =
   | "InvalidAccountId"
   | "TooManyFailedAttempts"
   | "InvalidSecret"

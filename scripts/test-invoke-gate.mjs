@@ -23,13 +23,13 @@
 import assert from "node:assert/strict";
 
 const INTERNAL_KEYS = [
-  "logs:createLogAs", "logs:purgeExpiredCoords", "logs:purgeExpiredCoordsBatch",
+  "logs:purgeExpiredCoords", "logs:purgeExpiredCoordsBatch",
   "messages:purgeExpiredMessages",
   "payroll_data:logsForExport",
   "push:pushToUser",
   "push_subs:recordSubscriptionError", "push_subs:removeSubscription", "push_subs:resetSubscriptionErrors", "push_subs:subscriptionsFor",
   "shifts:deriveForUser",
-  "users:archiveStaleMasterTemps", "users:archiveUserBreakGlass", "users:archiveUserInternal",
+  "users:archiveStaleMasterTemps", "users:archiveUserInternal",
   "users:bootstrapFirstModerator", "users:clearForceChange", "users:createMasterTempUser",
   "users:forceChangeOn", "users:markPasswordChanged", "users:resetPasswordBreakGlass",
   "users_queries:getByEmail", "users_queries:getById", "users_queries:listByRole",
