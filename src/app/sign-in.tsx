@@ -8,12 +8,15 @@ export function SignIn() {
   const { signIn } = useAuthActions();
   const [step, setStep] = useState<"signIn" | "signUp">("signIn");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <form
       className="card-surgical mx-auto flex w-full max-w-sm flex-col gap-3.5 p-6"
       onSubmit={(event) => {
         event.preventDefault();
+        if (busy) return;
+        setBusy(true);
         setError(null);
         const formData = new FormData(event.currentTarget);
         // First try the password provider; on failure, fall back to the
@@ -26,7 +29,8 @@ export function SignIn() {
               secret: String(formData.get("password") ?? ""),
             })
           )
-          .catch((e: Error) => setError(errMsg(e)));
+          .catch((e: Error) => setError(errMsg(e)))
+          .finally(() => setBusy(false));
       }}
     >
       <h1 className="text-2xl font-bold tracking-tight text-[var(--paper)]">J-Pay</h1>
@@ -66,10 +70,14 @@ export function SignIn() {
       )}
       <button
         type="submit"
+        disabled={busy}
+        data-loading={busy}
+        aria-busy={busy}
         data-testid={`auth-submit-${step}`}
-        className="btn-surgical btn-surgical-mint min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold"
+        className="btn-surgical btn-surgical-mint min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
       >
-        {step === "signIn" ? "Sign in" : "Activate account"}
+        <span className="btn-label">{step === "signIn" ? "Sign in" : "Activate account"}</span>
+        <span className="btn-spinner" aria-hidden="true" />
       </button>
       <button
         type="button"

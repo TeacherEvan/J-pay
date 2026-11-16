@@ -54,20 +54,26 @@ function PasswordFields({ onSaved, compact, submitRef }: PasswordFormProps) {
   const idSuffix = compact ? "compact" : "forced";
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="flex flex-col gap-2.5"
+    >
       <label className="sr-only" htmlFor={`${idSuffix}-pw-current`}>Current password / ID code</label>
-      <input id={`${idSuffix}-pw-current`} value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="Current password / ID code" type="password" className={inputCls} />
+      <input id={`${idSuffix}-pw-current`} value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="Current password / ID code" type="password" autoComplete="current-password" className={inputCls} />
       <label className="sr-only" htmlFor={`${idSuffix}-pw-next`}>New password (min 8 chars)</label>
-      <input id={`${idSuffix}-pw-next`} value={next} onChange={(e) => setNext(e.target.value)} placeholder="New password (min 8 chars)" type="password" className={inputCls} />
+      <input id={`${idSuffix}-pw-next`} value={next} onChange={(e) => setNext(e.target.value)} placeholder="New password (min 8 chars)" type="password" autoComplete="new-password" className={inputCls} />
       <label className="sr-only" htmlFor={`${idSuffix}-pw-confirm`}>Confirm new password</label>
-      <input id={`${idSuffix}-pw-confirm`} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" type="password" className={inputCls} />
-      <button ref={buttonRef} data-loading={busy} aria-busy={busy} onClick={() => void submit()} disabled={busy || !current || next.length < 8}
+      <input id={`${idSuffix}-pw-confirm`} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" type="password" autoComplete="new-password" className={inputCls} />
+      <button ref={buttonRef} type="submit" data-loading={busy} aria-busy={busy} disabled={busy || !current || next.length < 8}
         className={compact ? "btn-surgical min-h-[44px] self-start px-4 py-2 text-sm disabled:opacity-50" : "btn-surgical btn-surgical-mint min-h-[44px] w-full px-4 py-2.5 text-sm font-semibold disabled:opacity-50"}>
         <span className="btn-label">Update password</span>
         <span className="btn-spinner" aria-hidden="true" />
       </button>
       {msg && <p role="status" aria-live="polite" className={compact ? "text-sm text-[var(--fog)]" : "text-center text-sm font-medium text-[var(--paper)]"}>{msg}</p>}
-    </div>
+    </form>
   );
 }
 
