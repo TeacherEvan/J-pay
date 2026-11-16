@@ -69,14 +69,22 @@ export function SitePanel() {
           aria-busy={busy}
           disabled={busy || !orgId}
           onClick={async () => {
+            const name = form.name.trim();
+            const lat = form.lat.trim() === "" ? NaN : Number(form.lat);
+            const lng = form.lng.trim() === "" ? NaN : Number(form.lng);
+            const radius = form.radius.trim() === "" ? NaN : Number(form.radius);
+            if (!name || !Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) {
+              setMsg("Enter a site name, valid latitude/longitude, and radius.");
+              return;
+            }
             setBusy(true);
             setMsg(null);
             try {
               await createSite({
-                name: form.name,
-                latitude: Number(form.lat),
-                longitude: Number(form.lng),
-                geofenceRadiusMeters: Number(form.radius),
+                name,
+                latitude: lat,
+                longitude: lng,
+                geofenceRadiusMeters: radius,
                 timezone: form.tz,
                 orgId: orgId as never,
               });

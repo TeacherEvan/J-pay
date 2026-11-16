@@ -35,6 +35,7 @@ export function SignIn() {
       </p>
       <input
         name="email"
+        aria-label="Email"
         placeholder="Email"
         type="email"
         required
@@ -42,6 +43,7 @@ export function SignIn() {
       />
       <input
         name="password"
+        aria-label={step === "signIn" ? "ID code or password" : "Choose a password"}
         placeholder={step === "signIn" ? "ID code / password" : "Choose a password"}
         type="password"
         required
@@ -50,13 +52,18 @@ export function SignIn() {
       {step === "signUp" && (
         <input
           name="name"
+          aria-label="Full name"
           placeholder="Full name"
           type="text"
           className="input-surgical px-3.5 py-2.5 text-sm"
         />
       )}
       <input name="flow" type="hidden" value={step} />
-      {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         data-testid={`auth-submit-${step}`}

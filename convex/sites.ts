@@ -80,7 +80,11 @@ export const createSite = mutation({
     ) {
       throw new ConvexError("INVALID_COORDS");
     }
-    if (args.geofenceRadiusMeters <= 0 || args.geofenceRadiusMeters > 10000) {
+    if (
+      !Number.isFinite(args.geofenceRadiusMeters) ||
+      args.geofenceRadiusMeters <= 0 ||
+      args.geofenceRadiusMeters > 10000
+    ) {
       throw new ConvexError("GEOFENCE_RADIUS_OUT_OF_RANGE");
     }
     if (!args.timezone.includes("/")) throw new ConvexError("INVALID_TIMEZONE");

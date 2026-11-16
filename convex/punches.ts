@@ -53,6 +53,14 @@ export const recordPunch = mutation({
     if (!site || site.archivedAt !== undefined) throw new ConvexError("SITE_NOT_FOUND");
 
     // 6. Server-side haversine geo check
+    if (
+      !Number.isFinite(args.lat) ||
+      Math.abs(args.lat) > 90 ||
+      !Number.isFinite(args.lng) ||
+      Math.abs(args.lng) > 180
+    ) {
+      throw new ConvexError("INVALID_COORDS");
+    }
     const distance = haversineMeters(args.lat, args.lng, site.latitude, site.longitude);
     const geoPassed = distance <= site.geofenceRadiusMeters;
 
