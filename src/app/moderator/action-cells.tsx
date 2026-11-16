@@ -52,7 +52,7 @@ export function LocaleCell({ userId, initial }: { userId: Id<"users">; initial: 
       title={localeError ?? undefined}
       className="input-surgical px-2 py-1.5 text-xs"
     >
-      {LOCALES.map((l: any) => (
+      {LOCALES.map((l) => (
         <option key={l} value={l}>
           {l}
         </option>
