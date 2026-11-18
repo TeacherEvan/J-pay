@@ -115,39 +115,89 @@ export const createLog = mutation({
     // duplicate-key error from Postgres instead of writing a second row.
     // Swallow it into the same shape as the pre-check duplicate path — and
     // do NOT schedule derivation twice.
-    let logId: string;
-    try {
-      logId = await ctx.db.insert("logs", {
-        userId,
-        siteId: args.siteId,
-        clientReportedTime: args.clientReportedTime,
-        clockSkewMs,
-        status: args.status,
-        latitude: args.latitude,
-        longitude: args.longitude,
-        accuracyMeters: args.accuracyMeters,
-        isWithinGeofence,
-        sideMissionDurationMinutes: args.sideMissionDurationMinutes,
-        deviceMetadata: args.deviceMetadata,
-        idempotencyKey: args.idempotencyKey,
-        impossibleTravelFlag,
-      });
-    } catch (e) {
-      if (/duplicate|unique|23505/i.test(String(e))) {
-        const dup = await ctx.db
-          .query("logs")
-          .withIndex("by_user_idem", (q) =>
-            q.eq("userId", userId).eq("idempotencyKey", args.idempotencyKey)
-          )
-          .first();
-        if (dup) return { logId: dup._id, duplicate: true as const };
+    //
+    // Migration 0021 (jpay_commit_punch) upgrades this to a single transaction:
+    // advisory lock → idempotent insert → derivation enqueued — closing the
+    // hard-crash window between log commit and deriveForUser. When the
+    // function/table is absent the RPC throws and we fall back to the legacy
+    // two-phase insert below; both paths are idempotent via the same unique
+    // index, so a lost RPC response degrades to today's behavior, never to
+    // corruption or double derivation (a duplicate short-circuits before
+    // scheduling).
+    // NOTE: `duplicate` above (line 62) is the pre-check outcome; this tracks the
+    // duplicate resolved inside the commit paths instead.
+    let logId: string | undefined;
+    let commitDuplicate = false;
+    let committedViaRpc = false;
+    const rpc = (ctx.db as { rpc?: (name: string, a: Record<string, unknown>) => Promise<Record<string, unknown>> }).rpc;
+    if (typeof rpc === "function") {
+      try {
+        const res = await rpc.call(ctx.db, "jpay_commit_punch", {
+          p_user_id: userId,
+          p_site_id: args.siteId,
+          p_client_reported_time: args.clientReportedTime,
+          p_clock_skew_ms: clockSkewMs,
+          p_status: args.status,
+          p_latitude: args.latitude,
+          p_longitude: args.longitude,
+          p_accuracy_meters: args.accuracyMeters,
+          p_is_within_geofence: isWithinGeofence,
+          p_side_mission_duration_minutes: args.sideMissionDurationMinutes ?? null,
+          p_device_metadata: args.deviceMetadata,
+          p_idempotency_key: args.idempotencyKey,
+          p_impossible_travel_flag: impossibleTravelFlag ?? null,
+        });
+        if (res && res.log_id !== undefined) {
+          logId = String(res.log_id);
+          commitDuplicate = res.inserted === false;
+          committedViaRpc = true;
+        }
+      } catch (e) {
+        console.warn(
+          "[logs] jpay_commit_punch unavailable (migration 0021 not applied or transient error); using legacy insert path",
+          e instanceof Error ? e.message : e
+        );
       }
-      throw e;
+    }
+    if (!committedViaRpc) {
+      try {
+        logId = await ctx.db.insert("logs", {
+          userId,
+          siteId: args.siteId,
+          clientReportedTime: args.clientReportedTime,
+          clockSkewMs,
+          status: args.status,
+          latitude: args.latitude,
+          longitude: args.longitude,
+          accuracyMeters: args.accuracyMeters,
+          isWithinGeofence,
+          sideMissionDurationMinutes: args.sideMissionDurationMinutes,
+          deviceMetadata: args.deviceMetadata,
+          idempotencyKey: args.idempotencyKey,
+          impossibleTravelFlag,
+        });
+      } catch (e) {
+        if (/duplicate|unique|23505/i.test(String(e))) {
+          const dup = await ctx.db
+            .query("logs")
+            .withIndex("by_user_idem", (q) =>
+              q.eq("userId", userId).eq("idempotencyKey", args.idempotencyKey)
+            )
+            .first();
+          if (dup) return { logId: dup._id, duplicate: true as const };
+        }
+        throw e;
+      }
     }
 
-    await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
+    if (logId === undefined) throw new Error("log commit produced no id"); // unreachable: both commit paths throw on failure
+    // A duplicate resolved inside a commit path (concurrent twin already committed)
+    // carries no new punch evidence — do not derive.
+    if (!commitDuplicate) {
+      await ctx.scheduler.runAfter(0, internal.shifts.deriveForUser, { userId });
+    }
 
-    return { logId, duplicate: false as const };
+    return { logId, duplicate: commitDuplicate };
   },
 });
 

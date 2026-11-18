@@ -27,9 +27,19 @@ const LIMIT_MASTER = 5;
 const hits = new Map<string, number[]>();
 
 function clientIp(request: Request): string {
+  // Vercel sets x-real-ip to the true client IP (not spoofable by the caller's
+  // own X-Forwarded-For). Without it, take the LAST X-Forwarded-For entry —
+  // the rightmost hop is the one the trusted edge appended; the first is
+  // caller-controlled. Either way the bucket key includes the scheme so a
+  // spoofed header family cannot mint unlimited buckets.
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return `real:${real}`;
   const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  if (fwd) {
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return `fwd:${parts[parts.length - 1]}`;
+  }
+  return "unknown";
 }
 
 function rateLimited(key: string, windowMs: number, limit: number): boolean {

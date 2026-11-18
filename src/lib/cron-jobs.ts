@@ -11,6 +11,9 @@ export const CRON_JOBS = {
   "purge-expired-coordinates": { module: "logs", fn: "purgeExpiredCoords" },
   "archive-stale-master-temps": { module: "users", fn: "archiveStaleMasterTemps" },
   "purge-expired-messages": { module: "messages", fn: "purgeExpiredMessages" },
+  // Re-drive shift derivation for punches whose commit hard-crashed before the
+  // inline derive ran (migration 0021, owner-applied; no-op until then).
+  "derivation-sweep": { module: "shifts", fn: "sweepDerivationQueue" },
 } as const;
 
 /** Resolve a job name to its internal function ref, or null if unknown. */

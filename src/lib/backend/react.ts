@@ -272,9 +272,17 @@ export function useQueryResult<T = any>(
     if (skip) return;
     let active = true;
     callMeta.current = {};
+    const genAtStart = version;
     callBackend(ref, args, callMeta.current)
       .then((result) => {
         if (!active || !mounted.current) return;
+        // A mutation completed while this query was in flight — the payload is
+        // pre-mutation. Drop it and re-issue: applying it would roll the UI
+        // back to the pre-mutation truth after it had already advanced.
+        if (version !== genAtStart) {
+          setNonce((n) => n + 1);
+          return;
+        }
         const learned = callMeta.current.tablesRead;
         setReads((prev) =>
           prev && learned && prev.length === learned.length && prev.every((t, i) => t === learned[i])
@@ -326,6 +334,7 @@ export function useQuery<T = any>(
     }
   }, [ref]);
   const key = skip ? "" : `${refKey}::${JSON.stringify(args ?? {})}`;
+  const [nonce, setNonce] = useState(0);
   const [tick, setTick] = useState(version);
   const [state, setState] = useState<QueryState>({ key: "", data: undefined, error: null });
   const mounted = useRef(true);
@@ -355,9 +364,16 @@ export function useQuery<T = any>(
     if (skip) return;
     let active = true;
     callMeta.current = {};
+    const genAtStart = version;
     callBackend(ref, args, callMeta.current)
       .then((result) => {
         if (!active || !mounted.current) return;
+        // A mutation completed while this query was in flight — drop the stale
+        // payload and re-issue (consistent with useQueryResult).
+        if (version !== genAtStart) {
+          setNonce((n) => n + 1);
+          return;
+        }
         const learned = callMeta.current.tablesRead;
         setReads((prev) =>
           prev && learned && prev.length === learned.length && prev.every((t, i) => t === learned[i])
@@ -385,7 +401,7 @@ export function useQuery<T = any>(
     return () => {
       active = false;
     };
-  }, [key, tick, skip]);
+  }, [key, tick, skip, nonce]);
 
   if (skip) return undefined;
   if (state.key !== key) return undefined;

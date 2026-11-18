@@ -17,6 +17,8 @@
  * 2026-11-12: the anonymous-preview modules were removed from the
  * registry, so the floor below was lowered from 110 to 100 to stay meaningful
  * without encoding the retired module count.
+ * 2026-11-17: + shifts:sweepDerivationQueue (the cron sweeper behind migration
+ * 0021's derivation crash-net); registered functions now 121, internal 31.
  * If the registry grows, re-derive INTERNAL_KEYS from describeFunctions()
  * inspection of convex/*.ts exports and extend this list.
  */
@@ -28,7 +30,7 @@ const INTERNAL_KEYS = [
   "payroll_data:logsForExport",
   "push:pushToUser",
   "push_subs:recordSubscriptionError", "push_subs:removeSubscription", "push_subs:resetSubscriptionErrors", "push_subs:subscriptionsFor",
-  "shifts:deriveForUser",
+  "shifts:deriveForUser", "shifts:sweepDerivationQueue",
   "users:archiveStaleMasterTemps", "users:archiveUserInternal",
   "users:bootstrapFirstModerator", "users:clearForceChange", "users:createMasterTempUser",
   "users:forceChangeOn", "users:markPasswordChanged", "users:resetPasswordBreakGlass",

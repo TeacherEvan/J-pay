@@ -1,5 +1,7 @@
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
 import { deriveSegments, type EngineLog, type ShiftOverride } from "../src/lib/shift-engine";
 import type { Id } from "./_generated/dataModel";
 
@@ -49,18 +51,21 @@ export const deriveForUser = internalMutation({
       : undefined;
 
     // 2. Fetch logs within the active horizon (or all logs if no sealed shift)
-    let logsQuery = ctx.db
-      .query("logs")
-      .withIndex("by_user_time", (q) =>
-        horizonCutoff !== undefined
-          ? q.eq("userId", args.userId).gte("_creationTime", horizonCutoff - HORIZON_SAFETY_BUFFER_MS)
-          : q.eq("userId", args.userId)
-      );
-
+    // Use by_user_client_reported_time index to push the work-time horizon into SQL
+    // instead of a post-wire .filter() — mirrors the travel-window fix (P2-B13).
+    let logsQuery = ctx.db.query("logs");
     if (horizonCutoff !== undefined) {
-      logsQuery = logsQuery.filter((q) =>
-        q.gte(q.field("clientReportedTime"), horizonCutoff)
-      );
+      // Index added in migration 0020; generated types are historical and not regenerated.
+      // The schema.ts and INDEX_FIELDS (db.ts) are updated; cast allows the new index name.
+      logsQuery = (logsQuery as any)
+        .withIndex("by_user_client_reported_time", (q: any) =>
+          q.eq("userId", args.userId).gte("clientReportedTime", horizonCutoff)
+        )
+        .order("asc");
+    } else {
+      logsQuery = (logsQuery as any)
+        .withIndex("by_user_time", (q: any) => q.eq("userId", args.userId))
+        .order("asc");
     }
 
     const all = await logsQuery.collect();
@@ -199,5 +204,87 @@ export const deriveForUser = internalMutation({
         await ctx.db.insert("shifts", row);
       }
     }
+  },
+});
+
+/**
+ * Derivation crash-net (migration 0021, owner-applied). Called by
+ * POST /api/internal/cron?job=derivation-sweep on a schedule. Picks up punches
+ * whose createLog committed but whose derivation hard-crashed (or never ran),
+ * and re-drives deriveForUser for them. Re-derivation is idempotent
+ * (upsert-in-place), so a re-drive after a partially completed run is safe.
+ *
+ * migration 0021 absent → the queue table does not exist; returns
+ * { swept: 0, skipped: true } without throwing so the cron job stays green
+ * until the owner applies the migration.
+ *
+ * Never throws on a single user's failure — one bad row must not starve the
+ * queue. After SWEEP_MAX_ATTEMPTS the row is parked as 'failed' and a
+ * systemEvents row records it for the operator.
+ */
+const SWEEP_MAX_ATTEMPTS = 5;
+const SWEEP_BATCH = 25;
+
+export const sweepDerivationQueue = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const client = createSupabaseAdminClient();
+    const cutoff = new Date(Date.now() - 2_000).toISOString();
+    const { data: rows, error } = await client
+      .from("derivation_queue")
+      .select('"_id","userId","attempts"')
+      .eq("status", "pending")
+      .lt("requestedAt", cutoff)
+      .order("requestedAt", { ascending: true })
+      .limit(SWEEP_BATCH);
+    if (error) {
+      if (/derivation_queue|42P01|schema cache|does not exist/i.test(error.message)) {
+        return { swept: 0, failed: 0, skipped: true as const };
+      }
+      throw new Error(`derivation_queue read: ${error.message}`);
+    }
+
+    let swept = 0;
+    let failed = 0;
+    for (const row of rows ?? []) {
+      const attempts = (typeof row.attempts === "number" ? row.attempts : 0) + 1;
+      const nowIso = new Date().toISOString();
+      await client
+        .from("derivation_queue")
+        .update({ status: "processing", attempts, updatedAt: nowIso })
+        .eq("_id", row._id);
+      try {
+        // Single attempt per sweep; attempts are counted on the queue row.
+        await ctx.runMutation(internal.shifts.deriveForUser, {
+          userId: row.userId as Id<"users">,
+        });
+        await client
+          .from("derivation_queue")
+          .update({ status: "done", updatedAt: new Date().toISOString() })
+          .eq("_id", row._id);
+        swept += 1;
+      } catch (e) {
+        const msg = (e instanceof Error ? e.message : String(e)).slice(0, 300);
+        const exhausted = attempts >= SWEEP_MAX_ATTEMPTS;
+        await client
+          .from("derivation_queue")
+          .update({
+            status: exhausted ? "failed" : "pending",
+            lastError: msg,
+            updatedAt: new Date().toISOString(),
+          })
+          .eq("_id", row._id);
+        if (exhausted) {
+          await ctx.db.insert("systemEvents", {
+            kind: "derivation_queue_failed",
+            userId: row.userId as Id<"users">,
+            at: Date.now(),
+            detail: msg,
+          });
+        }
+        failed += 1;
+      }
+    }
+    return { swept, failed };
   },
 });

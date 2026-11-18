@@ -113,7 +113,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_site_time", ["siteId"])
     .index("by_user_skew", ["userId", "clockSkewMs"])
-    .index("by_user_idem", ["userId", "idempotencyKey"]),
+    .index("by_user_idem", ["userId", "idempotencyKey"])
+    .index("by_user_client_reported_time", ["userId", "clientReportedTime"]),
 
   shifts: defineTable({
     userId: v.id("users"),

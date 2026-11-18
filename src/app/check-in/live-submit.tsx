@@ -12,6 +12,7 @@ import { getPosition } from "./geoposition";
 import { storageGet, storageSet, storageRemove } from "@/lib/safe-storage";
 import { LABEL, TOKEN_KEY } from "./types";
 import type { Status, Phase, CardSite } from "./types";
+import { withPunchSyncLock } from "@/lib/punch-sync";
 
 export function LiveSubmit({
   phase,
@@ -218,7 +219,9 @@ export function LiveSubmit({
     setBusy(true);
     setMessage(null);
     try {
-      await runCheckIn();
+      // Same order as the outbox replay path — a manual punch never executes
+      // while a queued replay is in flight (and vice versa).
+      await withPunchSyncLock(runCheckIn);
     } finally {
       // F1 (audit 2026-11-13): the reset lives at exactly one site, so no
       // early return inside runCheckIn — least of all a device-token failure —

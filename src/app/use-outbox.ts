@@ -8,15 +8,7 @@ import {
   outboxRemove,
   type OutboxEntry,
 } from "@/lib/outbox";
-
-// Module-global flush lock. Protocol: `flushLock` holds the timestamp (ms) of
-// when the current flush acquired the lock, or null when free. A flush that
-// finds the lock held younger than STALE_MS backs off; an older lock is
-// presumed abandoned (the holder threw/hung between acquire and release) and
-// is stolen. Release happens in `finally`, so a throwing flush can never wedge
-// future flushes — and even a never-settling one ages out within STALE_MS.
-const STALE_MS = 30_000;
-let flushLock: number | null = null;
+import { withPunchSyncLock } from "@/lib/punch-sync";
 
 export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
   const [count, setCount] = useState(0);
@@ -29,9 +21,7 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
       .catch(() => setCount(0));
   }, []);
 
-  const flush = useCallback(async () => {
-    if (flushLock !== null && Date.now() - flushLock < STALE_MS) return;
-    flushLock = Date.now();
+  const flushLocked = useCallback(async () => {
     setSyncing(true);
     try {
       const items = await outboxAll();
@@ -68,11 +58,18 @@ export function useOutbox(flushOne: (entry: OutboxEntry) => Promise<void>) {
       // unhandled promise rejection and the operator never sees it.
       setLastError(`Sync failed: ${String(e)}`);
     } finally {
-      flushLock = null;
       setSyncing(false);
       refresh();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flushOne, refresh]);
+
+  const flush = useCallback(
+    async () => {
+      await withPunchSyncLock(flushLocked);
+    },
+    [flushLocked]
+  );
 
   const enqueue = useCallback(
     async (entry: OutboxEntry) => {

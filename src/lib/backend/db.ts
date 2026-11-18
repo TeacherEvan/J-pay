@@ -44,6 +44,7 @@ const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
     by_site_time: ["siteId"],
     by_user_skew: ["userId", "clockSkewMs"],
     by_user_idem: ["userId", "idempotencyKey"],
+    by_user_client_reported_time: ["userId", "clientReportedTime"],
   },
   shifts: {
     by_user_start: ["userId", "startedAt"],
@@ -197,6 +198,11 @@ function adminClient() {
   return sharedClient;
 }
 
+/** RPC function name → tables it writes. Keep in sync with migration 0021. */
+const RPC_WRITES: Record<string, string[]> = {
+  jpay_commit_punch: ["logs", "derivation_queue"],
+};
+
 export class Database {
   private client = adminClient();
 
@@ -347,6 +353,20 @@ export class Database {
     if (error) throw new Error(`${table} delete: ${error.message}`);
     this.writtenTables.add(table);
     this.idCache.delete(id);
+  }
+
+  /**
+   * Postgres functions that commit app rows atomically (migration 0021:
+   * jpay_commit_punch — advisory-lock + idempotent log insert + derivation
+   * enqueue in one transaction). The written tables are credited so write-set
+   * telemetry keeps client caches invalidating exactly as if the row had been
+   * written through this adapter.
+   */
+  async rpc(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { data, error } = await this.client.rpc(name, args);
+    if (error) throw new Error(`rpc ${name}: ${error.message}`);
+    for (const table of RPC_WRITES[name] ?? []) this.writtenTables.add(table);
+    return (data ?? {}) as Record<string, unknown>;
   }
 }
 

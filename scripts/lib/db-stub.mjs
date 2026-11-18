@@ -57,6 +57,7 @@ function mkSeed() {
       { _id: "shift-1", _creationTime: 100, userId: "user-1", startedAt: 100, needsReview: false },
     ],
     messages: [], pushSubscriptions: [], purgeAudit: [], reviewResolutions: [],
+    derivation_queue: [],
     _id: undefined,
   };
 }
@@ -123,6 +124,66 @@ export class Database {
       const i = (store[t] ?? []).findIndex((r) => r._id === id);
       if (i >= 0) { store[t].splice(i, 1); this.writtenTables.add(t); return; }
     }
+  }
+
+  /**
+   * Mirror of migration 0021's jpay_commit_punch for handler-level tests.
+   * Mode from globalThis.__STUB_RPC:
+   *   "ok"     — transaction succeeds: idempotent logs insert (by
+   *              (userId, idempotencyKey)) + coalesced pending queue row,
+   *   "absent" — function missing / 0021 not applied: caller must fall back,
+   *   "error"  — transient RPC failure: caller must fall back too.
+   * In both failure modes the thrown message matches what PostgREST would
+   * surface, so the fallback path is the one under test.
+   */
+  async rpc(name, args) {
+    const mode = globalThis.__STUB_RPC ?? "ok";
+    if (mode === "absent") {
+      throw new Error(`rpc ${name}: Could not find the function public.${name} in the schema cache`);
+    }
+    if (mode === "error") {
+      throw new Error(`rpc ${name}: connection terminated unexpectedly`);
+    }
+    if (name !== "jpay_commit_punch") throw new Error(`stub rpc: unknown function ${name}`);
+
+    const logs = (store.logs ??= []);
+    const queue = (store.derivation_queue ??= []);
+    const dup = logs.find(
+      (r) => r.userId === args.p_user_id && r.idempotencyKey === args.p_idempotency_key
+    );
+    if (dup) {
+      const hasPending = queue.some((r) => r.userId === args.p_user_id && r.status === "pending");
+      if (!hasPending) {
+        queue.push({ _id: `q-dup-${dup._id}`, _creationTime: Date.now(), userId: args.p_user_id, status: "pending", attempts: 0, requestedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      }
+      this.writtenTables.add("derivation_queue");
+      return { log_id: dup._id, inserted: false };
+    }
+    const id = `rpc-log-${Math.random().toString(36).slice(2, 10)}`;
+    logs.push({
+      _id: id,
+      _creationTime: Date.now(),
+      userId: args.p_user_id,
+      siteId: args.p_site_id,
+      clientReportedTime: args.p_client_reported_time,
+      clockSkewMs: args.p_clock_skew_ms,
+      status: args.p_status,
+      latitude: args.p_latitude,
+      longitude: args.p_longitude,
+      accuracyMeters: args.p_accuracy_meters,
+      isWithinGeofence: args.p_is_within_geofence,
+      sideMissionDurationMinutes: args.p_side_mission_duration_minutes ?? undefined,
+      deviceMetadata: args.p_device_metadata,
+      idempotencyKey: args.p_idempotency_key,
+      impossibleTravelFlag: args.p_impossible_travel_flag ?? undefined,
+    });
+    const hasPending = queue.some((r) => r.userId === args.p_user_id && r.status === "pending");
+    if (!hasPending) {
+      queue.push({ _id: `q-${id}`, _creationTime: Date.now(), userId: args.p_user_id, status: "pending", attempts: 0, requestedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    this.writtenTables.add("logs");
+    this.writtenTables.add("derivation_queue");
+    return { log_id: id, inserted: true };
   }
 }
 

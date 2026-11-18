@@ -85,6 +85,7 @@ export type ApiSurface = {
   "shifts": {
     deriveForUser: FunctionRef;
     markDerivationFailed: FunctionRef;
+    sweepDerivationQueue: FunctionRef;
   };
   "sites": {
     assignEmployee: FunctionRef;

@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry } from "serwist";
-import { Serwist } from "serwist";
+import { Serwist, NetworkOnly } from "serwist";
 
 declare const self: ServiceWorkerGlobalScope & {
   __SW_MANIFEST: (string | PrecacheEntry)[] | undefined;
@@ -8,7 +8,13 @@ declare const self: ServiceWorkerGlobalScope & {
 
 const serwist = new Serwist({
   precacheEntries: [...(self.__SW_MANIFEST ?? []), { url: "/~offline", revision: "1" }],
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    // Never cache anything under /api (any method, incl. GET): defaultCache
+    // would otherwise apply a 24h NetworkFirst cache to same-origin API
+    // GETs — authenticated responses could linger on a shared mobile device.
+    { matcher: ({ url }) => url.pathname.startsWith("/api/"), handler: new NetworkOnly() },
+    ...defaultCache,
+  ],
   fallbacks: {
     entries: [
       {

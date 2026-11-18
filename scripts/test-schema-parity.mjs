@@ -29,7 +29,7 @@ const root = resolve(__dirname, "..");
 
 // Tables that legitimately exist in migrations + INDEX_FIELDS but are not part
 // of the Convex schema / TRD §6 — they are Postgres infrastructure, not app data.
-const INFRA_TABLES = new Set(["jpay_rate_limits"]);
+const INFRA_TABLES = new Set(["jpay_rate_limits", "derivation_queue"]);
 // Engine-synthesized columns: present in SQL DDL, absent from defineTable fields.
 const ENGINE_COLUMNS = new Set(["_id", "_creationTime"]);
 

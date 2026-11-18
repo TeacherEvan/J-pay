@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, createSupabaseAnonClient } from "@/lib/supabase/server";
 import { describeFunctions, describeModules, invoke, type Identity } from "@/lib/backend/runtime";
 import { isSmokeKeyValid } from "@/lib/smoke-key";
+import { checkBackendPayload } from "@/lib/backend/payload-guard";
 
 /**
  * POST /api/backend/call
@@ -87,7 +88,17 @@ function statusFor(code: string): number {
   return 400;
 }
 
+const MAX_BODY_BYTES = 256 * 1024;
+
 export async function POST(request: Request): Promise<Response> {
+  // Cheap size cap before parsing: a 64 MB body would otherwise be buffered
+  // fully by request.json(). Chunked requests without a length are still
+  // bounded by the deep/node caps in checkBackendPayload after parse.
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "PAYLOAD_TOO_LARGE" }, { status: 413 });
+  }
+
   let body: Body;
   try {
     body = (await request.json()) as Body;
@@ -97,6 +108,17 @@ export async function POST(request: Request): Promise<Response> {
 
   if (!body?.ref) {
     return NextResponse.json({ error: "MISSING_REF" }, { status: 400 });
+  }
+
+  // Reject NaN/Infinity (`1e+400`), deep nesting, oversized strings, and
+  // __proto__ keys before anything reaches PostgREST (audit 2026-11-17, P1).
+  const refCheck = checkBackendPayload(body.ref);
+  const argsCheck = checkBackendPayload(body.args ?? {});
+  if (!refCheck.ok) {
+    return NextResponse.json({ error: refCheck.reason }, { status: 400 });
+  }
+  if (!argsCheck.ok) {
+    return NextResponse.json({ error: argsCheck.reason }, { status: 400 });
   }
 
   try {
