@@ -12,6 +12,10 @@ export const __pg = {
   calls,
   seed(table, rows) { store[table] = rows.map(clone); },
   seedRegistry(rows) { store["jpay_id_registry"] = rows.map(clone); },
+  setTableError(table, error) {
+    if (error) store[table] = { __error: error };
+    else delete store[table];
+  },
   reset() { store = {}; calls.length = 0; },
 };
 
@@ -83,12 +87,16 @@ class StubQuery {
   update(payload) { calls.push({ table: this.table, method: "update", payload }); this._updatePayload = payload; this.ops.push((rows) => { for (const src of store[this.table] ?? []) { /* applied in then via eq filter */ } return rows; }); return this; }
   delete() { calls.push({ table: this.table, method: "delete" }); return this; }
   then(resolve) {
-    let rows = (store[this.table] ?? []).map(clone);
+    if (store[this.table] && store[this.table].__error) {
+      resolve({ data: null, error: store[this.table].__error });
+      return;
+    }
+    let rows = (Array.isArray(store[this.table]) ? store[this.table] : []).map(clone);
     for (const op of this.ops) rows = op(rows);
     // apply pending update to table rows matched by eq ops
     if (this._updatePayload) {
       const matches = rows; // already filtered by eq ops
-      for (const target of store[this.table] ?? []) {
+      for (const target of Array.isArray(store[this.table]) ? store[this.table] : []) {
         if (matches.some((m) => m._id === target._id)) Object.assign(target, this._updatePayload);
       }
     }
@@ -100,6 +108,12 @@ class StubQuery {
 }
 
 export function createSupabaseAdminClient() {
-  return { from: (table) => new StubQuery(table) };
+  return {
+    from: (table) => new StubQuery(table),
+    rpc: async (name, args) => {
+      calls.push({ method: "rpc", name, args });
+      return { data: false, error: null };
+    },
+  };
 }
 export function hasSupabaseAdminKey() { return true; }

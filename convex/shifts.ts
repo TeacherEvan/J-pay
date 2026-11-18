@@ -226,9 +226,17 @@ const SWEEP_MAX_ATTEMPTS = 5;
 const SWEEP_BATCH = 25;
 
 export const sweepDerivationQueue = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const client = createSupabaseAdminClient();
+  args: {
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let client: ReturnType<typeof createSupabaseAdminClient>;
+    try {
+      client = createSupabaseAdminClient();
+    } catch {
+      return { swept: 0, failed: 0, skipped: true as const };
+    }
+    const batchLimit = typeof args?.batchSize === "number" && args.batchSize > 0 ? args.batchSize : SWEEP_BATCH;
     const cutoff = new Date(Date.now() - 2_000).toISOString();
     const { data: rows, error } = await client
       .from("derivation_queue")
@@ -236,7 +244,7 @@ export const sweepDerivationQueue = internalMutation({
       .eq("status", "pending")
       .lt("requestedAt", cutoff)
       .order("requestedAt", { ascending: true })
-      .limit(SWEEP_BATCH);
+      .limit(batchLimit);
     if (error) {
       if (/derivation_queue|42P01|schema cache|does not exist/i.test(error.message)) {
         return { swept: 0, failed: 0, skipped: true as const };

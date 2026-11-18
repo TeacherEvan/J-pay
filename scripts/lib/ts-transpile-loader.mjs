@@ -32,7 +32,13 @@ export async function resolve(spec, context, next) {
   if (spec === "./db" && context.parentURL?.endsWith("/src/lib/backend/runtime.ts")) {
     return { url: "file://" + p("scripts", "lib", "db-stub.mjs"), shortCircuit: true };
   }
-  if (spec === "@/lib/supabase/admin" && context.parentURL?.endsWith("/src/lib/backend/db.ts")) {
+  if (
+    (spec === "@/lib/supabase/admin" || spec === "../src/lib/supabase/admin") &&
+    (context.parentURL?.endsWith("/src/lib/backend/db.ts") ||
+      context.parentURL?.endsWith("/convex/shifts.ts") ||
+      context.parentURL?.endsWith("/src/app/api/internal/cron/route.ts") ||
+      context.parentURL?.endsWith("scripts/test-cron-jobs.mjs"))
+  ) {
     return { url: "file://" + p("scripts", "lib", "postgrest-stub.mjs"), shortCircuit: true };
   }
   if (spec === "@/lib/supabase/admin" && context.parentURL?.endsWith("runtime.ts")) {
@@ -43,6 +49,9 @@ export async function resolve(spec, context, next) {
   }
   if (spec === "@/lib/supabase/client" && context.parentURL?.endsWith("react.ts")) {
     return { url: "file://" + p("scripts", "lib", "supabase-client-stub.mjs"), shortCircuit: true };
+  }
+  if (spec === "next/server") {
+    return { url: "file://" + p("node_modules", "next", "server.js"), shortCircuit: true };
   }
   if (spec === "server-only") return { url: "data:text/javascript,export {};", shortCircuit: true };
   if (spec.startsWith("@/")) {
