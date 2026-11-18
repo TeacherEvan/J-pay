@@ -63,6 +63,7 @@ const INDEX_FIELDS: Record<string, Record<string, string[]>> = {
   managerSites: { by_manager: ["managerId"], by_site: ["siteId"] },
   travelSegments: { by_user: ["userId"], by_departed: ["departedAt"] },
   shiftOverrides: { by_user_key: ["userId", "shiftKey"] },
+  pay_periods: { by_org_iso_week: ["org_id", "iso_week"] },
 };
 
 /* ------------------------------------------------------------------ types -- */

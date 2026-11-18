@@ -59,6 +59,7 @@ const stagesFor = (mode) => {
     { label: "derivation horizon bounds (index-range pushdown, P2-B13 mirror)", cmd: process.execPath, args: ["scripts/test-derivation-horizon-bounds.mjs"] },
     { label: "punch sync lock (outbox replay vs live check-in)", cmd: process.execPath, args: ["scripts/test-punch-sync-lock.mjs"] },
     { label: "derivation queue migration 0021 (atomicity + lockdown invariants)", cmd: process.execPath, args: ["scripts/test-derivation-queue.mjs"] },
+    { label: "pay periods migration 0022 (DDL invariants + lock contract)", cmd: process.execPath, args: ["scripts/test-pay-periods.mjs"] },
     { label: "punch RPC fallback (createLog RPC-first + legacy fallback)", cmd: process.execPath, args: ["scripts/test-punch-rpc-fallback.mjs"] },
     { label: "travel consent revocation (B2 + pathSamples purge)", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-consent-revoke.mjs"] },
     { label: "cron jobs map", cmd: process.execPath, args: [...TS_TRANSPILE, "scripts/test-cron-jobs.mjs"] },
